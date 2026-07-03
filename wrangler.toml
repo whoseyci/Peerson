@@ -1,0 +1,10 @@
+name = "peerson"
+compatibility_date = "2024-07-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "peerson-db"
+database_id = "your-database-id-here"
+
+[vars]
+APP_NAME = "Peerson"
