@@ -80,44 +80,60 @@ export function renderShoppingView(app: App) {
         );
       }
       async function saveShoppingItem() {
-        const name = document.getElementById('shopName').value.trim();
-        if (!name) return window.app.toast('Name erforderlich');
-        const item = await window.api.shopping.create({
-          household_id: window.app.state.householdId,
-          name,
-          quantity: document.getElementById('shopQty').value || null
-        });
-        window.app.state.shopping.push(item.item);
-        window.app.closeModal('shopModal');
-        window.app.render();
-        window.app.toast('Hinzugefügt');
+        try {
+          const name = document.getElementById('shopName').value.trim();
+          if (!name) return window.app.toast('Name erforderlich');
+          const item = await window.api.shopping.create({
+            household_id: window.app.state.householdId,
+            name,
+            quantity: document.getElementById('shopQty').value || null
+          });
+          window.app.state.shopping.push(item.item);
+          window.app.closeModal('shopModal');
+          window.app.render();
+          window.app.toast('Hinzugefügt');
+        } catch (e) {
+          window.app.toast('Fehler beim Hinzufügen');
+        }
       }
       async function autoAddShopping(itemId, needed) {
-        const item = window.app.state.items.find(i => i.id === itemId);
-        if (!item) return;
-        const shop = await window.api.shopping.create({
-          household_id: window.app.state.householdId,
-          name: item.name,
-          quantity: needed + ' Stk',
-          linked_item_id: itemId
-        });
-        window.app.state.shopping.push(shop.item);
-        window.app.render();
-        window.app.toast('Zur Einkaufsliste hinzugefügt');
+        try {
+          const item = window.app.state.items.find(i => i.id === itemId);
+          if (!item) return;
+          const shop = await window.api.shopping.create({
+            household_id: window.app.state.householdId,
+            name: item.name,
+            quantity: needed + ' Stk',
+            linked_item_id: itemId
+          });
+          window.app.state.shopping.push(shop.item);
+          window.app.render();
+          window.app.toast('Zur Einkaufsliste hinzugefügt');
+        } catch (e) {
+          window.app.toast('Fehler beim Hinzufügen');
+        }
       }
       async function toggleShopping(id) {
-        const item = window.app.state.shopping.find(s => s.id === id);
-        if (!item) return;
-        const newStatus = item.status === 'open' ? 'bought' : 'open';
-        await window.api.shopping.update(id, { status: newStatus });
-        item.status = newStatus;
-        window.app.render();
+        try {
+          const item = window.app.state.shopping.find(s => s.id === id);
+          if (!item) return;
+          const newStatus = item.status === 'open' ? 'bought' : 'open';
+          await window.api.shopping.update(id, { status: newStatus });
+          item.status = newStatus;
+          window.app.render();
+        } catch (e) {
+          window.app.toast('Fehler beim Aktualisieren');
+        }
       }
       async function deleteShopping(id) {
-        await window.api.shopping.delete(id);
-        window.app.state.shopping = window.app.state.shopping.filter(s => s.id !== id);
-        window.app.render();
-        window.app.toast('Entfernt');
+        try {
+          await window.api.shopping.delete(id);
+          window.app.state.shopping = window.app.state.shopping.filter(s => s.id !== id);
+          window.app.render();
+          window.app.toast('Entfernt');
+        } catch (e) {
+          window.app.toast('Fehler beim Entfernen');
+        }
       }
     </script>
   `;

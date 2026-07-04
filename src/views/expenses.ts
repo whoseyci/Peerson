@@ -57,9 +57,9 @@ export function renderExpensesView(app: App) {
     <script>
       async function openAddExpenseModal() {
         const members = window.app.state.members;
-        const checkboxes = members.map(m => 
-          '<label style="display:flex; align-items:center; gap:8px; text-transform:none; font-weight:500; cursor:pointer; margin-bottom:8px;">' +
-            '<input type="checkbox" class="split-check" data-id="' + m.id + '" checked style="width:20px; height:20px;">' +
+        const checkboxes = members.map(m =>
+          '<label class="checkbox-label">' +
+            '<input type="checkbox" class="split-check" data-id="' + m.id + '" checked>' +
             '<span>' + m.name + '</span>' +
           '</label>'
         ).join('');
@@ -76,38 +76,46 @@ export function renderExpensesView(app: App) {
         );
       }
       async function saveExpense() {
-        const title = document.getElementById('expTitle').value.trim();
-        const amount = parseFloat(document.getElementById('expAmount').value);
-        const paidBy = document.getElementById('expPayer').value;
-        if (!title || !amount || amount <= 0) return window.app.toast('Titel und Betrag erforderlich');
-        const checked = Array.from(document.querySelectorAll('.split-check:checked')).map(el => el.getAttribute('data-id'));
-        if (checked.length === 0) return window.app.toast('Mindestens eine Person auswählen');
-        const splitAmount = amount / checked.length;
-        const splits = checked.map(uid => ({ user_id: uid, amount: splitAmount }));
-        const expense = await window.api.expenses.create({
-          household_id: window.app.state.householdId,
-          title,
-          amount,
-          paid_by: paidBy,
-          split_type: 'equal',
-          splits
-        });
-        window.app.state.expenses.push(expense.expense);
-        const data = await window.api.expenses.list(window.app.state.householdId);
-        window.app.state.splits = data.splits;
-        window.app.state.members = data.members;
-        window.app.closeModal('expenseModal');
-        window.app.render();
-        window.app.toast('Ausgabe gespeichert');
+        try {
+          const title = document.getElementById('expTitle').value.trim();
+          const amount = parseFloat(document.getElementById('expAmount').value);
+          const paidBy = document.getElementById('expPayer').value;
+          if (!title || !amount || amount <= 0) return window.app.toast('Titel und Betrag erforderlich');
+          const checked = Array.from(document.querySelectorAll('.split-check:checked')).map(el => el.getAttribute('data-id'));
+          if (checked.length === 0) return window.app.toast('Mindestens eine Person auswählen');
+          const splitAmount = amount / checked.length;
+          const splits = checked.map(uid => ({ user_id: uid, amount: splitAmount }));
+          const expense = await window.api.expenses.create({
+            household_id: window.app.state.householdId,
+            title,
+            amount,
+            paid_by: paidBy,
+            split_type: 'equal',
+            splits
+          });
+          window.app.state.expenses.push(expense.expense);
+          const data = await window.api.expenses.list(window.app.state.householdId);
+          window.app.state.splits = data.splits;
+          window.app.state.members = data.members;
+          window.app.closeModal('expenseModal');
+          window.app.render();
+          window.app.toast('Ausgabe gespeichert');
+        } catch (e) {
+          window.app.toast('Fehler beim Speichern');
+        }
       }
       async function deleteExpense(id) {
         if (!confirm('Löschen?')) return;
-        await window.api.expenses.delete(id);
-        window.app.state.expenses = window.app.state.expenses.filter(e => e.id !== id);
-        const data = await window.api.expenses.list(window.app.state.householdId);
-        window.app.state.splits = data.splits;
-        window.app.render();
-        window.app.toast('Gelöscht');
+        try {
+          await window.api.expenses.delete(id);
+          window.app.state.expenses = window.app.state.expenses.filter(e => e.id !== id);
+          const data = await window.api.expenses.list(window.app.state.householdId);
+          window.app.state.splits = data.splits;
+          window.app.render();
+          window.app.toast('Gelöscht');
+        } catch (e) {
+          window.app.toast('Fehler beim Löschen');
+        }
       }
     </script>
   `;

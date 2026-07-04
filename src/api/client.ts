@@ -14,36 +14,46 @@ function headers() {
   };
 }
 
+class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
 async function get(path: string) {
   const res = await fetch(`${API_BASE}${path}`, { headers: headers() });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new ApiError(await res.text(), res.status);
   return res.json();
 }
 
 async function post(path: string, body: any) {
   const res = await fetch(`${API_BASE}${path}`, { method: 'POST', headers: headers(), body: JSON.stringify(body) });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new ApiError(await res.text(), res.status);
   return res.json();
 }
 
 async function patch(path: string, body: any) {
   const res = await fetch(`${API_BASE}${path}`, { method: 'PATCH', headers: headers(), body: JSON.stringify(body) });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new ApiError(await res.text(), res.status);
   return res.json();
 }
 
 async function del(path: string) {
   const res = await fetch(`${API_BASE}${path}`, { method: 'DELETE', headers: headers() });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new ApiError(await res.text(), res.status);
   return res.json();
 }
 
 export const api = {
   households: {
     list: () => get('/api/households') as Promise<{ households: Household[] }>,
-    get: (id: string) => get(`/api/households?id=${id}`) as Promise<{ household: Household; members: HouseholdMember[] }>,
+    get: (id: string) => get(`/api/households?householdId=${id}`) as Promise<{ household: Household; members: HouseholdMember[] }>,
     create: (name: string) => post('/api/households', { name }) as Promise<{ household: Household }>,
     join: (code: string) => post('/api/households', { action: 'join', code }) as Promise<{ household: Household }>,
+    leave: (householdId: string, targetUserId: string) => post('/api/households', { action: 'leave', household_id: householdId, target_user_id: targetUserId }),
+    kick: (householdId: string, targetUserId: string) => post('/api/households', { action: 'kick', household_id: householdId, target_user_id: targetUserId }),
     regenerateInvite: (id: string) => patch(`/api/households/${id}`, { invite_code: 'regenerate' }) as Promise<{ invite_code: string }>,
   },
   items: {
@@ -75,5 +85,8 @@ export const api = {
     create: (data: any) => post('/api/shopping', data) as Promise<{ item: ShoppingItem }>,
     update: (id: string, data: any) => patch(`/api/shopping/${id}`, data) as Promise<{ item: ShoppingItem }>,
     delete: (id: string) => del(`/api/shopping/${id}`),
+  },
+  users: {
+    updateName: (name: string) => post('/api/users', { action: 'update_name', name }),
   },
 };

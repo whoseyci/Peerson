@@ -68,6 +68,17 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return Response.json({ success: true });
   }
 
+  if (body.action === 'kick' && body.household_id && body.target_user_id) {
+    const membership = await db.prepare('SELECT role FROM household_members WHERE household_id = ? AND user_id = ?')
+      .bind(body.household_id, userId).first();
+    if (!membership || membership.role !== 'admin') {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 });
+    }
+    await db.prepare('DELETE FROM household_members WHERE household_id = ? AND user_id = ?')
+      .bind(body.household_id, body.target_user_id).run();
+    return Response.json({ success: true });
+  }
+
   const name = body.name?.trim();
   if (!name) return new Response(JSON.stringify({ error: 'Name required' }), { status: 400 });
 

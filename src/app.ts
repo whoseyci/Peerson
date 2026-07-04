@@ -30,6 +30,8 @@ export class App {
   };
 
   actionLog: ActionLog[] = [];
+  isLoading = false;
+  loadError: string | null = null;
 
   private logAction(action: string, details?: string) {
     this.actionLog.unshift({ action, timestamp: Date.now(), details });
@@ -47,18 +49,24 @@ export class App {
     if (this.state.darkMode) document.body.classList.add('dark-mode');
 
     if (savedView) this.state.view = savedView;
-    if (savedHousehold) {
-      this.state.householdId = savedHousehold;
-      this.loadHousehold(savedHousehold).then(() => this.render());
-    } else {
-      this.render();
-    }
 
     const url = new URL(location.href);
     const inviteCode = url.searchParams.get('join');
     if (inviteCode) {
       this.joinFromInvite(inviteCode);
       history.replaceState({}, '', url.pathname);
+      return;
+    }
+
+    if (savedHousehold) {
+      this.isLoading = true;
+      this.loadError = null;
+      this.render();
+      this.loadHousehold(savedHousehold)
+        .then(() => { this.isLoading = false; this.render(); })
+        .catch(() => { this.isLoading = false; this.render(); });
+    } else {
+      this.render();
     }
 
     this.injectBugButton();
@@ -81,15 +89,6 @@ export class App {
       return `${i + 1}. [${time}] ${a.action}${a.details ? ' — ' + a.details : ''}`;
     }).join('\n') || 'Keine Aktionen aufgezeichnet';
 
-    const context = {
-      view: this.state.view,
-      household: this.state.household?.name || 'Kein Haushalt',
-      user: this.state.userName || 'Anonym',
-      userAgent: navigator.userAgent,
-      screen: `${window.innerWidth}x${window.innerHeight}`,
-      url: location.href,
-    };
-
     this.showModal('bugModal', `
       <div class="modal-header">
         <div class="modal-title"><i class="ph ph-bug"></i> Bug melden</div>
@@ -105,19 +104,19 @@ export class App {
           <textarea id="bugDesc" rows="4" placeholder="Was ist passiert? Was hast du erwartet?"></textarea>
         </div>
         <div class="form-group">
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-            <input type="checkbox" id="bugScreenshot" checked style="width:18px; height:18px;">
+          <label class="checkbox-label">
+            <input type="checkbox" id="bugScreenshot" checked>
             <span>Screenshot anhängen</span>
           </label>
         </div>
-        <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:12px; font-size:12px; color:var(--text-soft); margin-bottom:16px;">
+        <div class="bug-context">
           <div style="font-weight:700; margin-bottom:6px;">Auto-Kontext</div>
-          <div>View: <strong>${context.view}</strong></div>
-          <div>Haushalt: <strong>${context.household}</strong></div>
-          <div>User: <strong>${context.user}</strong></div>
-          <div>Screen: <strong>${context.screen}</strong></div>
+          <div>View: <strong>${this.state.view}</strong></div>
+          <div>Haushalt: <strong>${this.state.household?.name || '—'}</strong></div>
+          <div>User: <strong>${this.state.userName || 'Anonym'}</strong></div>
+          <div>Screen: <strong>${window.innerWidth}x${window.innerHeight}</strong></div>
           <div style="margin-top:6px; font-weight:700;">Letzte Aktionen:</div>
-          <pre style="margin:4px 0 0; white-space:pre-wrap; font-family:inherit; line-height:1.5;">${lastActions}</pre>
+          <pre>${lastActions}</pre>
         </div>
         <button class="btn" onclick="app.submitBugReport()">
           <i class="ph-bold ph-github-logo"></i> Auf GitHub erstellen
@@ -188,10 +187,18 @@ ${screenshotData ? '\n## Screenshot\n![Screenshot](' + screenshotData + ')' : ''
       this.state.household = data.household;
       this.state.members = data.members;
       await this.loadData();
-    } catch (e) {
-      this.toast('Fehler beim Laden des Haushalts');
-      this.state.householdId = null;
-      localStorage.removeItem('peerson_householdId');
+      this.loadError = null;
+    } catch (e: any) {
+      console.error('Load household error', e);
+      if (e.status === 404 || e.status === 401 || e.status === 403) {
+        this.toast('Haushalt nicht gefunden oder Zugriff verweigert');
+        this.state.householdId = null;
+        this.state.household = null;
+        localStorage.removeItem('peerson_householdId');
+      } else {
+        this.loadError = 'Verbindungsfehler — bitte erneut versuchen';
+        this.toast(this.loadError);
+      }
     }
   }
 
@@ -236,6 +243,17 @@ ${screenshotData ? '\n## Screenshot\n![Screenshot](' + screenshotData + ')' : ''
 
   render() {
     const appEl = document.getElementById('app')!;
+
+    if (this.isLoading) {
+      appEl.innerHTML = `
+        <div class="loading-overlay">
+          <div class="spinner"></div>
+          <div style="margin-top:16px; font-weight:600;">Laden...</div>
+        </div>`;
+      this.injectBugButton();
+      return;
+    }
+
     if (!this.state.householdId || !this.state.household) {
       this.setHtml(appEl, renderHouseholdView(this));
       this.injectBugButton();
@@ -321,7 +339,7 @@ ${screenshotData ? '\n## Screenshot\n![Screenshot](' + screenshotData + ')' : ''
       await this.loadData();
       this.render();
     } catch (e: any) {
-      this.toast(e.message || 'Fehler');
+      this.toast(e.message || 'Fehler beim Erstellen');
     }
   }
 
@@ -338,6 +356,7 @@ ${screenshotData ? '\n## Screenshot\n![Screenshot](' + screenshotData + ')' : ''
       this.render();
     } catch (e: any) {
       this.toast(e.message || 'Ungültiger Code');
+      this.render();
     }
   }
 
@@ -345,6 +364,23 @@ ${screenshotData ? '\n## Screenshot\n![Screenshot](' + screenshotData + ')' : ''
     this.logAction('Name setzen', name);
     this.state.userName = name;
     localStorage.setItem('peerson_userName', name);
+  }
+
+  async updateUserName(name: string) {
+    this.logAction('Name aktualisieren', name);
+    this.state.userName = name;
+    localStorage.setItem('peerson_userName', name);
+    try {
+      await api.users.updateName(name);
+      this.toast('Name gespeichert');
+    } catch (e) {
+      console.error('Update name error', e);
+    }
+  }
+
+  setUserId(id: string) {
+    this.state.userId = id;
+    localStorage.setItem('peerson_userId', id);
   }
 
   toggleDarkMode() {
@@ -358,6 +394,12 @@ ${screenshotData ? '\n## Screenshot\n![Screenshot](' + screenshotData + ')' : ''
     if (!id) return 'Nicht zugewiesen';
     const m = this.state.members.find(x => x.id === id);
     return m?.name || 'Unbekannt';
+  }
+
+  isAdmin() {
+    if (!this.state.householdId) return false;
+    const m = this.state.members.find(x => x.id === this.state.userId);
+    return m?.role === 'admin';
   }
 
   getItemTotal(itemId: string) {

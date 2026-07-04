@@ -63,34 +63,46 @@ export function renderTasksView(app: App) {
         );
       }
       async function saveTask() {
-        const title = document.getElementById('taskTitle').value.trim();
-        if (!title) return window.app.toast('Titel erforderlich');
-        const task = await window.api.tasks.create({
-          household_id: window.app.state.householdId,
-          title,
-          description: document.getElementById('taskDesc').value || null,
-          assigned_to: document.getElementById('taskAssignee').value || null,
-          due_date: document.getElementById('taskDue').value || null
-        });
-        window.app.state.tasks.push(task.task);
-        window.app.closeModal('taskModal');
-        window.app.render();
-        window.app.toast('Aufgabe erstellt');
+        try {
+          const title = document.getElementById('taskTitle').value.trim();
+          if (!title) return window.app.toast('Titel erforderlich');
+          const task = await window.api.tasks.create({
+            household_id: window.app.state.householdId,
+            title,
+            description: document.getElementById('taskDesc').value || null,
+            assigned_to: document.getElementById('taskAssignee').value || null,
+            due_date: document.getElementById('taskDue').value || null
+          });
+          window.app.state.tasks.push(task.task);
+          window.app.closeModal('taskModal');
+          window.app.render();
+          window.app.toast('Aufgabe erstellt');
+        } catch (e) {
+          window.app.toast('Fehler beim Erstellen');
+        }
       }
       async function toggleTask(id) {
-        const t = window.app.state.tasks.find(x => x.id === id);
-        if (!t) return;
-        const next = t.status === 'todo' ? 'done' : 'todo';
-        await window.api.tasks.update(id, { status: next });
-        t.status = next;
-        window.app.render();
+        try {
+          const t = window.app.state.tasks.find(x => x.id === id);
+          if (!t) return;
+          const next = t.status === 'todo' ? 'done' : 'todo';
+          await window.api.tasks.update(id, { status: next });
+          t.status = next;
+          window.app.render();
+        } catch (e) {
+          window.app.toast('Fehler beim Aktualisieren');
+        }
       }
       async function deleteTask(id) {
         if (!confirm('Löschen?')) return;
-        await window.api.tasks.delete(id);
-        window.app.state.tasks = window.app.state.tasks.filter(t => t.id !== id);
-        window.app.render();
-        window.app.toast('Gelöscht');
+        try {
+          await window.api.tasks.delete(id);
+          window.app.state.tasks = window.app.state.tasks.filter(t => t.id !== id);
+          window.app.render();
+          window.app.toast('Gelöscht');
+        } catch (e) {
+          window.app.toast('Fehler beim Löschen');
+        }
       }
     </script>
   `;

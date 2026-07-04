@@ -105,7 +105,7 @@ export function renderInventoryView(app: App) {
       }
       async function openAddItemModal() {
         const categories = ${JSON.stringify(Object.entries(CATEGORY_META).map(([k, v]) => ({ value: k, label: v.label })))};
-        window.app.showModal('itemModal', 
+        window.app.showModal('itemModal',
           '<div class="modal-header"><div class="modal-title">Neuer Artikel</div><button class="close-btn" onclick="window.app.closeModal(\'itemModal\')"><i class="ph ph-x"></i></button></div>' +
           '<div class="modal-body">' +
             '<div class="form-group"><label>Name</label><input type="text" id="newItemName" placeholder="z. B. Hafermilch"></div>' +
@@ -117,63 +117,79 @@ export function renderInventoryView(app: App) {
         );
       }
       async function saveNewItem() {
-        const name = document.getElementById('newItemName').value.trim();
-        if (!name) return window.app.toast('Name erforderlich');
-        const item = await window.api.items.create({
-          household_id: window.app.state.householdId,
-          name,
-          category: document.getElementById('newItemCategory').value,
-          threshold: parseInt(document.getElementById('newItemThreshold').value) || 0,
-          barcodes: document.getElementById('newItemBarcode').value ? [{ code: document.getElementById('newItemBarcode').value, grams: 0 }] : []
-        });
-        window.app.state.items.push(item.item);
-        window.app.closeModal('itemModal');
-        window.app.render();
-        window.app.toast('Artikel erstellt');
+        try {
+          const name = document.getElementById('newItemName').value.trim();
+          if (!name) return window.app.toast('Name erforderlich');
+          const item = await window.api.items.create({
+            household_id: window.app.state.householdId,
+            name,
+            category: document.getElementById('newItemCategory').value,
+            threshold: parseInt(document.getElementById('newItemThreshold').value) || 0,
+            barcodes: document.getElementById('newItemBarcode').value ? [{ code: document.getElementById('newItemBarcode').value, grams: 0 }] : []
+          });
+          window.app.state.items.push(item.item);
+          window.app.closeModal('itemModal');
+          window.app.render();
+          window.app.toast('Artikel erstellt');
+        } catch (e) {
+          window.app.toast('Fehler: ' + (e.message || 'Unbekannter Fehler'));
+        }
       }
       async function openItemDetail(id) {
-        const item = window.app.state.items.find(i => i.id === id);
-        if (!item) return;
-        const batches = window.app.state.batches.filter(b => b.item_id === id).sort((a, b) => (a.expiry || '').localeCompare(b.expiry || ''));
-        const catOptions = ${JSON.stringify(Object.entries(CATEGORY_META).map(([k, v]) => ({ value: k, label: v.label })))};
-        window.app.showModal('itemModal',
-          '<div class="modal-header"><div class="modal-title">' + item.name + '</div><button class="close-btn" onclick="window.app.closeModal(\'itemModal\')"><i class="ph ph-x"></i></button></div>' +
-          '<div class="modal-body">' +
-            '<div class="form-group"><label>Kategorie</label><select id="editCategory">' + catOptions.map(c => '<option value="' + c.value + '"' + (c.value === item.category ? ' selected' : '') + '>' + c.label + '</option>').join('') + '</select></div>' +
-            '<div class="form-group"><label>Mindestmenge</label><input type="number" id="editThreshold" value="' + item.threshold + '"></div>' +
-            '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;"><label style="margin:0">Chargen</label><button class="btn btn-small" onclick="openAddStock(\'' + item.id + '\')">+ Bestand</button></div>' +
-            '<div class="detail-batch-list" style="margin-bottom:16px;">' +
-              (batches.length ? batches.map(b => 
-                '<div class="detail-batch-item" style="display:flex; align-items:center; gap:8px; padding:8px; border-bottom:1px solid var(--border);">' +
-                  '<span style="font-weight:700; width:32px; text-align:center;">' + b.quantity + '</span>' +
-                  '<span style="flex:1; font-size:13px;">' + (b.expiry ? new Date(b.expiry).toLocaleDateString('de-DE') : 'Kein MHD') + '</span>' +
-                  '<button class="batch-del-btn" onclick="removeBatch(\'' + b.id + '\')"><i class="ph ph-minus"></i></button>' +
-                '</div>'
-              ).join('') : '<div class="empty-state" style="padding:16px;">Keine Chargen</div>') +
-            '</div>' +
-            '<button class="btn" onclick="saveItemDetail(\'' + item.id + '\')"><i class="ph-bold ph-floppy-disk"></i> Speichern</button>' +
-            '<button class="btn btn-secondary" onclick="deleteItem(\'' + item.id + '\')" style="margin-top:8px;"><i class="ph-bold ph-trash"></i> Löschen</button>' +
-          '</div>'
-        );
+        try {
+          const item = window.app.state.items.find(i => i.id === id);
+          if (!item) return;
+          const batches = window.app.state.batches.filter(b => b.item_id === id).sort((a, b) => (a.expiry || '').localeCompare(b.expiry || ''));
+          const catOptions = ${JSON.stringify(Object.entries(CATEGORY_META).map(([k, v]) => ({ value: k, label: v.label })))};
+          window.app.showModal('itemModal',
+            '<div class="modal-header"><div class="modal-title">' + item.name + '</div><button class="close-btn" onclick="window.app.closeModal(\'itemModal\')"><i class="ph ph-x"></i></button></div>' +
+            '<div class="modal-body">' +
+              '<div class="form-group"><label>Kategorie</label><select id="editCategory">' + catOptions.map(c => '<option value="' + c.value + '"' + (c.value === item.category ? ' selected' : '') + '>' + c.label + '</option>').join('') + '</select></div>' +
+              '<div class="form-group"><label>Mindestmenge</label><input type="number" id="editThreshold" value="' + item.threshold + '"></div>' +
+              '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;"><label style="margin:0">Chargen</label><button class="btn btn-small" onclick="openAddStock(\'' + item.id + '\')">+ Bestand</button></div>' +
+              '<div class="detail-batch-list" style="margin-bottom:16px;">' +
+                (batches.length ? batches.map(b =>
+                  '<div class="detail-batch-item" style="display:flex; align-items:center; gap:8px; padding:8px; border-bottom:1px solid var(--border);">' +
+                    '<span style="font-weight:700; width:32px; text-align:center;">' + b.quantity + '</span>' +
+                    '<span style="flex:1; font-size:13px;">' + (b.expiry ? new Date(b.expiry).toLocaleDateString('de-DE') : 'Kein MHD') + '</span>' +
+                    '<button class="batch-del-btn" onclick="removeBatch(\'' + b.id + '\')"><i class="ph ph-minus"></i></button>' +
+                  '</div>'
+                ).join('') : '<div class="empty-state" style="padding:16px;">Keine Chargen</div>') +
+              '</div>' +
+              '<button class="btn" onclick="saveItemDetail(\'' + item.id + '\')"><i class="ph-bold ph-floppy-disk"></i> Speichern</button>' +
+              '<button class="btn btn-secondary" onclick="deleteItem(\'' + item.id + '\')" style="margin-top:8px;"><i class="ph-bold ph-trash"></i> Löschen</button>' +
+            '</div>'
+          );
+        } catch (e) {
+          window.app.toast('Fehler beim Öffnen');
+        }
       }
       async function saveItemDetail(id) {
-        const threshold = parseInt(document.getElementById('editThreshold').value) || 0;
-        const category = document.getElementById('editCategory').value;
-        await window.api.items.update(id, { threshold, category });
-        const item = window.app.state.items.find(i => i.id === id);
-        if (item) { item.threshold = threshold; item.category = category; }
-        window.app.closeModal('itemModal');
-        window.app.render();
-        window.app.toast('Gespeichert');
+        try {
+          const threshold = parseInt(document.getElementById('editThreshold').value) || 0;
+          const category = document.getElementById('editCategory').value;
+          await window.api.items.update(id, { threshold, category });
+          const item = window.app.state.items.find(i => i.id === id);
+          if (item) { item.threshold = threshold; item.category = category; }
+          window.app.closeModal('itemModal');
+          window.app.render();
+          window.app.toast('Gespeichert');
+        } catch (e) {
+          window.app.toast('Fehler beim Speichern');
+        }
       }
       async function deleteItem(id) {
         if (!confirm('Wirklich löschen?')) return;
-        await window.api.items.delete(id);
-        window.app.state.items = window.app.state.items.filter(i => i.id !== id);
-        window.app.state.batches = window.app.state.batches.filter(b => b.item_id !== id);
-        window.app.closeModal('itemModal');
-        window.app.render();
-        window.app.toast('Gelöscht');
+        try {
+          await window.api.items.delete(id);
+          window.app.state.items = window.app.state.items.filter(i => i.id !== id);
+          window.app.state.batches = window.app.state.batches.filter(b => b.item_id !== id);
+          window.app.closeModal('itemModal');
+          window.app.render();
+          window.app.toast('Gelöscht');
+        } catch (e) {
+          window.app.toast('Fehler beim Löschen');
+        }
       }
       async function openAddStock(itemId) {
         window.app.showModal('stockModal',
@@ -186,27 +202,35 @@ export function renderInventoryView(app: App) {
         );
       }
       async function commitAddStock(itemId) {
-        const qty = parseInt(document.getElementById('addQty').value) || 0;
-        const expiry = document.getElementById('addExpiry').value;
-        if (qty <= 0) return;
-        const batch = await window.api.batches.create({ item_id: itemId, quantity: qty, expiry: expiry || null });
-        window.app.state.batches.push(batch.batch);
-        window.app.closeModal('stockModal');
-        window.app.render();
-        window.app.toast('Hinzugefügt');
+        try {
+          const qty = parseInt(document.getElementById('addQty').value) || 0;
+          const expiry = document.getElementById('addExpiry').value;
+          if (qty <= 0) return;
+          const batch = await window.api.batches.create({ item_id: itemId, quantity: qty, expiry: expiry || null });
+          window.app.state.batches.push(batch.batch);
+          window.app.closeModal('stockModal');
+          window.app.render();
+          window.app.toast('Hinzugefügt');
+        } catch (e) {
+          window.app.toast('Fehler beim Hinzufügen');
+        }
       }
       async function removeBatch(batchId) {
-        const b = window.app.state.batches.find(x => x.id === batchId);
-        if (!b) return;
-        if (b.quantity > 1) {
-          await window.api.batches.update(batchId, { quantity: b.quantity - 1 });
-          b.quantity -= 1;
-        } else {
-          await window.api.batches.delete(batchId);
-          window.app.state.batches = window.app.state.batches.filter(x => x.id !== batchId);
+        try {
+          const b = window.app.state.batches.find(x => x.id === batchId);
+          if (!b) return;
+          if (b.quantity > 1) {
+            await window.api.batches.update(batchId, { quantity: b.quantity - 1 });
+            b.quantity -= 1;
+          } else {
+            await window.api.batches.delete(batchId);
+            window.app.state.batches = window.app.state.batches.filter(x => x.id !== batchId);
+          }
+          window.app.render();
+          window.app.toast('Entnommen');
+        } catch (e) {
+          window.app.toast('Fehler beim Entnehmen');
         }
-        window.app.render();
-        window.app.toast('Entnommen');
       }
       async function removeOne(itemId) {
         const batches = window.app.state.batches.filter(b => b.item_id === itemId).sort((a, b) => (a.expiry || '').localeCompare(b.expiry || ''));
