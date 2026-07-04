@@ -5,7 +5,7 @@ pages_build_output_dir = "dist"
 [[d1_databases]]
 binding = "DB"
 database_name = "peerson-db"
-database_id = "your-database-id-here"
+database_id = "ca553dfb-0217-4db4-8b54-9ad2eee13195"
 
 [vars]
 APP_NAME = "Peerson"
