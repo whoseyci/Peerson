@@ -1,6 +1,5 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../_middleware';
-import { requireMember } from '../../lib/auth';
 
 function generateId() { return crypto.randomUUID(); }
 function generateCode() {
@@ -8,6 +7,11 @@ function generateCode() {
   let code = '';
   for (let i = 0; i < 8; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
   return code;
+}
+async function requireMember(db: D1Database, userId: string, householdId: string) {
+  const row = await db.prepare('SELECT 1 FROM household_members WHERE household_id = ? AND user_id = ?')
+    .bind(householdId, userId).first();
+  if (!row) throw new Error('Forbidden');
 }
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {

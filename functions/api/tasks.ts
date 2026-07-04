@@ -1,6 +1,11 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../_middleware';
-import { requireMember } from '../../lib/auth';
+
+async function requireMember(db: D1Database, userId: string, householdId: string) {
+  const row = await db.prepare('SELECT 1 FROM household_members WHERE household_id = ? AND user_id = ?')
+    .bind(householdId, userId).first();
+  if (!row) throw new Error('Forbidden');
+}
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const userId = request.headers.get('X-User-Id');
