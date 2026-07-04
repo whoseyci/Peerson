@@ -6,6 +6,12 @@ import { renderShoppingView } from './views/shopping';
 import { renderTasksView } from './views/tasks';
 import { renderExpensesView } from './views/expenses';
 
+interface ActionLog {
+  action: string;
+  timestamp: number;
+  details?: string;
+}
+
 export class App {
   state: AppState = {
     userId: '',
@@ -22,6 +28,13 @@ export class App {
     view: 'household',
     darkMode: false,
   };
+
+  actionLog: ActionLog[] = [];
+
+  private logAction(action: string, details?: string) {
+    this.actionLog.unshift({ action, timestamp: Date.now(), details });
+    if (this.actionLog.length > 10) this.actionLog.pop();
+  }
 
   init() {
     this.state.userId = localStorage.getItem('peerson_userId') || crypto.randomUUID();
@@ -47,6 +60,126 @@ export class App {
       this.joinFromInvite(inviteCode);
       history.replaceState({}, '', url.pathname);
     }
+
+    this.injectBugButton();
+  }
+
+  injectBugButton() {
+    if (document.getElementById('bugReportBtn')) return;
+    const btn = document.createElement('button');
+    btn.id = 'bugReportBtn';
+    btn.className = 'bug-report-btn';
+    btn.title = 'Bug melden';
+    btn.innerHTML = '<i class="ph ph-bug"></i>';
+    btn.onclick = () => this.openBugReport();
+    document.body.appendChild(btn);
+  }
+
+  openBugReport() {
+    const lastActions = this.actionLog.slice(0, 3).map((a, i) => {
+      const time = new Date(a.timestamp).toLocaleTimeString('de-DE');
+      return `${i + 1}. [${time}] ${a.action}${a.details ? ' — ' + a.details : ''}`;
+    }).join('\n') || 'Keine Aktionen aufgezeichnet';
+
+    const context = {
+      view: this.state.view,
+      household: this.state.household?.name || 'Kein Haushalt',
+      user: this.state.userName || 'Anonym',
+      userAgent: navigator.userAgent,
+      screen: `${window.innerWidth}x${window.innerHeight}`,
+      url: location.href,
+    };
+
+    this.showModal('bugModal', `
+      <div class="modal-header">
+        <div class="modal-title"><i class="ph ph-bug"></i> Bug melden</div>
+        <button class="close-btn" onclick="app.closeModal('bugModal')"><i class="ph ph-x"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Titel</label>
+          <input type="text" id="bugTitle" placeholder="Kurze Beschreibung des Problems">
+        </div>
+        <div class="form-group">
+          <label>Beschreibung</label>
+          <textarea id="bugDesc" rows="4" placeholder="Was ist passiert? Was hast du erwartet?"></textarea>
+        </div>
+        <div class="form-group">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="bugScreenshot" checked style="width:18px; height:18px;">
+            <span>Screenshot anhängen</span>
+          </label>
+        </div>
+        <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:12px; font-size:12px; color:var(--text-soft); margin-bottom:16px;">
+          <div style="font-weight:700; margin-bottom:6px;">Auto-Kontext</div>
+          <div>View: <strong>${context.view}</strong></div>
+          <div>Haushalt: <strong>${context.household}</strong></div>
+          <div>User: <strong>${context.user}</strong></div>
+          <div>Screen: <strong>${context.screen}</strong></div>
+          <div style="margin-top:6px; font-weight:700;">Letzte Aktionen:</div>
+          <pre style="margin:4px 0 0; white-space:pre-wrap; font-family:inherit; line-height:1.5;">${lastActions}</pre>
+        </div>
+        <button class="btn" onclick="app.submitBugReport()">
+          <i class="ph-bold ph-github-logo"></i> Auf GitHub erstellen
+        </button>
+      </div>
+    `);
+  }
+
+  async submitBugReport() {
+    const title = (document.getElementById('bugTitle') as HTMLInputElement)?.value.trim();
+    const desc = (document.getElementById('bugDesc') as HTMLTextAreaElement)?.value.trim();
+    const includeScreenshot = (document.getElementById('bugScreenshot') as HTMLInputElement)?.checked;
+
+    if (!title) {
+      this.toast('Bitte Titel eingeben');
+      return;
+    }
+
+    const lastActions = this.actionLog.slice(0, 3).map((a, i) => {
+      const time = new Date(a.timestamp).toLocaleTimeString('de-DE');
+      return `${i + 1}. [${time}] ${a.action}${a.details ? ' — ' + a.details : ''}`;
+    }).join('\n') || 'Keine Aktionen aufgezeichnet';
+
+    let screenshotData = '';
+    if (includeScreenshot && (window as any).html2canvas) {
+      try {
+        this.closeModal('bugModal');
+        await new Promise(r => setTimeout(r, 300));
+        const canvas = await (window as any).html2canvas(document.body, {
+          backgroundColor: null,
+          scale: 1,
+          logging: false,
+        });
+        screenshotData = canvas.toDataURL('image/png');
+      } catch (e) {
+        console.error('Screenshot failed', e);
+      }
+    }
+
+    const body = `## Beschreibung
+${desc || '_(keine Beschreibung)_'}
+
+## Kontext
+| Feld | Wert |
+|------|------|
+| View | \`${this.state.view}\` |
+| Haushalt | ${this.state.household?.name || '—'} |
+| User | ${this.state.userName || 'Anonym'} |
+| Screen | \`${window.innerWidth}x${window.innerHeight}\` |
+| URL | \`${location.href}\` |
+| User-Agent | \`${navigator.userAgent}\` |
+
+## Letzte Aktionen
+\`\`\`
+${lastActions}
+\`\`\`
+${screenshotData ? '\n## Screenshot\n![Screenshot](' + screenshotData + ')' : ''}
+`;
+
+    const issueUrl = `https://github.com/whoseyci/Peerson/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
+    window.open(issueUrl, '_blank');
+    this.toast('GitHub Issue geöffnet');
   }
 
   async loadHousehold(id: string) {
@@ -85,6 +218,7 @@ export class App {
   }
 
   navigate(view: string) {
+    this.logAction('Navigation', `→ ${view}`);
     this.state.view = view;
     localStorage.setItem('peerson_view', view);
     this.render();
@@ -92,7 +226,6 @@ export class App {
 
   setHtml(el: HTMLElement, html: string) {
     el.innerHTML = html;
-    // Re-execute scripts since innerHTML doesn't run them
     el.querySelectorAll('script').forEach(oldScript => {
       const newScript = document.createElement('script');
       Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
@@ -105,6 +238,7 @@ export class App {
     const appEl = document.getElementById('app')!;
     if (!this.state.householdId || !this.state.household) {
       this.setHtml(appEl, renderHouseholdView(this));
+      this.injectBugButton();
       return;
     }
 
@@ -146,6 +280,7 @@ export class App {
         </button>
       </nav>
     `);
+    this.injectBugButton();
   }
 
   showModal(id: string, content: string) {
@@ -175,6 +310,7 @@ export class App {
   }
 
   async createHousehold(name: string) {
+    this.logAction('Haushalt erstellen', name);
     try {
       const data = await api.households.create(name);
       this.state.householdId = data.household.id;
@@ -190,6 +326,7 @@ export class App {
   }
 
   async joinFromInvite(code: string) {
+    this.logAction('Einladung beitreten', code);
     try {
       const data = await api.households.join(code);
       this.state.householdId = data.household.id;
@@ -205,11 +342,13 @@ export class App {
   }
 
   setUserName(name: string) {
+    this.logAction('Name setzen', name);
     this.state.userName = name;
     localStorage.setItem('peerson_userName', name);
   }
 
   toggleDarkMode() {
+    this.logAction('Dark Mode toggle');
     this.state.darkMode = !this.state.darkMode;
     document.body.classList.toggle('dark-mode', this.state.darkMode);
     localStorage.setItem('peerson_darkMode', String(this.state.darkMode));
