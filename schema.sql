@@ -98,3 +98,7 @@ CREATE INDEX IF NOT EXISTS idx_expense_splits_expense ON expense_splits(expense_
 CREATE INDEX IF NOT EXISTS idx_expense_splits_user ON expense_splits(user_id);
 CREATE INDEX IF NOT EXISTS idx_shopping_items_household ON shopping_items(household_id);
 CREATE INDEX IF NOT EXISTS idx_shopping_items_linked ON shopping_items(linked_item_id);
+
+-- Price Tracking Columns
+ALTER TABLE batches ADD COLUMN price REAL DEFAULT NULL;
+ALTER TABLE shopping_items ADD COLUMN price REAL DEFAULT NULL;

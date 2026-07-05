@@ -55,6 +55,7 @@ export const api = {
     leave: (householdId: string, targetUserId: string) => post('/api/households', { action: 'leave', household_id: householdId, target_user_id: targetUserId }),
     kick: (householdId: string, targetUserId: string) => post('/api/households', { action: 'kick', household_id: householdId, target_user_id: targetUserId }),
     regenerateInvite: (id: string) => patch(`/api/households/${id}`, { invite_code: 'regenerate' }) as Promise<{ invite_code: string }>,
+    syncCheck: (householdId: string) => get(`/api/sync-check?householdId=${householdId}`) as Promise<{ lastModified: number }>,
   },
   items: {
     list: (householdId: string) => get(`/api/items?householdId=${householdId}`) as Promise<{ items: Item[]; batches: Batch[] }>,

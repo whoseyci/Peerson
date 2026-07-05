@@ -23,6 +23,10 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
   if (body.expiry !== undefined) {
     await env.DB.prepare('UPDATE batches SET expiry = ? WHERE id = ?').bind(body.expiry, id).run();
   }
+  if (body.price !== undefined) {
+    const price = body.price !== null ? parseFloat(body.price) || null : null;
+    await env.DB.prepare('UPDATE batches SET price = ? WHERE id = ?').bind(price, id).run();
+  }
   const updated = await env.DB.prepare('SELECT * FROM batches WHERE id = ?').bind(id).first();
   return Response.json({ batch: updated });
 };

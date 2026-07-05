@@ -16,7 +16,7 @@ interface ActionLog {
 // fairly conservative (8s) to avoid hammering the API; a visibilitychange
 // + window-focus listener also triggers an immediate refresh so switching
 // back to the tab always feels current even between polls.
-const SYNC_INTERVAL_MS = 8000;
+const SYNC_INTERVAL_MS = 3000;
 
 type DeletableType = 'item' | 'task' | 'shopping' | 'expense';
 
@@ -56,6 +56,7 @@ export class App {
   private syncTimer: ReturnType<typeof setInterval> | null = null;
   private syncInFlight = false;
   isSyncing = false;
+  private lastSyncTimestamp = 0;
 
   // --- Soft-delete / undo state ---
   // Keyed by "type:id" so an item and a task can never collide even if
@@ -343,6 +344,15 @@ export class App {
     this.isSyncing = true;
     this.injectSyncIndicator();
     try {
+      try {
+        const check = await (this.api as any).syncCheck(this.state.householdId);
+        if (check && check.lastModified && check.lastModified === this.lastSyncTimestamp) {
+          return;
+        }
+        this.lastSyncTimestamp = (check && check.lastModified) ? check.lastModified : 0;
+      } catch (e) {
+        // Fall back to full data load if check fails
+      }
       await this.loadData();
     } finally {
       this.syncInFlight = false;
