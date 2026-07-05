@@ -43,6 +43,7 @@ export interface Batch {
   barcode_code?: string;
   grams_per_unit: number;
   date_added: number;
+  price?: number | null;
 }
 
 export interface Task {
@@ -82,6 +83,7 @@ export interface ShoppingItem {
   requested_by?: string;
   status: 'open' | 'bought';
   linked_item_id?: string;
+  price?: number | null;
 }
 
 export interface AppState {

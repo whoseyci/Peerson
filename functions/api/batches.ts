@@ -16,10 +16,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   await requireMember(env.DB, userId, item.household_id as string);
 
   const id = crypto.randomUUID();
+  const price = body.price !== undefined && body.price !== null ? parseFloat(body.price) || null : null;
   await env.DB.prepare(`
-    INSERT INTO batches (id, item_id, quantity, expiry, barcode_code, grams_per_unit)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).bind(id, body.item_id, body.quantity || 1, body.expiry || null, body.barcode_code || null, body.grams_per_unit || 0).run();
+    INSERT INTO batches (id, item_id, quantity, expiry, barcode_code, grams_per_unit, price)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).bind(id, body.item_id, body.quantity || 1, body.expiry || null, body.barcode_code || null, body.grams_per_unit || 0, price).run();
 
-  return Response.json({ batch: { id, ...body } }, { status: 201 });
+  return Response.json({ batch: { id, ...body, price } }, { status: 201 });
 };
