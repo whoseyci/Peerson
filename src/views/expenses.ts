@@ -10,7 +10,7 @@ export function renderExpensesView(app: App) {
 
   return `
     <div class="header">
-      <h1><i class="ph ph-currency-euro"></i> Finanzen</h1>
+      <h1><i class="ph ph-currency-eur"></i> Finanzen</h1>
       <button class="icon-btn" onclick="openAddExpenseModal()"><i class="ph ph-plus"></i></button>
     </div>
 
