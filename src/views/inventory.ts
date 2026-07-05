@@ -108,6 +108,7 @@ export function renderInventoryView(app: App) {
       }
       async function openAddItemModal(prefill) {
         prefill = prefill || {};
+        window._pendingNutrition = prefill.nutrition || {};
         const categories = ${JSON.stringify(Object.entries(CATEGORY_META).map(([k, v]) => ({ value: k, label: v.label })))};
         const preview = prefill.imageUrl || prefill.quantity ? (
           '<div class="product-preview">' +
@@ -151,7 +152,8 @@ export function renderInventoryView(app: App) {
             name,
             category: document.getElementById('newItemCategory').value,
             threshold: parseInt(document.getElementById('newItemThreshold').value) || 0,
-            barcodes: document.getElementById('newItemBarcode').value ? [{ code: document.getElementById('newItemBarcode').value, grams: 0 }] : []
+            barcodes: document.getElementById('newItemBarcode').value ? [{ code: document.getElementById('newItemBarcode').value, grams: 0 }] : [],
+            nutrition: window._pendingNutrition || {}
           });
           window.app.state.items.push(item.item);
           window.app.closeModal('itemModal');
@@ -219,6 +221,7 @@ export function renderInventoryView(app: App) {
               barcode: code,
               imageUrl: product.imageUrl,
               quantity: product.quantity,
+              nutrition: product.nutrition,
             });
           } else {
             window.app.toast('Produkt nicht gefunden — bitte manuell ausfüllen');
@@ -475,13 +478,19 @@ function renderInventoryList(app: App, filter: string) {
 
   return sorted.map(i => {
     const total = getTotal(i.id, app.state.batches);
+    const kcal = i.nutrition?.energy_kcal_100g || i.nutrition?.['energy-kcal_100g'];
+    const nutriScore = i.nutrition?.nutriscore_grade ? String(i.nutrition.nutriscore_grade).toUpperCase() : null;
+    const latestBatch = app.state.batches.filter(b => b.item_id === i.id && typeof b.price === 'number' && b.price > 0).sort((a,b) => b.date_added - a.date_added)[0];
+    const priceStr = latestBatch ? ` · ca. ${latestBatch.price!.toFixed(2)} €` : '';
+    const nutriStr = (nutriScore || kcal) ? ` <span style="font-size:0.75rem; background:var(--border); padding:2px 6px; border-radius:4px; margin-left:6px; font-weight:600; display:inline-block; margin-top:2px;">${nutriScore ? `Nutri-Score ${nutriScore} ` : ''}${kcal ? `🔥 ${kcal} kcal` : ''}</span>` : '';
     return `
       <div class="card">
         <div class="card-content" onclick="openItemDetail('${i.id}')">
           <div class="card-icon"><i class="ph ph-${getItemIcon(i)}"></i></div>
           <div class="card-text">
             <div class="card-header"><div class="item-name">${i.name}</div><div class="item-qty">${total}</div></div>
-            <div class="card-meta">${CATEGORY_META[i.category]?.label || i.category} · Min. ${i.threshold}</div>
+            <div class="card-meta">${CATEGORY_META[i.category]?.label || i.category} · Min. ${i.threshold}${priceStr}</div>
+            ${nutriStr}
           </div>
         </div>
         <div class="card-actions">

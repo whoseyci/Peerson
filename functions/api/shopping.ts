@@ -25,10 +25,22 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   await requireMember(env.DB, userId, body.household_id);
 
   const id = crypto.randomUUID();
-  await env.DB.prepare(`
-    INSERT INTO shopping_items (id, household_id, name, quantity, requested_by, linked_item_id)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).bind(id, body.household_id, body.name || '', body.quantity || null, userId, body.linked_item_id || null).run();
+  const price = body.price !== undefined && body.price !== null ? parseFloat(body.price) || null : null;
+  try {
+    await env.DB.prepare(`
+      INSERT INTO shopping_items (id, household_id, name, quantity, requested_by, linked_item_id, price)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(id, body.household_id, body.name || '', body.quantity || null, userId, body.linked_item_id || null, price).run();
+  } catch (e: any) {
+    if (e?.message?.includes('no such column: price')) {
+      await env.DB.prepare(`
+        INSERT INTO shopping_items (id, household_id, name, quantity, requested_by, linked_item_id)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).bind(id, body.household_id, body.name || '', body.quantity || null, userId, body.linked_item_id || null).run();
+    } else {
+      throw e;
+    }
+  }
 
-  return Response.json({ item: { id, ...body } }, { status: 201 });
+  return Response.json({ item: { id, ...body, price } }, { status: 201 });
 };

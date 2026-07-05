@@ -105,6 +105,7 @@ export function renderShoppingView(app: App) {
             <button class="shopping-check checked" onclick="toggleShopping('${item.id}')"><i class="ph-bold ph-check"></i></button>
             <div class="card-text" style="margin-left: 8px;">
               <div class="card-header"><div class="item-name" style="text-decoration: line-through;">${item.name}</div></div>
+              ${item.price ? `<div class="card-meta" style="color:var(--success); font-weight:700;">${item.price.toFixed(2)} €</div>` : ''}
             </div>
           </div>
         </div>
@@ -118,6 +119,7 @@ export function renderShoppingView(app: App) {
           '<div class="modal-body">' +
             '<div class="form-group"><label>Artikel</label><input type="text" id="shopName" placeholder="Was wird gebraucht?" value="' + (prefillName ? prefillName.replace(/"/g, '&quot;') : '') + '"></div>' +
             '<div class="form-group"><label>Menge (optional)</label><input type="text" id="shopQty" placeholder="z. B. 2 Packungen"></div>' +
+            '<div class="form-group"><label>Preis (€, optional)</label><input type="number" id="shopPrice" step="0.01" min="0" placeholder="z. B. 1.99"></div>' +
             '<button class="btn" onclick="saveShoppingItem()"><i class="ph-bold ph-check"></i></button>' +
           '</div>'
         );
@@ -153,10 +155,13 @@ export function renderShoppingView(app: App) {
         try {
           const name = document.getElementById('shopName').value.trim();
           if (!name) return window.app.toast('Name erforderlich');
+          const priceVal = document.getElementById('shopPrice') ? document.getElementById('shopPrice').value : null;
+          const price = priceVal ? parseFloat(priceVal) || null : null;
           const item = await window.api.shopping.create({
             household_id: window.app.state.householdId,
             name,
-            quantity: document.getElementById('shopQty').value || null
+            quantity: document.getElementById('shopQty').value || null,
+            price: price
           });
           window.app.state.shopping.push(item.item);
           window.app.closeModal('shopModal');
@@ -170,11 +175,13 @@ export function renderShoppingView(app: App) {
         try {
           const item = window.app.state.items.find(i => i.id === itemId);
           if (!item) return;
+          const latestBatch = window.app.state.batches.filter(b => b.item_id === itemId && typeof b.price === 'number' && b.price > 0).sort((a,b) => b.date_added - a.date_added)[0];
           const shop = await window.api.shopping.create({
             household_id: window.app.state.householdId,
             name: item.name,
             quantity: needed + ' Stk',
-            linked_item_id: itemId
+            linked_item_id: itemId,
+            price: latestBatch ? latestBatch.price : null
           });
           window.app.state.shopping.push(shop.item);
           window.app.render();
@@ -201,6 +208,29 @@ export function renderShoppingView(app: App) {
         window.app.scheduleSoftDelete('shopping', item, window.app.state.shopping, '"' + item.name + '"', async () => {
           await window.api.shopping.delete(id);
         });
+      }
+      async function openUpdateShopPrice(id, name, currentPrice) {
+        window.app.showModal('shopPriceModal',
+          '<div class="modal-header"><div class="modal-title">Preis für "' + name + '"</div><button class="close-btn" onclick="window.app.closeModal(\'shopPriceModal\')"><i class="ph ph-x"></i></button></div>' +
+          '<div class="modal-body">' +
+            '<div class="form-group"><label>Preis (€)</label><input type="number" id="quickShopPrice" step="0.01" min="0" value="' + (currentPrice || '') + '" placeholder="z. B. 1.99"></div>' +
+            '<button class="btn" onclick="saveShopPrice(\'' + id + '\')"><i class="ph-bold ph-check"></i> Speichern</button>' +
+          '</div>'
+        );
+      }
+      async function saveShopPrice(id) {
+        try {
+          const val = document.getElementById('quickShopPrice').value;
+          const price = val ? parseFloat(val) || null : null;
+          await window.api.shopping.update(id, { price });
+          const item = window.app.state.shopping.find(s => s.id === id);
+          if (item) item.price = price;
+          window.app.closeModal('shopPriceModal');
+          window.app.render();
+          window.app.toast('Preis aktualisiert');
+        } catch (e) {
+          window.app.toast('Fehler beim Aktualisieren');
+        }
       }
     </script>
   `;

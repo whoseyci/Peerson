@@ -10,6 +10,24 @@ export function renderExpensesView(app: App) {
 
   const hasImbalance = balances.some(b => Math.abs(b.balance) > 0.05);
 
+  const pricedBatches = s.batches.filter(b => typeof b.price === 'number' && b.price > 0);
+  let totalPantryVal = 0;
+  pricedBatches.forEach(b => { totalPantryVal += b.quantity * b.price!; });
+
+  const itemTrends: Array<{ name: string; history: string[]; trend: 'up' | 'down' | 'same' }> = [];
+  s.items.forEach(i => {
+    const iBatches = pricedBatches.filter(b => b.item_id === i.id).sort((a, b) => a.date_added - b.date_added);
+    if (iBatches.length >= 1) {
+      const prices = iBatches.map(b => b.price!);
+      let trend: 'up' | 'down' | 'same' = 'same';
+      if (prices.length >= 2) {
+        if (prices[prices.length - 1] > prices[prices.length - 2] + 0.02) trend = 'up';
+        else if (prices[prices.length - 1] < prices[prices.length - 2] - 0.02) trend = 'down';
+      }
+      itemTrends.push({ name: i.name, history: prices.map(p => p.toFixed(2) + ' €'), trend });
+    }
+  });
+
   return `
     <div class="header">
       <h1><i class="ph ph-currency-eur"></i> Finanzen</h1>
@@ -18,6 +36,31 @@ export function renderExpensesView(app: App) {
         <button class="icon-btn" onclick="openAddExpenseModal()" title="Ausgabe hinzufügen"><i class="ph ph-plus"></i></button>
       </div>
     </div>
+
+    ${(totalPantryVal > 0 || itemTrends.length > 0) ? `
+    <div class="section">
+      <div class="section-header"><div class="section-title"><i class="ph ph-trend-up"></i> Vorratswert & Preistrends</div></div>
+      ${totalPantryVal > 0 ? `
+      <div class="card" style="margin-bottom: 8px; border-left: 3px solid var(--success);">
+        <div class="card-content">
+          <div class="card-icon" style="background: var(--success); color: #fff;"><i class="ph ph-coins"></i></div>
+          <div class="card-text">
+            <div class="card-header"><div class="item-name">Gesamter Vorratswert</div><div class="item-qty" style="color: var(--success); font-weight: 800;">ca. ${totalPantryVal.toFixed(2)} €</div></div>
+            <div class="card-meta">Basierend auf erfassten Chargenpreisen</div>
+          </div>
+        </div>
+      </div>` : ''}
+      ${itemTrends.length ? `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;font-size:0.85rem;">
+        <div style="font-weight:700;color:var(--text-soft);margin-bottom:6px;font-size:0.75rem;text-transform:uppercase;">Erfasste Artikelpreise:</div>
+        ${itemTrends.map(t => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border);">
+            <span>${t.name}</span>
+            <span style="font-family:monospace;font-weight:600;">${t.history.join(' → ')} ${t.trend === 'up' ? '↗️' : t.trend === 'down' ? '↘️' : ''}</span>
+          </div>
+        `).join('')}
+      </div>` : ''}
+    </div>` : ''}
 
     <div class="section">
       <div class="section-header">
