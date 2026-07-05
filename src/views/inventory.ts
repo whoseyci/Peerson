@@ -301,7 +301,7 @@ export function renderInventoryView(app: App) {
                 (batches.length ? batches.map(b =>
                   '<div class="detail-batch-item" style="display:flex; align-items:center; gap:8px; padding:8px; border-bottom:1px solid var(--border);">' +
                     '<span style="font-weight:700; width:32px; text-align:center;">' + b.quantity + '</span>' +
-                    '<span style="flex:1; font-size:13px;">' + (b.expiry ? new Date(b.expiry).toLocaleDateString('de-DE') : 'Kein MHD') + '</span>' +
+                    '<span style="flex:1; font-size:13px;">' + (b.expiry ? new Date(b.expiry).toLocaleDateString('de-DE') : 'Kein MHD') + (b.price ? ' · ' + b.price.toFixed(2) + ' €' : '') + '</span>' +
                     '<button class="batch-del-btn" onclick="removeBatch(\\'' + b.id + '\\')"><i class="ph ph-minus"></i></button>' +
                   '</div>'
                 ).join('') : '<div class="empty-state" style="padding:16px;">Keine Chargen</div>') +
@@ -409,6 +409,7 @@ export function renderInventoryView(app: App) {
             '<div id="stockVariantChips">' + renderAddStockVariantChips(itemId) + '</div>' +
             '<div class="form-group"><label>Menge</label><input type="number" id="addQty" value="1" min="1"></div>' +
             '<div class="form-group"><label>MHD (optional)</label><input type="date" id="addExpiry"></div>' +
+            '<div class="form-group"><label>Preis (€, optional)</label><input type="number" id="addPrice" step="0.01" min="0" placeholder="z. B. 1.79"></div>' +
             '<button class="btn" onclick="commitAddStock(\\'' + itemId + '\\')"><i class="ph-bold ph-check"></i></button>' +
           '</div>'
         );
@@ -421,12 +422,15 @@ export function renderInventoryView(app: App) {
           const item = window.app.state.items.find(i => i.id === itemId);
           const options = item ? getAddStockBarcodeOptions(item) : [];
           const variant = options.find(b => b.code === addStockSelectedBarcode);
+          const priceVal = document.getElementById('addPrice') ? document.getElementById('addPrice').value : null;
+          const price = priceVal ? parseFloat(priceVal) || null : null;
           const batch = await window.api.batches.create({
             item_id: itemId,
             quantity: qty,
             expiry: expiry || null,
             barcode_code: variant ? variant.code : null,
             grams_per_unit: variant ? (variant.grams || 0) : 0,
+            price: price,
           });
           window.app.state.batches.push(batch.batch);
           window.app.closeModal('stockModal');
