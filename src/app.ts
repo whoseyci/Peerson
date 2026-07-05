@@ -12,6 +12,20 @@ interface ActionLog {
   details?: string;
 }
 
+// How often we poll for changes made by other household members. Kept
+// fairly conservative (8s) to avoid hammering the API; a visibilitychange
+// + window-focus listener also triggers an immediate refresh so switching
+// back to the tab always feels current even between polls.
+const SYNC_INTERVAL_MS = 8000;
+
+type DeletableType = 'item' | 'task' | 'shopping' | 'expense';
+
+interface PendingDeletion {
+  timeoutId: ReturnType<typeof setTimeout>;
+  undo: () => void;
+  commit: () => Promise<void>;
+}
+
 export class App {
   // Exposed so inline view scripts (household.ts etc.) can call
   // `app.api.households.kick(...)`, `app.api.households.leave(...)`,
@@ -37,6 +51,17 @@ export class App {
   actionLog: ActionLog[] = [];
   isLoading = false;
   loadError: string | null = null;
+
+  // --- Live sync state ---
+  private syncTimer: ReturnType<typeof setInterval> | null = null;
+  private syncInFlight = false;
+  isSyncing = false;
+
+  // --- Soft-delete / undo state ---
+  // Keyed by "type:id" so an item and a task can never collide even if
+  // their ids happened to match. Only one pending deletion per key at a
+  // time (re-deleting mid-countdown just restarts the timer).
+  private pendingDeletions = new Map<string, PendingDeletion>();
 
   private logAction(action: string, details?: string) {
     this.actionLog.unshift({ action, timestamp: Date.now(), details });
@@ -68,13 +93,22 @@ export class App {
       this.loadError = null;
       this.render();
       this.loadHousehold(savedHousehold)
-        .then(() => { this.isLoading = false; this.render(); })
+        .then(() => { this.isLoading = false; this.render(); this.startSync(); })
         .catch(() => { this.isLoading = false; this.render(); });
     } else {
       this.render();
     }
 
     this.injectBugButton();
+    this.injectSyncIndicator();
+
+    // Refresh immediately whenever the tab regains focus/visibility --
+    // covers the common case of switching away and back without waiting
+    // for the next poll tick, e.g. checking another app and coming back.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') this.syncNow();
+    });
+    window.addEventListener('focus', () => this.syncNow());
   }
 
   injectBugButton() {
@@ -86,6 +120,23 @@ export class App {
     btn.innerHTML = '<i class="ph ph-bug"></i>';
     btn.onclick = () => this.openBugReport();
     document.body.appendChild(btn);
+  }
+
+  // Small pulsing dot, always in the same corner regardless of which view
+  // is showing, that lights up while a background sync request is in
+  // flight. Deliberately subtle -- most users should never consciously
+  // notice it, it's just enough to confirm "yes, this is live" for anyone
+  // who does look.
+  injectSyncIndicator() {
+    let el = document.getElementById('syncIndicator');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'syncIndicator';
+      el.className = 'sync-indicator';
+      el.title = 'Wird synchronisiert...';
+      document.body.appendChild(el);
+    }
+    el.classList.toggle('active', this.isSyncing);
   }
 
   openBugReport() {
@@ -247,16 +298,63 @@ export class App {
         api.expenses.list(hid),
         api.shopping.list(hid),
       ]);
-      this.state.items = itemsData.items;
+      this.state.items = this.stripPending('item', itemsData.items);
       this.state.batches = itemsData.batches;
-      this.state.tasks = tasksData.tasks;
-      this.state.expenses = expensesData.expenses;
+      this.state.tasks = this.stripPending('task', tasksData.tasks);
+      this.state.expenses = this.stripPending('expense', expensesData.expenses);
       this.state.splits = expensesData.splits;
-      this.state.shopping = shoppingData.items;
+      this.state.shopping = this.stripPending('shopping', shoppingData.items);
       this.state.members = expensesData.members;
     } catch (e) {
       console.error('Load data error', e);
     }
+  }
+
+  // --- Live sync -----------------------------------------------------
+  //
+  // Peerson is a shared household app; if my flatmate adds something to
+  // the shopping list I should see it without needing to know to reload
+  // the page. This polls the same endpoints loadData() already uses on
+  // a fixed interval, plus refreshes immediately on tab focus/visibility
+  // so switching back to the app always feels current.
+  //
+  // Deliberately conservative about *when* it's allowed to trigger a
+  // visible re-render: it never fires while the user is actively typing
+  // (active element is an input/textarea) or while a modal is open, so a
+  // background refresh can never wipe out an in-progress edit or steal
+  // focus. State is still kept fresh underneath either way -- the next
+  // render (whenever that naturally happens) will reflect it.
+
+  startSync() {
+    if (this.syncTimer) return;
+    this.syncTimer = setInterval(() => this.syncNow(), SYNC_INTERVAL_MS);
+  }
+
+  stopSync() {
+    if (this.syncTimer) {
+      clearInterval(this.syncTimer);
+      this.syncTimer = null;
+    }
+  }
+
+  async syncNow() {
+    if (!this.state.householdId || this.syncInFlight || this.isLoading) return;
+    this.syncInFlight = true;
+    this.isSyncing = true;
+    this.injectSyncIndicator();
+    try {
+      await this.loadData();
+    } finally {
+      this.syncInFlight = false;
+      this.isSyncing = false;
+      this.injectSyncIndicator();
+    }
+
+    const activeTag = document.activeElement?.tagName;
+    const isTyping = activeTag === 'INPUT' || activeTag === 'TEXTAREA';
+    const modalOpen = !!document.querySelector('.modal.active');
+    if (isTyping || modalOpen) return;
+    this.render();
   }
 
   navigate(view: string) {
@@ -286,12 +384,14 @@ export class App {
           <div style="margin-top:16px; font-weight:600;">Laden...</div>
         </div>`;
       this.injectBugButton();
+    this.injectSyncIndicator();
       return;
     }
 
     if (!this.state.householdId || !this.state.household) {
       this.setHtml(appEl, renderHouseholdView(this));
       this.injectBugButton();
+    this.injectSyncIndicator();
       return;
     }
 
@@ -334,6 +434,7 @@ export class App {
       </nav>
     `);
     this.injectBugButton();
+    this.injectSyncIndicator();
   }
 
   showModal(id: string, content: string) {
@@ -360,6 +461,117 @@ export class App {
     document.body.appendChild(t);
     requestAnimationFrame(() => t.classList.add('visible'));
     setTimeout(() => { t.classList.remove('visible'); setTimeout(() => t.remove(), 300); }, 2500);
+  }
+
+  // A toast with an "Undo" button and a shrinking progress bar, used by
+  // the soft-delete flow below. Lives for `durationMs`, then calls
+  // onExpire() if the user never clicked undo.
+  private undoToast(msg: string, durationMs: number, onUndo: () => void, onExpire: () => void) {
+    const t = document.createElement('div');
+    t.className = 'toast toast-undo';
+    t.innerHTML = `
+      <span>${msg}</span>
+      <button class="toast-undo-btn">Rückgängig</button>
+      <div class="toast-progress"><div class="toast-progress-bar"></div></div>
+    `;
+    document.body.appendChild(t);
+    requestAnimationFrame(() => t.classList.add('visible'));
+
+    const bar = t.querySelector('.toast-progress-bar') as HTMLElement;
+    if (bar) {
+      bar.style.transitionDuration = `${durationMs}ms`;
+      requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.transform = 'scaleX(0)'; }));
+    }
+
+    let settled = false;
+    const dismiss = () => {
+      if (settled) return;
+      settled = true;
+      t.classList.remove('visible');
+      setTimeout(() => t.remove(), 300);
+    };
+
+    t.querySelector('.toast-undo-btn')?.addEventListener('click', () => {
+      if (settled) return;
+      onUndo();
+      dismiss();
+    });
+
+    setTimeout(() => {
+      if (settled) return;
+      onExpire();
+      dismiss();
+    }, durationMs);
+  }
+
+  // --- Soft delete / undo ---------------------------------------------
+  //
+  // Deleting something in a shared household app is unusually costly to
+  // get wrong -- it's not just your own data, a flatmate might notice a
+  // task or expense missing and have no way to know it was deleted by
+  // mistake versus never having existed. Every destructive action in the
+  // app should route through this instead of calling the delete API
+  // directly: it hides the item from the UI immediately (so it *feels*
+  // instant), but only actually calls the API after a grace period,
+  // giving the user a chance to undo a misclick.
+  //
+  // `list` is the live state array (e.g. this.state.items) so we can
+  // filter it in place without each caller re-deriving a new array.
+  scheduleSoftDelete<T extends { id: string }>(
+    type: DeletableType,
+    item: T,
+    list: T[],
+    label: string,
+    commitFn: () => Promise<void>
+  ) {
+    const key = `${type}:${item.id}`;
+    // If this exact item somehow gets "deleted" again before the first
+    // grace period ends (shouldn't normally happen since it's hidden from
+    // the UI already), just restart the timer rather than double-commit.
+    const existing = this.pendingDeletions.get(key);
+    if (existing) clearTimeout(existing.timeoutId);
+
+    const index = list.indexOf(item);
+    if (index !== -1) list.splice(index, 1);
+    this.render();
+
+    const restore = () => {
+      this.pendingDeletions.delete(key);
+      if (!list.includes(item)) {
+        const insertAt = Math.min(index, list.length);
+        list.splice(insertAt, 0, item);
+      }
+      this.render();
+      this.toast('Wiederhergestellt');
+    };
+
+    const commit = async () => {
+      this.pendingDeletions.delete(key);
+      try {
+        await commitFn();
+      } catch (e) {
+        console.error(`Soft-delete commit failed for ${key}`, e);
+        // The optimistic removal already happened; if the server call
+        // failed, put it back rather than silently diverging from the
+        // backend's actual state.
+        restore();
+        this.toast('Fehler beim Löschen — wiederhergestellt');
+      }
+    };
+
+    const timeoutId = setTimeout(() => { void commit(); }, 5000);
+    this.pendingDeletions.set(key, { timeoutId, undo: restore, commit });
+
+    this.undoToast(`${label} gelöscht`, 5000, restore, () => { void commit(); });
+  }
+
+  // Removes any item from a freshly-fetched list that's currently
+  // mid-undo-countdown locally, so a background sync poll can never
+  // resurrect something the user just deleted (and hasn't undone) just
+  // because the server hadn't processed the delete yet.
+  private stripPending<T extends { id: string }>(type: DeletableType, list: T[]): T[] {
+    if (this.pendingDeletions.size === 0) return list;
+    return list.filter((item) => !this.pendingDeletions.has(`${type}:${item.id}`));
   }
 
   async createHousehold(name: string) {

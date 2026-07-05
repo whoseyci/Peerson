@@ -5,6 +5,8 @@ A wholesome app for shared households. Track your pantry, split expenses, assign
 ## Features
 
 - **Households** — Create a household and invite others via a shareable link or 8-digit code.
+- **Live Sync** — Changes made by other household members (new tasks, shopping items, expenses...) show up automatically within a few seconds, no manual reload needed. Never interrupts you mid-edit — a background sync will never close a modal or clear text you're typing.
+- **Undo Everything** — Deleting an item, task, shopping entry, or expense is instant but reversible: a 5-second "Rückgängig" (undo) toast appears before anything is actually removed from the server.
 - **Pantry / Inventory** — Track items with quantities, locations, expiry dates (MHD), and barcodes.
 - **Barcode Scanner** — Scan a product with your camera to look it up (via [Open Food Facts](https://world.openfoodfacts.org)) and auto-fill its name, category and photo. Scanning a barcode already in your pantry jumps straight to "add stock" instead of creating a duplicate.
 - **Smart Shopping List** — Manually add items, scan a barcode, or let the app auto-suggest low-stock pantry items. Scanning something into the pantry automatically checks it off the shopping list if it was on there.

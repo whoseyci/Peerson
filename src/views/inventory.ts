@@ -261,17 +261,13 @@ export function renderInventoryView(app: App) {
         }
       }
       async function deleteItem(id) {
-        if (!confirm('Wirklich löschen?')) return;
-        try {
+        const item = window.app.state.items.find(i => i.id === id);
+        if (!item) return;
+        window.app.closeModal('itemModal');
+        window.app.scheduleSoftDelete('item', item, window.app.state.items, '"' + item.name + '"', async () => {
           await window.api.items.delete(id);
-          window.app.state.items = window.app.state.items.filter(i => i.id !== id);
           window.app.state.batches = window.app.state.batches.filter(b => b.item_id !== id);
-          window.app.closeModal('itemModal');
-          window.app.render();
-          window.app.toast('Gelöscht');
-        } catch (e) {
-          window.app.toast('Fehler beim Löschen');
-        }
+        });
       }
       async function openAddStock(itemId) {
         window.app.showModal('stockModal',

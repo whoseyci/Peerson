@@ -156,14 +156,11 @@ export function renderShoppingView(app: App) {
         }
       }
       async function deleteShopping(id) {
-        try {
+        const item = window.app.state.shopping.find(s => s.id === id);
+        if (!item) return;
+        window.app.scheduleSoftDelete('shopping', item, window.app.state.shopping, '"' + item.name + '"', async () => {
           await window.api.shopping.delete(id);
-          window.app.state.shopping = window.app.state.shopping.filter(s => s.id !== id);
-          window.app.render();
-          window.app.toast('Entfernt');
-        } catch (e) {
-          window.app.toast('Fehler beim Entfernen');
-        }
+        });
       }
     </script>
   `;

@@ -94,15 +94,11 @@ export function renderTasksView(app: App) {
         }
       }
       async function deleteTask(id) {
-        if (!confirm('Löschen?')) return;
-        try {
+        const task = window.app.state.tasks.find(t => t.id === id);
+        if (!task) return;
+        window.app.scheduleSoftDelete('task', task, window.app.state.tasks, '"' + task.title + '"', async () => {
           await window.api.tasks.delete(id);
-          window.app.state.tasks = window.app.state.tasks.filter(t => t.id !== id);
-          window.app.render();
-          window.app.toast('Gelöscht');
-        } catch (e) {
-          window.app.toast('Fehler beim Löschen');
-        }
+        });
       }
     </script>
   `;
