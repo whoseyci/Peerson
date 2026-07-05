@@ -30,6 +30,8 @@ export interface Item {
   nutrition: Record<string, number>;
   price_cents?: number | null;
   created_by?: string;
+  recurrence?: string | null;
+  rotation_users?: string[] | null;
 }
 
 export interface Barcode {
@@ -82,6 +84,8 @@ export interface Task {
   status: 'todo' | 'done';
   due_date?: string;
   created_by?: string;
+  recurrence?: string | null;
+  rotation_users?: string[] | null;
 }
 
 export interface Expense {
@@ -91,6 +95,7 @@ export interface Expense {
   amount: number;
   paid_by: string;
   split_type: string;
+  category?: string;
   created_at: number;
 }
 
