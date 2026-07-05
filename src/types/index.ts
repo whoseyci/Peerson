@@ -25,8 +25,10 @@ export interface Item {
   icon?: string;
   threshold: number;
   location?: string;
+  location_id?: string | null;
   barcodes: Barcode[];
   nutrition: Record<string, number>;
+  price_cents?: number | null;
   created_by?: string;
 }
 
@@ -34,6 +36,31 @@ export interface Barcode {
   code: string;
   grams: number;
 }
+
+// A node in a household's nested storage-location tree, e.g.
+// "Küche" (parent_id: null) -> "Rollcontainer" (parent_id: <Küche.id>) ->
+// "oben" (parent_id: <Rollcontainer.id>). Managed in Settings; items point
+// at a single leaf-or-any-level location via Item.location_id.
+export interface Location {
+  id: string;
+  household_id: string;
+  parent_id: string | null;
+  name: string;
+  sort_order: number;
+}
+
+// One superseded price for an item. Only created when the price actually
+// changes (see functions/api/items/[id].ts) -- the *current* price lives on
+// Item.price_cents, not here. effective_until is always set for history
+// rows (the currently-active price has no row here at all).
+export interface ItemPriceHistoryEntry {
+  id: string;
+  item_id: string;
+  price_cents: number;
+  effective_from: number;
+  effective_until: number;
+}
+
 
 export interface Batch {
   id: string;
@@ -98,6 +125,7 @@ export interface AppState {
   expenses: Expense[];
   splits: ExpenseSplit[];
   shopping: ShoppingItem[];
+  locations: Location[];
   view: string;
   darkMode: boolean;
 }

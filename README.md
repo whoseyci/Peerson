@@ -7,7 +7,11 @@ A wholesome app for shared households. Track your pantry, split expenses, assign
 - **Households** — Create a household and invite others via a shareable link or 8-digit code.
 - **Live Sync** — Changes made by other household members (new tasks, shopping items, expenses...) show up automatically within a few seconds, no manual reload needed. Never interrupts you mid-edit — a background sync will never close a modal or clear text you're typing.
 - **Undo Everything** — Deleting an item, task, shopping entry, or expense is instant but reversible: a 5-second "Rückgängig" (undo) toast appears before anything is actually removed from the server.
-- **Pantry / Inventory** — Track items with quantities, locations, expiry dates (MHD), and barcodes.
+- **Pantry / Inventory** — Track items with quantities, locations, expiry dates (MHD), and barcodes. Edit an item's name, category, threshold, and expiry per batch any time.
+- **Nested Storage Locations** — Model where things actually live: rooms → furniture/containers → shelf positions (e.g. Küche → Rollcontainer → oben), managed in Settings (add/rename/delete, arbitrary depth). Assign or move an item between locations from its detail view; deleting a location un-assigns (never deletes) the items inside it.
+- **Multi-Barcode Items** — Link several barcodes to one item (e.g. different pack sizes), each with its own gram weight. Scanning any linked barcode recognizes the item; adding stock shows a variant picker when more than one barcode is linked.
+- **Nutrition Info** — Per-100g nutrition (energy, fat, carbs, protein) auto-filled from Open Food Facts when scanning, or entered manually for items without a barcode.
+- **Price Tracking & Inflation History** — Record a price per item. Only price *changes* are kept in history (not one entry per purchase), so you can see exactly how much and when a price moved — no clutter from repeat purchases at the same price.
 - **Barcode Scanner** — Scan a product with your camera to look it up (via [Open Food Facts](https://world.openfoodfacts.org)) and auto-fill its name, category and photo. Scanning a barcode already in your pantry jumps straight to "add stock" instead of creating a duplicate. Runs a background rescue pass for real-world blurry/low-contrast barcode photos that the primary decoder can't read on its own.
 - **Smart Shopping List** — Manually add items, scan a barcode, or let the app auto-suggest low-stock pantry items. Scanning something into the pantry automatically checks it off the shopping list if it was on there.
 - **Task Assignment** — Create tasks, assign them to household members, set due dates.
@@ -49,6 +53,18 @@ database_id = "your-database-id-here"
 ```bash
 wrangler d1 execute peerson-db --file=./schema.sql
 ```
+
+If you already had a Peerson database running before nested storage
+locations / item pricing existed, `schema.sql` alone won't retroactively
+add the new bits (`CREATE TABLE IF NOT EXISTS` skips tables that already
+exist, and it can't add columns to an existing `items` table). Run the
+one-off migration once instead:
+
+```bash
+wrangler d1 execute peerson-db --file=./migrations/001_locations_and_pricing.sql
+```
+
+Fresh setups only need `schema.sql` and should skip the migration file.
 
 ### 4. Local Development
 
