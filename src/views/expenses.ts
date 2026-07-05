@@ -105,17 +105,14 @@ export function renderExpensesView(app: App) {
         }
       }
       async function deleteExpense(id) {
-        if (!confirm('Löschen?')) return;
-        try {
+        const expense = window.app.state.expenses.find(e => e.id === id);
+        if (!expense) return;
+        window.app.scheduleSoftDelete('expense', expense, window.app.state.expenses, '"' + expense.title + '"', async () => {
           await window.api.expenses.delete(id);
-          window.app.state.expenses = window.app.state.expenses.filter(e => e.id !== id);
           const data = await window.api.expenses.list(window.app.state.householdId);
           window.app.state.splits = data.splits;
           window.app.render();
-          window.app.toast('Gelöscht');
-        } catch (e) {
-          window.app.toast('Fehler beim Löschen');
-        }
+        });
       }
     </script>
   `;

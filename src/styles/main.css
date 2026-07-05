@@ -581,6 +581,66 @@ input[type="checkbox"]:checked::after {
 }
 .toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+/* Undo toast (soft delete) */
+.toast-undo {
+  pointer-events: auto;
+  padding: 12px 12px 12px 22px;
+  border-radius: 16px;
+  gap: 14px;
+  overflow: hidden;
+  position: relative;
+}
+.toast-undo-btn {
+  background: transparent;
+  border: none;
+  color: var(--bg);
+  font-weight: 800;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  padding: 8px 10px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.toast-undo-btn:hover { background: rgba(255,255,255,0.15); }
+body.dark-mode .toast-undo-btn:hover { background: rgba(0,0,0,0.15); }
+.toast-progress {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 3px;
+  background: transparent;
+  overflow: hidden;
+}
+.toast-progress-bar {
+  height: 100%;
+  width: 100%;
+  background: rgba(255,255,255,0.5);
+  transform-origin: left;
+  transform: scaleX(1);
+  transition: transform linear;
+}
+body.dark-mode .toast-progress-bar { background: rgba(0,0,0,0.35); }
+
+/* Sync indicator */
+.sync-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--text-soft);
+  opacity: 0;
+  transition: opacity 0.2s;
+  margin-left: 6px;
+}
+.sync-indicator.active { opacity: 1; animation: pulse-sync 1s ease-in-out infinite; }
+@keyframes pulse-sync {
+  0%, 100% { opacity: 0.4; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
 /* Utility */
 .flex { display: flex; }
 .flex-col { flex-direction: column; }
