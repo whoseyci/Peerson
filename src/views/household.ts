@@ -42,12 +42,26 @@ export function renderHouseholdView(app: App) {
         </div>
       </div>
       <script>
-        function restoreAccount() {
+        async function restoreAccount() {
           const id = document.getElementById('restoreUserId').value.trim();
           if (!id) return app.toast('Bitte User-ID eingeben');
           app.setUserId(id);
-          app.toast('Account wiederhergestellt — Seite neu laden');
-          setTimeout(() => location.reload(), 1500);
+          try {
+            // Look up any household(s) this restored account already belongs
+            // to, so the same account picks its household back up instead
+            // of landing on the create/join screen again.
+            const data = await app.api.households.list();
+            if (data.households && data.households.length > 0) {
+              const household = data.households[0];
+              localStorage.setItem('peerson_householdId', household.id);
+              app.toast('Account wiederhergestellt');
+            } else {
+              app.toast('Account wiederhergestellt (kein Haushalt gefunden)');
+            }
+          } catch (e) {
+            app.toast('Account wiederhergestellt — Seite neu laden');
+          }
+          setTimeout(() => location.reload(), 1200);
         }
       </script>
     `;

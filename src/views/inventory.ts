@@ -106,7 +106,7 @@ export function renderInventoryView(app: App) {
       async function openAddItemModal() {
         const categories = ${JSON.stringify(Object.entries(CATEGORY_META).map(([k, v]) => ({ value: k, label: v.label })))};
         window.app.showModal('itemModal',
-          '<div class="modal-header"><div class="modal-title">Neuer Artikel</div><button class="close-btn" onclick="window.app.closeModal(\'itemModal\')"><i class="ph ph-x"></i></button></div>' +
+          '<div class="modal-header"><div class="modal-title">Neuer Artikel</div><button class="close-btn" onclick="window.app.closeModal(\\'itemModal\\')"><i class="ph ph-x"></i></button></div>' +
           '<div class="modal-body">' +
             '<div class="form-group"><label>Name</label><input type="text" id="newItemName" placeholder="z. B. Hafermilch"></div>' +
             '<div class="form-group"><label>Kategorie</label><select id="newItemCategory">' + categories.map(c => '<option value="' + c.value + '">' + c.label + '</option>').join('') + '</select></div>' +
@@ -142,22 +142,22 @@ export function renderInventoryView(app: App) {
           const batches = window.app.state.batches.filter(b => b.item_id === id).sort((a, b) => (a.expiry || '').localeCompare(b.expiry || ''));
           const catOptions = ${JSON.stringify(Object.entries(CATEGORY_META).map(([k, v]) => ({ value: k, label: v.label })))};
           window.app.showModal('itemModal',
-            '<div class="modal-header"><div class="modal-title">' + item.name + '</div><button class="close-btn" onclick="window.app.closeModal(\'itemModal\')"><i class="ph ph-x"></i></button></div>' +
+            '<div class="modal-header"><div class="modal-title">' + item.name + '</div><button class="close-btn" onclick="window.app.closeModal(\\'itemModal\\')"><i class="ph ph-x"></i></button></div>' +
             '<div class="modal-body">' +
               '<div class="form-group"><label>Kategorie</label><select id="editCategory">' + catOptions.map(c => '<option value="' + c.value + '"' + (c.value === item.category ? ' selected' : '') + '>' + c.label + '</option>').join('') + '</select></div>' +
               '<div class="form-group"><label>Mindestmenge</label><input type="number" id="editThreshold" value="' + item.threshold + '"></div>' +
-              '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;"><label style="margin:0">Chargen</label><button class="btn btn-small" onclick="openAddStock(\'' + item.id + '\')">+ Bestand</button></div>' +
+              '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;"><label style="margin:0">Chargen</label><button class="btn btn-small" onclick="openAddStock(\\'' + item.id + '\\')">+ Bestand</button></div>' +
               '<div class="detail-batch-list" style="margin-bottom:16px;">' +
                 (batches.length ? batches.map(b =>
                   '<div class="detail-batch-item" style="display:flex; align-items:center; gap:8px; padding:8px; border-bottom:1px solid var(--border);">' +
                     '<span style="font-weight:700; width:32px; text-align:center;">' + b.quantity + '</span>' +
                     '<span style="flex:1; font-size:13px;">' + (b.expiry ? new Date(b.expiry).toLocaleDateString('de-DE') : 'Kein MHD') + '</span>' +
-                    '<button class="batch-del-btn" onclick="removeBatch(\'' + b.id + '\')"><i class="ph ph-minus"></i></button>' +
+                    '<button class="batch-del-btn" onclick="removeBatch(\\'' + b.id + '\\')"><i class="ph ph-minus"></i></button>' +
                   '</div>'
                 ).join('') : '<div class="empty-state" style="padding:16px;">Keine Chargen</div>') +
               '</div>' +
-              '<button class="btn" onclick="saveItemDetail(\'' + item.id + '\')"><i class="ph-bold ph-floppy-disk"></i> Speichern</button>' +
-              '<button class="btn btn-secondary" onclick="deleteItem(\'' + item.id + '\')" style="margin-top:8px;"><i class="ph-bold ph-trash"></i> Löschen</button>' +
+              '<button class="btn" onclick="saveItemDetail(\\'' + item.id + '\\')"><i class="ph-bold ph-floppy-disk"></i> Speichern</button>' +
+              '<button class="btn btn-secondary" onclick="deleteItem(\\'' + item.id + '\\')" style="margin-top:8px;"><i class="ph-bold ph-trash"></i> Löschen</button>' +
             '</div>'
           );
         } catch (e) {
@@ -193,11 +193,11 @@ export function renderInventoryView(app: App) {
       }
       async function openAddStock(itemId) {
         window.app.showModal('stockModal',
-          '<div class="modal-header"><div class="modal-title">Bestand hinzufügen</div><button class="close-btn" onclick="window.app.closeModal(\'stockModal\')"><i class="ph ph-x"></i></button></div>' +
+          '<div class="modal-header"><div class="modal-title">Bestand hinzufügen</div><button class="close-btn" onclick="window.app.closeModal(\\'stockModal\\')"><i class="ph ph-x"></i></button></div>' +
           '<div class="modal-body">' +
             '<div class="form-group"><label>Menge</label><input type="number" id="addQty" value="1" min="1"></div>' +
             '<div class="form-group"><label>MHD (optional)</label><input type="date" id="addExpiry"></div>' +
-            '<button class="btn" onclick="commitAddStock(\'' + itemId + '\')"><i class="ph-bold ph-check"></i></button>' +
+            '<button class="btn" onclick="commitAddStock(\\'' + itemId + '\\')"><i class="ph-bold ph-check"></i></button>' +
           '</div>'
         );
       }

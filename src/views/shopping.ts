@@ -71,7 +71,7 @@ export function renderShoppingView(app: App) {
     <script>
       async function openAddShoppingModal() {
         window.app.showModal('shopModal',
-          '<div class="modal-header"><div class="modal-title">Zur Liste hinzufügen</div><button class="close-btn" onclick="window.app.closeModal(\'shopModal\')"><i class="ph ph-x"></i></button></div>' +
+          '<div class="modal-header"><div class="modal-title">Zur Liste hinzufügen</div><button class="close-btn" onclick="window.app.closeModal(\\'shopModal\\')"><i class="ph ph-x"></i></button></div>' +
           '<div class="modal-body">' +
             '<div class="form-group"><label>Artikel</label><input type="text" id="shopName" placeholder="Was wird gebraucht?"></div>' +
             '<div class="form-group"><label>Menge (optional)</label><input type="text" id="shopQty" placeholder="z. B. 2 Packungen"></div>' +

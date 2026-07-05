@@ -65,7 +65,7 @@ export function renderExpensesView(app: App) {
         ).join('');
         const payerOptions = members.map(m => '<option value="' + m.id + '">' + m.name + '</option>').join('');
         window.app.showModal('expenseModal',
-          '<div class="modal-header"><div class="modal-title">Ausgabe hinzufügen</div><button class="close-btn" onclick="window.app.closeModal(\'expenseModal\')"><i class="ph ph-x"></i></button></div>' +
+          '<div class="modal-header"><div class="modal-title">Ausgabe hinzufügen</div><button class="close-btn" onclick="window.app.closeModal(\\'expenseModal\\')"><i class="ph ph-x"></i></button></div>' +
           '<div class="modal-body">' +
             '<div class="form-group"><label>Titel</label><input type="text" id="expTitle" placeholder="z. B. Wocheneinkauf"></div>' +
             '<div class="form-group"><label>Betrag (€)</label><input type="number" id="expAmount" step="0.01" min="0"></div>' +
