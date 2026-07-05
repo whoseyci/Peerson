@@ -294,6 +294,26 @@ h1 i { color: var(--text); opacity: 0.8; }
   display: flex; align-items: center; gap: 8px;
 }
 .scanner-header .close-btn { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.2); color: #fff; }
+.scanner-mode-toggle {
+  display: flex; gap: 8px; margin-bottom: 12px; flex-shrink: 0;
+}
+.scanner-mode-btn {
+  flex: 1;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 10px 8px;
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.16);
+  color: rgba(255,255,255,0.65);
+  font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.scanner-mode-btn.active {
+  background: #fff;
+  color: #111827;
+  border-color: #fff;
+}
 .scanner-reader {
   flex: 1;
   border-radius: var(--radius);
@@ -488,6 +508,7 @@ input[type="checkbox"] {
   appearance: none;
   width: 22px;
   height: 22px;
+  padding: 0;
   border: 2px solid var(--field-border);
   border-radius: 6px;
   background: var(--field-bg);

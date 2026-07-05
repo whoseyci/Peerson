@@ -326,7 +326,7 @@ export class App {
           ${unreadTasks > 0 ? `<span class="badge">${unreadTasks}</span>` : ''}
         </button>
         <button class="dock-btn ${this.state.view === 'expenses' ? 'active' : ''}" onclick="app.navigate('expenses')" title="Finanzen">
-          <i class="ph ph-currency-euro"></i>
+          <i class="ph ph-currency-eur"></i>
         </button>
         <button class="dock-btn ${this.state.view === 'household' ? 'active' : ''}" onclick="app.navigate('household')" title="Haushalt">
           <i class="ph ph-users"></i>
