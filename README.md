@@ -85,6 +85,32 @@ After the first deploy, go to your Cloudflare Pages project settings:
 - Add a binding named `DB` pointing to your `peerson-db` database.
 - Redeploy if needed.
 
+### 7. (Optional) In-app bug reporting
+
+The "🐛" button lets users file a bug report without leaving the app or
+needing a GitHub account — it's handled entirely server-side by
+`functions/api/bug-report.ts`. To enable it:
+
+1. Create a **fine-grained GitHub Personal Access Token** scoped only to
+   this repo, with **Issues: Read & write** and **Contents: Read & write**
+   permissions (Contents is only needed so screenshots can be committed
+   into `bug-reports/` and rendered inline — GitHub strips `data:` URI
+   images from issue bodies, so a raw committed file is the only way to
+   get an inline screenshot to actually show up).
+2. In your Cloudflare Pages project: **Settings → Environment variables**,
+   add `GITHUB_PAT` as an **encrypted/secret** variable (for both
+   Production and Preview environments) with that token as its value.
+3. (Optional) If you forked this repo, also set `GITHUB_REPO` to
+   `your-username/your-repo` — it defaults to `whoseyci/Peerson`.
+4. Redeploy. If `GITHUB_PAT` isn't set, the bug button still works — it
+   falls back to opening a pre-filled GitHub "new issue" page in a new
+   tab instead of submitting automatically.
+
+**Never** put this token in `wrangler.toml`, a `[vars]` block, or any
+client-side code — those are all bundled/committed in plaintext. It must
+only ever live as an encrypted Pages environment variable, read
+server-side inside a Function.
+
 ## Project Structure
 
 ```

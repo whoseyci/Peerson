@@ -123,8 +123,8 @@ export class App {
           <div style="margin-top:6px; font-weight:700;">Letzte Aktionen:</div>
           <pre>${lastActions}</pre>
         </div>
-        <button class="btn" onclick="app.submitBugReport()">
-          <i class="ph-bold ph-github-logo"></i> Auf GitHub erstellen
+        <button class="btn" id="bugSubmitBtn" onclick="app.submitBugReport()">
+          <i class="ph-bold ph-paper-plane-tilt"></i> Bug melden
         </button>
       </div>
     `);
@@ -134,6 +134,7 @@ export class App {
     const title = (document.getElementById('bugTitle') as HTMLInputElement)?.value.trim();
     const desc = (document.getElementById('bugDesc') as HTMLTextAreaElement)?.value.trim();
     const includeScreenshot = (document.getElementById('bugScreenshot') as HTMLInputElement)?.checked;
+    const submitBtn = document.getElementById('bugSubmitBtn') as HTMLButtonElement | null;
 
     if (!title) {
       this.toast('Bitte Titel eingeben');
@@ -142,18 +143,22 @@ export class App {
 
     const lastActions = this.actionLog.slice(0, 3).map((a, i) => {
       const time = new Date(a.timestamp).toLocaleTimeString('de-DE');
-      return `${i + 1}. [${time}] ${a.action}${a.details ? ' — ' + a.details : ''}`;
+      return `${i + 1}. [${time}] ${a.action}${a.details ? ' \u2014 ' + a.details : ''}`;
     }).join('\n') || 'Keine Aktionen aufgezeichnet';
+
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="ph ph-spinner-gap"></i> Wird gesendet\u2026';
+    }
 
     let screenshotData = '';
     if (includeScreenshot && (window as any).html2canvas) {
       try {
-        this.closeModal('bugModal');
-        await new Promise(r => setTimeout(r, 300));
         const canvas = await (window as any).html2canvas(document.body, {
           backgroundColor: null,
           scale: 1,
           logging: false,
+          ignoreElements: (el: HTMLElement) => el.id === 'bugModal',
         });
         screenshotData = canvas.toDataURL('image/png');
       } catch (e) {
@@ -161,31 +166,55 @@ export class App {
       }
     }
 
-    const body = `## Beschreibung
-${desc || '_(keine Beschreibung)_'}
+    const context = {
+      View: this.state.view,
+      Haushalt: this.state.household?.name || '\u2014',
+      User: this.state.userName || 'Anonym',
+      Screen: `${window.innerWidth}x${window.innerHeight}`,
+      URL: location.href,
+      'User-Agent': navigator.userAgent,
+    };
 
-## Kontext
-| Feld | Wert |
-|------|------|
-| View | \`${this.state.view}\` |
-| Haushalt | ${this.state.household?.name || '—'} |
-| User | ${this.state.userName || 'Anonym'} |
-| Screen | \`${window.innerWidth}x${window.innerHeight}\` |
-| URL | \`${location.href}\` |
-| User-Agent | \`${navigator.userAgent}\` |
-
-## Letzte Aktionen
-\`\`\`
-${lastActions}
-\`\`\`
-${screenshotData ? '\n## Screenshot\n![Screenshot](' + screenshotData + ')' : ''}
-`;
-
-    const issueUrl = `https://github.com/whoseyci/Peerson/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
-    window.open(issueUrl, '_blank');
-    this.toast('GitHub Issue geöffnet');
+    try {
+      const result = await api.bugReport.submit({
+        title,
+        description: desc,
+        context,
+        lastActions,
+        screenshot: screenshotData || undefined,
+      });
+      this.closeModal('bugModal');
+      this.showModal('bugSuccessModal', `
+        <div class="modal-header">
+          <div class="modal-title"><i class="ph ph-check-circle"></i> Danke!</div>
+          <button class="close-btn" onclick="app.closeModal('bugSuccessModal')"><i class="ph ph-x"></i></button>
+        </div>
+        <div class="modal-body">
+          <p style="margin-bottom:16px;">Dein Bug-Report wurde direkt erstellt (Issue #${result.number}).</p>
+          <a class="btn btn-secondary" href="${result.url}" target="_blank" rel="noopener noreferrer">
+            <i class="ph ph-arrow-square-out"></i> Auf GitHub ansehen
+          </a>
+        </div>
+      `);
+    } catch (e: any) {
+      // Server-side reporting isn't configured (no GITHUB_PAT set yet) or
+      // failed -- fall back to the old manual flow so reporting still
+      // works, but only as a last resort, and only if the reporter has a
+      // GitHub account to file it with themselves.
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="ph-bold ph-paper-plane-tilt"></i> Bug melden';
+      }
+      if (e?.status === 501) {
+        this.toast('Bug-Reporting ist serverseitig noch nicht eingerichtet \u2014 \u00f6ffne GitHub manuell.');
+        const body = `## Beschreibung\n${desc || '_(keine Beschreibung)_'}\n\n## Kontext\n${Object.entries(context).map(([k, v]) => `- **${k}:** ${v}`).join('\n')}\n\n## Letzte Aktionen\n\`\`\`\n${lastActions}\n\`\`\`\n`;
+        const issueUrl = `https://github.com/whoseyci/Peerson/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
+        window.open(issueUrl, '_blank');
+      } else {
+        this.toast(e?.message || 'Fehler beim Erstellen des Bug-Reports');
+      }
+    }
   }
-
   async loadHousehold(id: string) {
     try {
       const data = await api.households.get(id);
