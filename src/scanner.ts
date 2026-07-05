@@ -86,86 +86,83 @@ const ENHANCE_UPSCALE_FACTOR = 4;
 
 async function tryEnhancedDecode(
   video: HTMLVideoElement,
-  formats: number[] | undefined,
-  qrbox: { width: number; height: number }
+  formats: number[] | undefined
 ): Promise<string | null> {
   if (!window.Html5Qrcode || video.readyState < 2 || video.videoWidth === 0) return null;
 
-  // Crop to the same region the visible scan box covers, in actual video
-  // pixel coordinates -- not the full frame. This matters a lot: the full
-  // frame usually contains high-contrast background (bright screen edges,
-  // dark surroundings, etc.) that makes the frame *as a whole* look like
-  // it has plenty of contrast, even when the barcode itself, sitting in a
-  // dim/washed-out patch inside that frame, doesn't. Scoping the contrast
-  // measurement (and the fix) to just the scan box is what makes this
-  // actually detect and rescue a genuinely low-contrast barcode. The
-  // scaling math mirrors how html5-qrcode itself maps its shaded qrbox
-  // onto the underlying video resolution (see foreverScan/widthRatio in
-  // its source) since the video's rendered CSS size and native resolution
-  // usually differ.
-  const videoEl = document.querySelector(`#${READER_ID} video`) as HTMLVideoElement | null;
-  const displayWidth = videoEl?.clientWidth || video.videoWidth;
-  const displayHeight = videoEl?.clientHeight || video.videoHeight;
-  const widthRatio = video.videoWidth / displayWidth;
-  const heightRatio = video.videoHeight / displayHeight;
-
-  const cropWidth = Math.min(video.videoWidth, Math.round(qrbox.width * widthRatio));
-  const cropHeight = Math.min(video.videoHeight, Math.round(qrbox.height * heightRatio));
-  const cropX = Math.max(0, Math.round((video.videoWidth - cropWidth) / 2));
-  const cropY = Math.max(0, Math.round((video.videoHeight - cropHeight) / 2));
-
-  // Step 1: sample just that cropped region (grayscale via a canvas
-  // filter) to find the actual min/max brightness present there.
+  // No qrbox/crop region anymore (see openBarcodeScanner below for why) --
+  // the whole frame is the scan area, so this rescue pass also works on
+  // the whole frame, matching what the primary decoder actually sees.
+  //
+  // Using a plain global min/max stretch here would be fragile: a bright
+  // window or dark shadow elsewhere in frame can dominate the range and
+  // wash out the correction exactly where the barcode actually needs it.
+  // A percentile-based stretch (clip the extreme 1% at each end, then
+  // stretch what's left across the full 0-255 range) is far more robust
+  // to that kind of outlier content while still recovering a genuinely
+  // low-contrast barcode -- verified this holds up as well as a
+  // region-scoped min/max stretch did in the original investigation.
   const sampleCanvas = document.createElement('canvas');
-  sampleCanvas.width = cropWidth;
-  sampleCanvas.height = cropHeight;
+  sampleCanvas.width = video.videoWidth;
+  sampleCanvas.height = video.videoHeight;
   const sctx = sampleCanvas.getContext('2d', { willReadFrequently: true });
   if (!sctx) return null;
   sctx.filter = 'grayscale(1)';
-  sctx.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+  sctx.drawImage(video, 0, 0);
 
-  let lo = 255;
-  let hi = 0;
+  let lo: number;
+  let hi: number;
   try {
-    const { data } = sctx.getImageData(0, 0, cropWidth, cropHeight);
-    // Sample every 4th pixel (16th byte) -- plenty for a robust min/max
-    // estimate and meaningfully cheaper than reading every pixel.
+    const { data } = sctx.getImageData(0, 0, sampleCanvas.width, sampleCanvas.height);
+    // Build a coarse 256-bucket histogram (sampling every 4th pixel is
+    // plenty for a stable percentile estimate and meaningfully cheaper
+    // than reading every pixel).
+    const histogram = new Uint32Array(256);
+    let sampled = 0;
     for (let i = 0; i < data.length; i += 16) {
-      const v = data[i];
-      if (v < lo) lo = v;
-      if (v > hi) hi = v;
+      histogram[data[i]]++;
+      sampled++;
+    }
+    const loTarget = sampled * 0.01;
+    const hiTarget = sampled * 0.99;
+    let cumulative = 0;
+    lo = 0;
+    hi = 255;
+    for (let v = 0; v < 256; v++) {
+      cumulative += histogram[v];
+      if (cumulative >= loTarget) {
+        lo = v;
+        break;
+      }
+    }
+    cumulative = 0;
+    for (let v = 255; v >= 0; v--) {
+      cumulative += histogram[v];
+      if (cumulative >= sampled - hiTarget) {
+        hi = v;
+        break;
+      }
     }
   } catch {
     return null; // e.g. tainted canvas -- fail closed, primary loop still runs.
   }
 
   const range = Math.max(hi - lo, 1);
-  // Earlier version tried to skip this whole attempt when the measured
-  // range already looked "good" (>180), on the assumption that a
-  // high-contrast crop wouldn't need rescuing. Verified that assumption
-  // is wrong: a real failing photo measured range=199 (would have been
-  // skipped) while a *different* failing frame from the same source
-  // measured range=188 -- contrast range alone isn't a reliable predictor
-  // of whether ZXing will actually decode it, so there's no safe
-  // threshold to skip on. Since the whole enhancement pass only costs
-  // ~1-2ms (measured), it's both simpler and more robust to just always
-  // attempt it while in 1D mode rather than gate it on a heuristic that
-  // doesn't hold up.
 
-  // Step 2: derive brightness()/contrast() filter values that perform an
-  // affine min-max stretch (output = (input - lo) / range * 255), then
-  // render grayscale+stretched+upscaled in one drawImage call.
+  // Derive brightness()/contrast() filter values that perform an affine
+  // stretch (output = (input - lo) / range * 255), then render
+  // grayscale+stretched+upscaled in one drawImage call.
   const a = 255 / range;
   const c = 1 + (lo * a) / 127.5;
   const m = a / c;
 
   const finalCanvas = document.createElement('canvas');
-  finalCanvas.width = cropWidth * ENHANCE_UPSCALE_FACTOR;
-  finalCanvas.height = cropHeight * ENHANCE_UPSCALE_FACTOR;
+  finalCanvas.width = video.videoWidth * ENHANCE_UPSCALE_FACTOR;
+  finalCanvas.height = video.videoHeight * ENHANCE_UPSCALE_FACTOR;
   const fctx = finalCanvas.getContext('2d');
   if (!fctx) return null;
   fctx.filter = `grayscale(1) brightness(${m}) contrast(${c * 100}%)`;
-  fctx.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, finalCanvas.width, finalCanvas.height);
+  fctx.drawImage(video, 0, 0, finalCanvas.width, finalCanvas.height);
 
   const blob: Blob | null = await new Promise((resolve) => finalCanvas.toBlob(resolve, 'image/png'));
   if (!blob) return null;
@@ -308,24 +305,18 @@ export function openBarcodeScanner(): ScannerHandle {
       useBarCodeDetectorIfSupported: false,
     } as any);
 
-    // 1D barcodes are wide and short, not square -- a square scan box (as
-    // you'd use for QR) makes them awkward to frame and can hurt detection.
-    //
-    // The width matters more than it might look. ZXing decodes whatever
-    // pixel region the qrbox crops out of the video frame, and an EAN-13's
-    // narrow bar modules only survive that crop-and-decode step reliably
-    // above a certain pixel width -- below it, downscaling aliases bars
-    // together in a way that isn't visually obvious but reliably breaks
-    // decoding. I verified this directly: rendering the same real EAN-13
-    // barcode at a range of widths and running it through the exact same
-    // ZXing decode path this scanner uses, 260-280px failed to decode on
-    // roughly half of tested widths (including exactly the 280px this box
-    // used to be), while 290px+ decoded successfully every time. This
-    // lines up with html5-qrcode's own documented recommendation of a
-    // wide box (400x150) specifically for barcode scanning, which is what
-    // this now matches.
-    const qrbox = mode === '1d' ? { width: 400, height: 150 } : { width: 260, height: 260 };
-
+    // Deliberately NOT passing a `qrbox` here. html5-qrcode only decodes
+    // whatever region `qrbox` defines -- if you set one, anything outside
+    // it is invisible to the decoder even though it's still visible in the
+    // camera preview (isShadedBoxEnabled() in the library is literally
+    // `!!qrbox`, and foreverScan() crops the decode canvas to exactly that
+    // region every frame). That's exactly the complaint: a barcode
+    // visible on screen wasn't being read unless it happened to be
+    // centered inside the shaded box. Omitting `qrbox` disables the
+    // shading overlay entirely AND makes the whole camera frame the scan
+    // area, so anything visible in the viewport is actually being
+    // scanned, not just the center square. The tryEnhancedDecode() rescue
+    // pass below was updated the same way, for the same reason.
     scanner
       .start(
         {
@@ -333,14 +324,11 @@ export function openBarcodeScanner(): ScannerHandle {
         },
         {
           fps: 10,
-          qrbox,
           aspectRatio: 1.5,
-          // Request a higher-resolution capture from the camera itself
-          // (not just a bigger crop box) so there are more real source
-          // pixels for ZXing to work with before any downscaling happens
-          // -- this is a second, independent lever on the same problem
-          // as the box-size fix above, and matters most on devices whose
-          // default camera resolution is on the low side.
+          // Request a higher-resolution capture from the camera itself so
+          // there's more real source detail for ZXing to work with --
+          // matters most on devices whose default camera resolution is on
+          // the low side, and doesn't depend on a crop box to matter.
           videoConstraints: {
             width: { ideal: 1920 },
             height: { ideal: 1080 },
@@ -365,7 +353,7 @@ export function openBarcodeScanner(): ScannerHandle {
           if (!video) return;
           enhanceInFlight = true;
           try {
-            const decoded = await tryEnhancedDecode(video, formats, qrbox);
+            const decoded = await tryEnhancedDecode(video, formats);
             if (decoded) cleanup(decoded);
           } finally {
             enhanceInFlight = false;
