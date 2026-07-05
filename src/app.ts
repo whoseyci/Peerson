@@ -13,6 +13,11 @@ interface ActionLog {
 }
 
 export class App {
+  // Exposed so inline view scripts (household.ts etc.) can call
+  // `app.api.households.kick(...)`, `app.api.households.leave(...)`,
+  // and `app.api.households.regenerateInvite(...)` directly.
+  api = api;
+
   state: AppState = {
     userId: '',
     userName: '',
@@ -184,6 +189,7 @@ ${screenshotData ? '\n## Screenshot\n![Screenshot](' + screenshotData + ')' : ''
   async loadHousehold(id: string) {
     try {
       const data = await api.households.get(id);
+      this.state.householdId = id;
       this.state.household = data.household;
       this.state.members = data.members;
       await this.loadData();

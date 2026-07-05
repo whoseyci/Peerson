@@ -52,7 +52,7 @@ export function renderTasksView(app: App) {
       async function openAddTaskModal() {
         const members = window.app.state.members.map(m => '<option value="' + m.id + '">' + m.name + '</option>').join('');
         window.app.showModal('taskModal',
-          '<div class="modal-header"><div class="modal-title">Neue Aufgabe</div><button class="close-btn" onclick="window.app.closeModal(\'taskModal\')"><i class="ph ph-x"></i></button></div>' +
+          '<div class="modal-header"><div class="modal-title">Neue Aufgabe</div><button class="close-btn" onclick="window.app.closeModal(\\'taskModal\\')"><i class="ph ph-x"></i></button></div>' +
           '<div class="modal-body">' +
             '<div class="form-group"><label>Titel</label><input type="text" id="taskTitle" placeholder="Was ist zu tun?"></div>' +
             '<div class="form-group"><label>Beschreibung</label><textarea id="taskDesc" rows="2" placeholder="Details..."></textarea></div>' +
