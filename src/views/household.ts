@@ -1,4 +1,46 @@
 import type { App } from '../app';
+import type { Location } from '../types';
+
+// Assembles the flat locations array (as stored/returned by the API) into
+// a tree for rendering. Kept as a plain array-of-nodes-with-children
+// structure rather than mutating Location objects in place, so re-renders
+// always rebuild from the authoritative flat app.state.locations.
+interface LocationNode extends Location {
+  children: LocationNode[];
+}
+
+function buildLocationTree(flat: Location[]): LocationNode[] {
+  const byId = new Map<string, LocationNode>();
+  flat.forEach(l => byId.set(l.id, { ...l, children: [] }));
+  const roots: LocationNode[] = [];
+  byId.forEach(node => {
+    if (node.parent_id && byId.has(node.parent_id)) {
+      byId.get(node.parent_id)!.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  });
+  return roots;
+}
+
+function renderLocationTree(nodes: LocationNode[], depth: number): string {
+  if (!nodes.length) {
+    return depth === 0 ? '<div class="empty-state" style="padding:16px;">Noch keine Orte angelegt</div>' : '';
+  }
+  return nodes.map(node => `
+    <div class="location-node" style="margin-left:${depth * 18}px;">
+      <div class="location-row">
+        <span class="location-name">${node.name}</span>
+        <div class="location-row-actions">
+          <button class="icon-btn-sm" title="Unterort hinzufügen" onclick="addChildLocation('${node.id}')"><i class="ph ph-plus"></i></button>
+          <button class="icon-btn-sm" title="Umbenennen" onclick="renameLocation('${node.id}', '${node.name.replace(/'/g, "\\'")}')"><i class="ph ph-pencil-simple"></i></button>
+          <button class="icon-btn-sm" title="Löschen" onclick="deleteLocation('${node.id}', '${node.name.replace(/'/g, "\\'")}')"><i class="ph ph-trash"></i></button>
+        </div>
+      </div>
+      ${renderLocationTree(node.children, depth + 1)}
+    </div>
+  `).join('');
+}
 
 export function renderHouseholdView(app: App) {
   const s = app.state;
@@ -118,6 +160,21 @@ export function renderHouseholdView(app: App) {
     </div>
 
     <div class="section">
+      <div class="section-header">
+        <div class="section-title">Aufbewahrungsorte</div>
+      </div>
+      <div class="card">
+        <div class="card-content" style="flex-direction: column; align-items: stretch; gap: 4px;">
+          <div style="font-size: 12px; color: var(--text-soft); margin-bottom: 8px;">
+            Räume, Möbel und Positionen zum Sortieren des Vorrats -- z. B. Küche → Rollcontainer → oben.
+          </div>
+          <div id="locationTree">${renderLocationTree(buildLocationTree(s.locations), 0)}</div>
+          <button class="btn btn-secondary btn-small mt-2" onclick="addRootLocation()"><i class="ph ph-plus"></i> Ort hinzufügen</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
       <div class="section-header"><div class="section-title">Einladung</div></div>
       <div class="card">
         <div class="card-content" style="flex-direction: column; align-items: stretch; gap: 8px;">
@@ -172,6 +229,108 @@ export function renderHouseholdView(app: App) {
         app.state.household = null;
         app.navigate('household');
         app.render();
+      }
+
+      // --- Storage locations (nested rooms/containers/positions) ---------
+      //
+      // Modeled as a flat adjacency list (id + parent_id) on the backend --
+      // see schema.sql for the full "why not a materialized path / nested
+      // set" rationale. The UI only ever needs a name-entry modal for
+      // add/rename, since the tree structure itself is expressed by which
+      // button (root vs. a specific node's "+") the user clicked.
+
+      function openLocationNameModal(title, initialValue, onSave) {
+        window._locationModalOnSave = onSave;
+        window.app.showModal('locationNameModal',
+          '<div class="modal-header"><div class="modal-title">' + title + '</div><button class="close-btn" onclick="window.app.closeModal(\\'locationNameModal\\')"><i class="ph ph-x"></i></button></div>' +
+          '<div class="modal-body">' +
+            '<div class="form-group"><label>Name</label><input type="text" id="locationNameInput" value="' + (initialValue || '').replace(/"/g, '&quot;') + '" placeholder="z. B. Küche"></div>' +
+            '<button class="btn" onclick="submitLocationNameModal()"><i class="ph-bold ph-check"></i></button>' +
+          '</div>'
+        );
+      }
+
+      async function submitLocationNameModal() {
+        const name = document.getElementById('locationNameInput').value.trim();
+        if (!name) return app.toast('Name erforderlich');
+        window.app.closeModal('locationNameModal');
+        await window._locationModalOnSave(name);
+      }
+
+      async function addRootLocation() {
+        openLocationNameModal('Ort hinzufügen', '', async (name) => {
+          try {
+            const res = await app.api.locations.create({ household_id: app.state.household.id, name });
+            app.state.locations.push(res.location);
+            app.render();
+            app.toast('Ort hinzugefügt');
+          } catch (e) {
+            app.toast('Fehler beim Anlegen');
+          }
+        });
+      }
+
+      async function addChildLocation(parentId) {
+        openLocationNameModal('Unterort hinzufügen', '', async (name) => {
+          try {
+            const res = await app.api.locations.create({ household_id: app.state.household.id, name, parent_id: parentId });
+            app.state.locations.push(res.location);
+            app.render();
+            app.toast('Unterort hinzugefügt');
+          } catch (e) {
+            app.toast('Fehler beim Anlegen');
+          }
+        });
+      }
+
+      async function renameLocation(id, currentName) {
+        openLocationNameModal('Umbenennen', currentName, async (name) => {
+          try {
+            const res = await app.api.locations.update(id, { name });
+            const loc = app.state.locations.find(l => l.id === id);
+            if (loc) loc.name = res.location.name;
+            app.render();
+            app.toast('Umbenannt');
+          } catch (e) {
+            app.toast('Fehler beim Umbenennen');
+          }
+        });
+      }
+
+      async function deleteLocation(id, name) {
+        // Deleting a location cascades to its own descendants on the
+        // backend (ON DELETE CASCADE) and un-assigns (not deletes) any
+        // items that pointed at it or a descendant (ON DELETE SET NULL) --
+        // worth naming both consequences explicitly since this action is
+        // not reversible via the soft-delete/undo system the rest of the
+        // app uses for items/tasks/etc.
+        const hasChildren = app.state.locations.some(l => l.parent_id === id);
+        const warning = hasChildren
+          ? '"' + name + '" und alle Unterorte darin wirklich löschen? Artikel darin werden nicht gelöscht, aber verlieren ihren Ort.'
+          : '"' + name + '" wirklich löschen? Artikel darin werden nicht gelöscht, aber verlieren ihren Ort.';
+        if (!confirm(warning)) return;
+        try {
+          await app.api.locations.delete(id);
+          const toRemove = new Set([id]);
+          // Mirror the backend's cascade client-side so the tree updates
+          // immediately without waiting for the next sync poll.
+          let changed = true;
+          while (changed) {
+            changed = false;
+            app.state.locations.forEach(l => {
+              if (l.parent_id && toRemove.has(l.parent_id) && !toRemove.has(l.id)) {
+                toRemove.add(l.id);
+                changed = true;
+              }
+            });
+          }
+          app.state.locations = app.state.locations.filter(l => !toRemove.has(l.id));
+          app.state.items.forEach(i => { if (i.location_id && toRemove.has(i.location_id)) i.location_id = null; });
+          app.render();
+          app.toast('Gelöscht');
+        } catch (e) {
+          app.toast('Fehler beim Löschen');
+        }
       }
     </script>
   `;

@@ -44,6 +44,7 @@ export class App {
     expenses: [],
     splits: [],
     shopping: [],
+    locations: [],
     view: 'household',
     darkMode: false,
   };
@@ -292,11 +293,12 @@ export class App {
     if (!this.state.householdId) return;
     const hid = this.state.householdId;
     try {
-      const [itemsData, tasksData, expensesData, shoppingData] = await Promise.all([
+      const [itemsData, tasksData, expensesData, shoppingData, locationsData] = await Promise.all([
         api.items.list(hid),
         api.tasks.list(hid),
         api.expenses.list(hid),
         api.shopping.list(hid),
+        api.locations.list(hid),
       ]);
       this.state.items = this.stripPending('item', itemsData.items);
       this.state.batches = itemsData.batches;
@@ -305,6 +307,7 @@ export class App {
       this.state.splits = expensesData.splits;
       this.state.shopping = this.stripPending('shopping', shoppingData.items);
       this.state.members = expensesData.members;
+      this.state.locations = locationsData.locations;
     } catch (e) {
       console.error('Load data error', e);
     }
