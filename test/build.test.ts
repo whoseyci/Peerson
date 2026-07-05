@@ -86,6 +86,9 @@ describe('Functions Structure', () => {
       'functions/api/expenses/[id].ts',
       'functions/api/shopping.ts',
       'functions/api/shopping/[id].ts',
+      'functions/api/locations.ts',
+      'functions/api/locations/[id].ts',
+      'functions/api/items/[id]/price-history.ts',
       'functions/_middleware.ts',
     ];
     for (const route of routes) {

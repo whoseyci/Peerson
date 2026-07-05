@@ -60,13 +60,23 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (!body.household_id) return new Response(JSON.stringify({ error: 'household_id required' }), { status: 400 });
   await requireMember(env.DB, userId, body.household_id);
 
+  let locationId: string | null = body.location_id || null;
+  if (locationId) {
+    const loc = await env.DB.prepare('SELECT household_id FROM locations WHERE id = ?').bind(locationId).first();
+    if (!loc || loc.household_id !== body.household_id) locationId = null;
+  }
+  const priceCents = body.price_cents === null || body.price_cents === undefined
+    ? null
+    : Math.max(0, Math.round(body.price_cents));
+
   const id = crypto.randomUUID();
   await env.DB.prepare(`
-    INSERT INTO items (id, household_id, name, category, icon, threshold, location, barcodes, nutrition, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO items (id, household_id, name, category, icon, threshold, location, location_id, barcodes, nutrition, price_cents, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     id, body.household_id, body.name || '', body.category || 'sonstiges', body.icon || null,
-    body.threshold || 0, body.location || '', JSON.stringify(body.barcodes || []), JSON.stringify(body.nutrition || {}), userId
+    body.threshold || 0, body.location || '', locationId, JSON.stringify(body.barcodes || []),
+    JSON.stringify(body.nutrition || {}), priceCents, userId
   ).run();
 
   const item = await env.DB.prepare('SELECT * FROM items WHERE id = ?').bind(id).first();

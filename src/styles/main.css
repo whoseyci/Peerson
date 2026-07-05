@@ -85,6 +85,22 @@ h1 i { color: var(--text); opacity: 0.8; }
 }
 .icon-btn:active { transform: scale(0.90); }
 
+/* Nested storage-location tree (Settings -> "Aufbewahrungsorte") */
+.location-node { padding: 2px 0; }
+.location-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 4px; border-radius: 8px; gap: 8px;
+}
+.location-row:hover { background: var(--bg); }
+.location-name { font-size: 14px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.location-row-actions { display: flex; gap: 2px; flex-shrink: 0; }
+.icon-btn-sm {
+  width: 30px; height: 30px; border-radius: 8px; border: none; background: transparent;
+  color: var(--text-muted); display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 15px;
+}
+.icon-btn-sm:hover { background: var(--surface); color: var(--text); }
+
 /* Sections */
 .section { margin-bottom: 28px; }
 .section-header {
@@ -445,6 +461,24 @@ input:focus, select:focus, textarea:focus {
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 .barcode-variant-chip.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+
+/* Read-only nutrition table (item detail) */
+.nutrition-table { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.nutrition-row {
+  display: flex; justify-content: space-between; padding: 8px 12px; font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+.nutrition-row:last-child { border-bottom: none; }
+.nutrition-row span:last-child { font-weight: 600; }
+
+/* Price history modal */
+.price-history-list { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.price-history-row {
+  display: flex; justify-content: space-between; padding: 8px 12px; font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+.price-history-row:last-child { border-bottom: none; }
+.price-history-row.price-history-current { font-weight: 700; background: var(--bg); }
 
 /* Lists */
 .empty-state { text-align: center; padding: 40px 20px; opacity: 0.6; font-size: 15px; }

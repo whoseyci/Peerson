@@ -1,4 +1,4 @@
-import type { Household, Item, Batch, Task, Expense, ShoppingItem, HouseholdMember } from '../types';
+import type { Household, Item, Batch, Task, Expense, ShoppingItem, HouseholdMember, Location, ItemPriceHistoryEntry } from '../types';
 
 const API_BASE = '';
 
@@ -62,6 +62,15 @@ export const api = {
     create: (data: any) => post('/api/items', data) as Promise<{ item: Item }>,
     update: (id: string, data: any) => patch(`/api/items/${id}`, data) as Promise<{ item: Item }>,
     delete: (id: string) => del(`/api/items/${id}`),
+    priceHistory: (id: string) => get(`/api/items/${id}/price-history`) as Promise<{ history: ItemPriceHistoryEntry[] }>,
+  },
+  locations: {
+    list: (householdId: string) => get(`/api/locations?householdId=${householdId}`) as Promise<{ locations: Location[] }>,
+    create: (data: { household_id: string; name: string; parent_id?: string | null }) =>
+      post('/api/locations', data) as Promise<{ location: Location }>,
+    update: (id: string, data: { name?: string; parent_id?: string | null; sort_order?: number }) =>
+      patch(`/api/locations/${id}`, data) as Promise<{ location: Location }>,
+    delete: (id: string) => del(`/api/locations/${id}`),
   },
   batches: {
     create: (data: any) => post('/api/batches', data) as Promise<{ batch: Batch }>,
