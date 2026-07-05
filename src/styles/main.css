@@ -411,6 +411,41 @@ input:focus, select:focus, textarea:focus {
 .btn-danger { background: var(--danger-bg); color: var(--danger); border: 2px solid var(--border); }
 .btn-small { padding: 8px 14px; font-size: 13px; width: auto; }
 
+/* Multi-barcode-per-item UI (item detail: manage several linked barcodes,
+   e.g. different pack sizes of the same product each with their own EAN).
+   Visual language borrowed from the household's old storage-inventory.html
+   prototype (barcode row list + pill-shaped "variant chips"). */
+.barcode-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 0; border-bottom: 1px solid var(--border);
+}
+.barcode-row:last-child { border-bottom: none; }
+.barcode-row input[type="text"] { flex: 2; }
+.barcode-row input[type="number"] { flex: 1; }
+.barcode-row-del {
+  width: 40px; height: 40px; flex-shrink: 0;
+  border: none; background: transparent; color: var(--danger, #dc2626);
+  border-radius: 8px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.barcode-row-del:hover { background: var(--danger-bg, rgba(220,38,38,0.1)); }
+.barcode-add-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 10px 0; background: transparent; border: none;
+  color: var(--text-muted); font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.barcode-variant-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.barcode-variant-chip {
+  border: 1px solid var(--field-border);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.barcode-variant-chip.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+
 /* Lists */
 .empty-state { text-align: center; padding: 40px 20px; opacity: 0.6; font-size: 15px; }
 

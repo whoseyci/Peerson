@@ -167,6 +167,15 @@ export function renderInventoryView(app: App) {
           Array.isArray(i.barcodes) && i.barcodes.some(b => b.code === code)
         );
       }
+      // Any item (other than itself) that already has this barcode linked --
+      // used to enforce cross-item barcode uniqueness when editing an item's
+      // barcode list, mirroring the old storage-inventory.html prototype's
+      // "Barcode bereits mit X verknüpft" validation.
+      function findOtherItemWithBarcode(code, excludeItemId) {
+        return window.app.state.items.find(i =>
+          i.id !== excludeItemId && Array.isArray(i.barcodes) && i.barcodes.some(b => b.code === code)
+        );
+      }
       // If something matching this name is still open on the shopping list,
       // mark it bought automatically -- scanning an item into the pantry
       // means it was just bought, so keeping it "open" on the list would be
@@ -193,7 +202,10 @@ export function renderInventoryView(app: App) {
         const existing = findItemByBarcode(code);
         if (existing) {
           window.app.toast('"' + existing.name + '" erkannt');
-          openAddStock(existing.id);
+          // Pass the scanned code through so, if the item has multiple
+          // linked barcodes (different pack sizes), the matching variant
+          // chip is preselected instead of defaulting to the first one.
+          openAddStock(existing.id, code);
           return;
         }
 
@@ -217,17 +229,73 @@ export function renderInventoryView(app: App) {
           openAddItemModal({ barcode: code });
         }
       }
+      // A "working draft" of the item's barcodes, edited in the detail modal
+      // and only committed on save. Kept outside the DOM (rather than
+      // re-reading every input on every render) so add/remove-row clicks can
+      // just re-render the list from this array.
+      // NOTE: must be 'var', not 'let'/'const'. This whole <script> block is
+      // re-injected into the DOM on every render() (see App.setHtml(), which
+      // clones and re-executes the view's <script> tag each time). Top-level
+      // 'let'/'const' create bindings in the shared global lexical
+      // environment, so re-running the script a second time throws
+      // "Identifier '...' has already been declared" and view scripts never
+      // came back to life -- verified via a debug Playwright run that showed
+      // pageerror events firing with exactly that message on the 2nd+
+      // openItemDetail() call. 'var' re-declares safely in that scope.
+      var detailBarcodeDraft = [];
+
+      function renderDetailBarcodeRows() {
+        if (!detailBarcodeDraft.length) {
+          return '<div class="empty-state" style="padding:12px;">Keine Barcodes verknüpft</div>';
+        }
+        return detailBarcodeDraft.map((b, idx) =>
+          '<div class="barcode-row">' +
+            '<input type="text" class="detail-barcode-code" placeholder="Barcode" value="' + (b.code || '').replace(/"/g, '&quot;') + '" oninput="detailBarcodeDraft[' + idx + '].code = this.value">' +
+            '<input type="number" class="detail-barcode-grams" placeholder="Gramm" min="0" value="' + (b.grams || 0) + '" oninput="detailBarcodeDraft[' + idx + '].grams = parseInt(this.value) || 0">' +
+            '<button class="barcode-row-del" onclick="removeDetailBarcodeRow(' + idx + ')" title="Entfernen"><i class="ph ph-x"></i></button>' +
+          '</div>'
+        ).join('');
+      }
+
+      function addDetailBarcodeRow() {
+        detailBarcodeDraft.push({ code: '', grams: 0 });
+        document.getElementById('detailBarcodeRows').innerHTML = renderDetailBarcodeRows();
+      }
+
+      function removeDetailBarcodeRow(idx) {
+        detailBarcodeDraft.splice(idx, 1);
+        document.getElementById('detailBarcodeRows').innerHTML = renderDetailBarcodeRows();
+      }
+
+      async function scanIntoDetailBarcodeRow() {
+        const handle = window.openBarcodeScanner();
+        const code = await handle.result;
+        if (!code) return;
+        if (detailBarcodeDraft.length && !detailBarcodeDraft[detailBarcodeDraft.length - 1].code) {
+          detailBarcodeDraft[detailBarcodeDraft.length - 1].code = code;
+        } else {
+          detailBarcodeDraft.push({ code, grams: 0 });
+        }
+        document.getElementById('detailBarcodeRows').innerHTML = renderDetailBarcodeRows();
+      }
+
       async function openItemDetail(id) {
         try {
           const item = window.app.state.items.find(i => i.id === id);
           if (!item) return;
           const batches = window.app.state.batches.filter(b => b.item_id === id).sort((a, b) => (a.expiry || '').localeCompare(b.expiry || ''));
           const catOptions = ${JSON.stringify(Object.entries(CATEGORY_META).map(([k, v]) => ({ value: k, label: v.label })))};
+          detailBarcodeDraft = (Array.isArray(item.barcodes) ? item.barcodes : []).map(b => ({ code: b.code, grams: b.grams || 0 }));
           window.app.showModal('itemModal',
             '<div class="modal-header"><div class="modal-title">' + item.name + '</div><button class="close-btn" onclick="window.app.closeModal(\\'itemModal\\')"><i class="ph ph-x"></i></button></div>' +
             '<div class="modal-body">' +
               '<div class="form-group"><label>Kategorie</label><select id="editCategory">' + catOptions.map(c => '<option value="' + c.value + '"' + (c.value === item.category ? ' selected' : '') + '>' + c.label + '</option>').join('') + '</select></div>' +
               '<div class="form-group"><label>Mindestmenge</label><input type="number" id="editThreshold" value="' + item.threshold + '"></div>' +
+              '<div class="form-group">' +
+                '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><label style="margin:0">Barcodes</label><button class="btn btn-small" onclick="scanIntoDetailBarcodeRow()"><i class="ph ph-barcode"></i></button></div>' +
+                '<div id="detailBarcodeRows">' + renderDetailBarcodeRows() + '</div>' +
+                '<button class="barcode-add-row" onclick="addDetailBarcodeRow()"><i class="ph ph-plus"></i> Barcode hinzufügen</button>' +
+              '</div>' +
               '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;"><label style="margin:0">Chargen</label><button class="btn btn-small" onclick="openAddStock(\\'' + item.id + '\\')">+ Bestand</button></div>' +
               '<div class="detail-batch-list" style="margin-bottom:16px;">' +
                 (batches.length ? batches.map(b =>
@@ -250,9 +318,28 @@ export function renderInventoryView(app: App) {
         try {
           const threshold = parseInt(document.getElementById('editThreshold').value) || 0;
           const category = document.getElementById('editCategory').value;
-          await window.api.items.update(id, { threshold, category });
+
+          // Clean the draft: drop rows the user left empty, trim codes.
+          const cleaned = detailBarcodeDraft
+            .map(b => ({ code: (b.code || '').trim(), grams: b.grams || 0 }))
+            .filter(b => b.code);
+
+          // Reject duplicate barcodes within this item's own list.
+          const seen = new Set();
+          for (const b of cleaned) {
+            if (seen.has(b.code)) return window.app.toast('Barcode doppelt: ' + b.code);
+            seen.add(b.code);
+          }
+          // Reject a barcode already linked to a *different* item -- a
+          // barcode should identify exactly one product across the household.
+          for (const b of cleaned) {
+            const owner = findOtherItemWithBarcode(b.code, id);
+            if (owner) return window.app.toast('Barcode bereits mit "' + owner.name + '" verknüpft');
+          }
+
+          await window.api.items.update(id, { threshold, category, barcodes: cleaned });
           const item = window.app.state.items.find(i => i.id === id);
-          if (item) { item.threshold = threshold; item.category = category; }
+          if (item) { item.threshold = threshold; item.category = category; item.barcodes = cleaned; }
           window.app.closeModal('itemModal');
           window.app.render();
           window.app.toast('Gespeichert');
@@ -269,10 +356,57 @@ export function renderInventoryView(app: App) {
           window.app.state.batches = window.app.state.batches.filter(b => b.item_id !== id);
         });
       }
-      async function openAddStock(itemId) {
+      // When an item has more than one linked barcode (e.g. two different
+      // pack sizes of the same product), show a row of "variant chips" so
+      // the user can say which barcode/pack-size they're adding stock for.
+      // Selecting a variant auto-fills its known gram weight as a hint.
+      // Same var-not-let reasoning as detailBarcodeDraft above.
+      var addStockSelectedBarcode = null;
+
+      function getAddStockBarcodeOptions(item) {
+        return Array.isArray(item.barcodes) ? item.barcodes.filter(b => b.code) : [];
+      }
+
+      function renderAddStockVariantChips(itemId) {
+        const item = window.app.state.items.find(i => i.id === itemId);
+        if (!item) return '';
+        const options = getAddStockBarcodeOptions(item);
+        if (options.length < 2) return '';
+        return '<div class="form-group">' +
+          '<label>Variante</label>' +
+          '<div class="barcode-variant-row">' +
+            options.map((b, idx) =>
+              '<div class="barcode-variant-chip' + (addStockSelectedBarcode === b.code ? ' active' : '') + '" onclick="setAddStockVariant(\\'' + itemId + '\\', ' + idx + ')">' +
+                b.code + (b.grams ? ' · ' + b.grams + 'g' : '') +
+              '</div>'
+            ).join('') +
+          '</div>' +
+        '</div>';
+      }
+
+      function setAddStockVariant(itemId, idx) {
+        const item = window.app.state.items.find(i => i.id === itemId);
+        if (!item) return;
+        const options = getAddStockBarcodeOptions(item);
+        const chosen = options[idx];
+        if (!chosen) return;
+        addStockSelectedBarcode = chosen.code;
+        document.getElementById('stockVariantChips').innerHTML = renderAddStockVariantChips(itemId);
+      }
+
+      async function openAddStock(itemId, preselectBarcode) {
+        addStockSelectedBarcode = preselectBarcode || null;
+        // If nothing was preselected but the item has variants, default to
+        // the first one so commitAddStock always has something to record.
+        if (!addStockSelectedBarcode) {
+          const item = window.app.state.items.find(i => i.id === itemId);
+          const options = item ? getAddStockBarcodeOptions(item) : [];
+          if (options.length) addStockSelectedBarcode = options[0].code;
+        }
         window.app.showModal('stockModal',
           '<div class="modal-header"><div class="modal-title">Bestand hinzufügen</div><button class="close-btn" onclick="window.app.closeModal(\\'stockModal\\')"><i class="ph ph-x"></i></button></div>' +
           '<div class="modal-body">' +
+            '<div id="stockVariantChips">' + renderAddStockVariantChips(itemId) + '</div>' +
             '<div class="form-group"><label>Menge</label><input type="number" id="addQty" value="1" min="1"></div>' +
             '<div class="form-group"><label>MHD (optional)</label><input type="date" id="addExpiry"></div>' +
             '<button class="btn" onclick="commitAddStock(\\'' + itemId + '\\')"><i class="ph-bold ph-check"></i></button>' +
@@ -284,7 +418,16 @@ export function renderInventoryView(app: App) {
           const qty = parseInt(document.getElementById('addQty').value) || 0;
           const expiry = document.getElementById('addExpiry').value;
           if (qty <= 0) return;
-          const batch = await window.api.batches.create({ item_id: itemId, quantity: qty, expiry: expiry || null });
+          const item = window.app.state.items.find(i => i.id === itemId);
+          const options = item ? getAddStockBarcodeOptions(item) : [];
+          const variant = options.find(b => b.code === addStockSelectedBarcode);
+          const batch = await window.api.batches.create({
+            item_id: itemId,
+            quantity: qty,
+            expiry: expiry || null,
+            barcode_code: variant ? variant.code : null,
+            grams_per_unit: variant ? (variant.grams || 0) : 0,
+          });
           window.app.state.batches.push(batch.batch);
           window.app.closeModal('stockModal');
           window.app.render();
