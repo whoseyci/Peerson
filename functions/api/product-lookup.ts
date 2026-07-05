@@ -87,10 +87,15 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, waitUntil }) =
       quantity: p.quantity || null,
       imageUrl: p.image_front_small_url || null,
       nutrition: {
-        energy_kcal_100g: p.nutriments?.['energy-kcal_100g'] ?? null,
+        energy_kcal_100g: p.nutriments?.['energy-kcal_100g'] ?? p.nutriments?.energy_kcal_100g ?? null,
         fat_100g: p.nutriments?.fat_100g ?? null,
+        saturated_fat_100g: p.nutriments?.['saturated-fat_100g'] ?? p.nutriments?.saturated_fat_100g ?? null,
         carbohydrates_100g: p.nutriments?.carbohydrates_100g ?? null,
+        sugars_100g: p.nutriments?.sugars_100g ?? null,
+        fiber_100g: p.nutriments?.fiber_100g ?? null,
         proteins_100g: p.nutriments?.proteins_100g ?? null,
+        salt_100g: p.nutriments?.salt_100g ?? null,
+        nutriscore_grade: (p as any).nutriscore_grade ?? (p as any).nutrition_grades ?? (p.nutriments as any)?.nutriscore_grade ?? null,
       },
     };
   }

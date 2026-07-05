@@ -131,9 +131,9 @@ export function renderHouseholdView(app: App) {
       <div class="card">
         <div class="card-content" style="flex-direction:column; align-items:stretch;">
           <label>Dein Name im Haushalt</label>
-          <div style="display:flex; gap:8px;">
-            <input type="text" id="profileName" value="${s.userName}" style="flex:1;">
-            <button class="btn" onclick="saveProfileName()"><i class="ph-bold ph-check"></i></button>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input type="text" id="profileName" value="${s.userName}" style="flex:1; height:44px; padding:0 12px; font-size:16px; border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--field-bg); color:var(--text);">
+            <button class="btn" onclick="saveProfileName()" style="width:44px; height:44px; padding:0; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><i class="ph-bold ph-check" style="font-size:18px;"></i></button>
           </div>
           <div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--border); font-size:12px; color:var(--text-soft);">
             <div style="margin-bottom:4px;"><strong>Account-Wiederherstellung:</strong></div>
