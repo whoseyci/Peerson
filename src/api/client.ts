@@ -98,4 +98,24 @@ export const api = {
       screenshot?: string;
     }) => post('/api/bug-report', data) as Promise<{ url: string; number: number }>,
   },
+  products: {
+    lookup: (barcode: string) =>
+      get(`/api/product-lookup?barcode=${encodeURIComponent(barcode)}`) as Promise<ProductLookupResult>,
+  },
 };
+
+export interface ProductLookupResult {
+  found: boolean;
+  barcode: string;
+  name?: string;
+  category?: string;
+  quantity?: string | null;
+  imageUrl?: string | null;
+  nutrition?: {
+    energy_kcal_100g: number | null;
+    fat_100g: number | null;
+    carbohydrates_100g: number | null;
+    proteins_100g: number | null;
+  };
+}
+
