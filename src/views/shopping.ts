@@ -14,7 +14,10 @@ export function renderShoppingView(app: App) {
   return `
     <div class="header">
       <h1><i class="ph ph-shopping-cart"></i> Einkaufen</h1>
-      <button class="icon-btn" onclick="openAddShoppingModal()"><i class="ph ph-plus"></i></button>
+      <div style="display:flex; gap:8px;">
+        <button class="icon-btn" onclick="scanForShopping()" title="Barcode scannen"><i class="ph ph-barcode"></i></button>
+        <button class="icon-btn" onclick="openAddShoppingModal()" title="Manuell hinzufügen"><i class="ph ph-plus"></i></button>
+      </div>
     </div>
 
     ${missingLowStock.length ? `
@@ -69,15 +72,42 @@ export function renderShoppingView(app: App) {
     </div>` : ''}
 
     <script>
-      async function openAddShoppingModal() {
+      async function openAddShoppingModal(prefillName) {
         window.app.showModal('shopModal',
           '<div class="modal-header"><div class="modal-title">Zur Liste hinzufügen</div><button class="close-btn" onclick="window.app.closeModal(\\'shopModal\\')"><i class="ph ph-x"></i></button></div>' +
           '<div class="modal-body">' +
-            '<div class="form-group"><label>Artikel</label><input type="text" id="shopName" placeholder="Was wird gebraucht?"></div>' +
+            '<div class="form-group"><label>Artikel</label><input type="text" id="shopName" placeholder="Was wird gebraucht?" value="' + (prefillName ? prefillName.replace(/"/g, '&quot;') : '') + '"></div>' +
             '<div class="form-group"><label>Menge (optional)</label><input type="text" id="shopQty" placeholder="z. B. 2 Packungen"></div>' +
             '<button class="btn" onclick="saveShoppingItem()"><i class="ph-bold ph-check"></i></button>' +
           '</div>'
         );
+      }
+      async function scanForShopping() {
+        const handle = window.openBarcodeScanner();
+        const code = await handle.result;
+        if (!code) return;
+
+        const pantryItem = window.app.state.items.find(i =>
+          Array.isArray(i.barcodes) && i.barcodes.some(b => b.code === code)
+        );
+        if (pantryItem) {
+          const alreadyOpen = window.app.state.shopping.some(s => s.status === 'open' && s.name.trim().toLowerCase() === pantryItem.name.trim().toLowerCase());
+          if (alreadyOpen) {
+            window.app.toast('"' + pantryItem.name + '" steht schon auf der Liste');
+            return;
+          }
+          openAddShoppingModal(pantryItem.name);
+          return;
+        }
+
+        window.app.toast('Suche Produkt...');
+        try {
+          const product = await window.api.products.lookup(code);
+          openAddShoppingModal(product.found ? product.name : null);
+          if (!product.found) window.app.toast('Produkt nicht gefunden — bitte Namen eingeben');
+        } catch (e) {
+          openAddShoppingModal(null);
+        }
       }
       async function saveShoppingItem() {
         try {

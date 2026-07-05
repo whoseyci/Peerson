@@ -6,7 +6,8 @@ A wholesome app for shared households. Track your pantry, split expenses, assign
 
 - **Households** — Create a household and invite others via a shareable link or 8-digit code.
 - **Pantry / Inventory** — Track items with quantities, locations, expiry dates (MHD), and barcodes.
-- **Smart Shopping List** — Manually add items or let the app auto-suggest low-stock pantry items.
+- **Barcode Scanner** — Scan a product with your camera to look it up (via [Open Food Facts](https://world.openfoodfacts.org)) and auto-fill its name, category and photo. Scanning a barcode already in your pantry jumps straight to "add stock" instead of creating a duplicate.
+- **Smart Shopping List** — Manually add items, scan a barcode, or let the app auto-suggest low-stock pantry items. Scanning something into the pantry automatically checks it off the shopping list if it was on there.
 - **Task Assignment** — Create tasks, assign them to household members, set due dates.
 - **Expense & Income Splitting** — Log who paid what and split costs equally among members. Balances are calculated automatically.
 - **Monochrome Design** — Clean, accessible UI with dark mode support.
@@ -110,6 +111,19 @@ needing a GitHub account — it's handled entirely server-side by
 client-side code — those are all bundled/committed in plaintext. It must
 only ever live as an encrypted Pages environment variable, read
 server-side inside a Function.
+
+### 8. Barcode scanning & product lookup
+
+No setup required — `functions/api/product-lookup.ts` proxies to
+[Open Food Facts](https://world.openfoodfacts.org), a free, keyless,
+community-maintained product database, and caches results at Cloudflare's
+edge for 24h. The camera scanner uses the
+[html5-qrcode](https://github.com/mebjas/html5-qrcode) library (loaded via
+CDN in `index.html`) and requires HTTPS (or `localhost`) to access the
+camera — this is a browser requirement, not something Peerson controls.
+If camera access is denied or unavailable, users can type the barcode in
+manually; the rest of the flow (lookup, prefill, add-stock shortcut) works
+identically either way.
 
 ## Project Structure
 

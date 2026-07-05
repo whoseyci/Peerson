@@ -43,7 +43,10 @@ export function renderInventoryView(app: App) {
   return `
     <div class="header">
       <h1><i class="ph ph-package"></i> Vorrat</h1>
-      <button class="icon-btn" onclick="openAddItemModal()"><i class="ph ph-plus"></i></button>
+      <div style="display:flex; gap:8px;">
+        <button class="icon-btn" onclick="startScanFlow()" title="Barcode scannen"><i class="ph ph-barcode"></i></button>
+        <button class="icon-btn" onclick="openAddItemModal()" title="Manuell hinzufügen"><i class="ph ph-plus"></i></button>
+      </div>
     </div>
 
     ${expiring.length ? `
@@ -103,18 +106,41 @@ export function renderInventoryView(app: App) {
         const term = document.getElementById('invSearch').value.toLowerCase();
         document.getElementById('inventoryList').innerHTML = window.renderInventoryList(window.app, term);
       }
-      async function openAddItemModal() {
+      async function openAddItemModal(prefill) {
+        prefill = prefill || {};
         const categories = ${JSON.stringify(Object.entries(CATEGORY_META).map(([k, v]) => ({ value: k, label: v.label })))};
+        const preview = prefill.imageUrl || prefill.quantity ? (
+          '<div class="product-preview">' +
+            (prefill.imageUrl
+              ? '<img src="' + prefill.imageUrl + '" alt="">'
+              : '<div class="product-preview-icon"><i class="ph ph-package"></i></div>') +
+            '<div class="product-preview-text">' +
+              '<div class="product-preview-name">' + (prefill.name || 'Unbekanntes Produkt') + '</div>' +
+              '<div class="product-preview-meta">' + (prefill.quantity || 'Über Barcode gefunden') + '</div>' +
+            '</div>' +
+          '</div>'
+        ) : '';
         window.app.showModal('itemModal',
           '<div class="modal-header"><div class="modal-title">Neuer Artikel</div><button class="close-btn" onclick="window.app.closeModal(\\'itemModal\\')"><i class="ph ph-x"></i></button></div>' +
           '<div class="modal-body">' +
-            '<div class="form-group"><label>Name</label><input type="text" id="newItemName" placeholder="z. B. Hafermilch"></div>' +
-            '<div class="form-group"><label>Kategorie</label><select id="newItemCategory">' + categories.map(c => '<option value="' + c.value + '">' + c.label + '</option>').join('') + '</select></div>' +
+            preview +
+            '<div class="form-group"><label>Name</label><input type="text" id="newItemName" placeholder="z. B. Hafermilch" value="' + (prefill.name ? prefill.name.replace(/"/g, '&quot;') : '') + '"></div>' +
+            '<div class="form-group"><label>Kategorie</label><select id="newItemCategory">' + categories.map(c => '<option value="' + c.value + '"' + (c.value === prefill.category ? ' selected' : '') + '>' + c.label + '</option>').join('') + '</select></div>' +
             '<div class="form-group"><label>Mindestmenge</label><input type="number" id="newItemThreshold" value="2" min="0"></div>' +
-            '<div class="form-group"><label>Barcode</label><input type="text" id="newItemBarcode" placeholder="Optional"></div>' +
+            '<div class="form-group"><label>Barcode</label>' +
+              '<div style="display:flex; gap:8px;">' +
+                '<input type="text" id="newItemBarcode" placeholder="Optional" value="' + (prefill.barcode || '') + '" style="flex:1;">' +
+                '<button class="btn btn-secondary btn-small" style="width:auto; padding:0 14px;" onclick="scanIntoBarcodeField()"><i class="ph ph-barcode"></i></button>' +
+              '</div>' +
+            '</div>' +
             '<button class="btn" onclick="saveNewItem()"><i class="ph-bold ph-check"></i></button>' +
           '</div>'
         );
+      }
+      async function scanIntoBarcodeField() {
+        const handle = window.openBarcodeScanner();
+        const code = await handle.result;
+        if (code) document.getElementById('newItemBarcode').value = code;
       }
       async function saveNewItem() {
         try {
@@ -131,8 +157,64 @@ export function renderInventoryView(app: App) {
           window.app.closeModal('itemModal');
           window.app.render();
           window.app.toast('Artikel erstellt');
+          maybeCheckOffShoppingList(name);
         } catch (e) {
           window.app.toast('Fehler: ' + (e.message || 'Unbekannter Fehler'));
+        }
+      }
+      function findItemByBarcode(code) {
+        return window.app.state.items.find(i =>
+          Array.isArray(i.barcodes) && i.barcodes.some(b => b.code === code)
+        );
+      }
+      // If something matching this name is still open on the shopping list,
+      // mark it bought automatically -- scanning an item into the pantry
+      // means it was just bought, so keeping it "open" on the list would be
+      // a lie the user has to go clean up manually.
+      async function maybeCheckOffShoppingList(name) {
+        const normalized = name.trim().toLowerCase();
+        const match = window.app.state.shopping.find(s =>
+          s.status === 'open' && s.name.trim().toLowerCase() === normalized
+        );
+        if (!match) return;
+        try {
+          await window.api.shopping.update(match.id, { status: 'bought' });
+          match.status = 'bought';
+          window.app.toast('"' + name + '" von Einkaufsliste abgehakt');
+        } catch (e) {
+          // Non-critical -- the item was still added to inventory successfully.
+        }
+      }
+      async function startScanFlow() {
+        const handle = window.openBarcodeScanner();
+        const code = await handle.result;
+        if (!code) return;
+
+        const existing = findItemByBarcode(code);
+        if (existing) {
+          window.app.toast('"' + existing.name + '" erkannt');
+          openAddStock(existing.id);
+          return;
+        }
+
+        window.app.toast('Suche Produkt...');
+        try {
+          const product = await window.api.products.lookup(code);
+          if (product.found) {
+            openAddItemModal({
+              name: product.name,
+              category: product.category,
+              barcode: code,
+              imageUrl: product.imageUrl,
+              quantity: product.quantity,
+            });
+          } else {
+            window.app.toast('Produkt nicht gefunden — bitte manuell ausfüllen');
+            openAddItemModal({ barcode: code });
+          }
+        } catch (e) {
+          window.app.toast('Produktsuche fehlgeschlagen — bitte manuell ausfüllen');
+          openAddItemModal({ barcode: code });
         }
       }
       async function openItemDetail(id) {
