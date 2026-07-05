@@ -18,6 +18,10 @@ describe('Build Output', () => {
     expect(html).toContain('src="/assets/');
     expect(html).toContain('href="/assets/');
   });
+
+  it('produces dist/manifest.json for PWA support', () => {
+    expect(existsSync('dist/manifest.json')).toBe(true);
+  });
 });
 
 describe('Wrangler Config', () => {
@@ -57,6 +61,14 @@ describe('Schema SQL', () => {
       expect(sql).toContain(`create table if not exists ${table}`);
     }
   });
+
+  it('contains performance indexes for foreign keys', () => {
+    const sql = readFileSync('schema.sql', 'utf-8').toLowerCase();
+    expect(sql).toContain('create index if not exists');
+    expect(sql).toContain('idx_items_household');
+    expect(sql).toContain('idx_batches_item');
+    expect(sql).toContain('idx_expenses_household');
+  });
 });
 
 describe('Functions Structure', () => {
@@ -82,7 +94,6 @@ describe('Functions Structure', () => {
   });
 
   it('has no external imports outside functions tree', () => {
-    // Ensure functions only import from within functions/ or node_modules
     const checkDir = (dir: string) => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
         const path = resolve(dir, entry.name);

@@ -1,4 +1,25 @@
 import type { App } from '../app';
+import type { ShoppingItem } from '../types';
+
+const AISLE_META: Record<string, { label: string; icon: string; order: number }> = {
+  obst: { label: 'Obst & Gemüse', icon: 'apple-logo', order: 1 },
+  gemuese: { label: 'Obst & Gemüse', icon: 'carrot', order: 1 },
+  milch: { label: 'Kühlregal & Milch', icon: 'drop', order: 2 },
+  proteine: { label: 'Fleisch & Proteine', icon: 'egg', order: 3 },
+  getreide: { label: 'Getreide & Beilagen', icon: 'bread', order: 4 },
+  getraenke: { label: 'Getränke', icon: 'bottle', order: 5 },
+  fette: { label: 'Öle & Fette', icon: 'drop-half-bottom', order: 6 },
+  fertig: { label: 'Konserven & Fertigwaren', icon: 'can', order: 7 },
+  sonstiges: { label: 'Sonstiges & Haushalt', icon: 'package', order: 8 },
+};
+
+function getItemAisle(item: ShoppingItem, app: App) {
+  const pantryItem = app.state.items.find(i => 
+    i.id === item.linked_item_id || i.name.trim().toLowerCase() === item.name.trim().toLowerCase()
+  );
+  const cat = pantryItem?.category || 'sonstiges';
+  return AISLE_META[cat] || AISLE_META.sonstiges;
+}
 
 export function renderShoppingView(app: App) {
   const s = app.state;
@@ -10,6 +31,17 @@ export function renderShoppingView(app: App) {
     return total < i.threshold;
   });
   const missingLowStock = lowStockItems.filter(i => !s.shopping.some(sh => sh.linked_item_id === i.id && sh.status === 'open'));
+
+  // Group open items by supermarket aisle
+  const groupedOpen = new Map<string, { label: string; icon: string; order: number; items: ShoppingItem[] }>();
+  open.forEach(item => {
+    const aisle = getItemAisle(item, app);
+    if (!groupedOpen.has(aisle.label)) {
+      groupedOpen.set(aisle.label, { ...aisle, items: [] });
+    }
+    groupedOpen.get(aisle.label)!.items.push(item);
+  });
+  const sortedAisles = Array.from(groupedOpen.values()).sort((a, b) => a.order - b.order);
 
   return `
     <div class="header">
@@ -39,20 +71,28 @@ export function renderShoppingView(app: App) {
     </div>` : ''}
 
     <div class="section">
-      <div class="section-header"><div class="section-title">Offen</div><span class="badge">${open.length}</span></div>
-      ${open.length ? open.map(item => `
-        <div class="card">
-          <div class="card-content" style="align-items: center;">
-            <button class="shopping-check" onclick="toggleShopping('${item.id}')"></button>
-            <div class="card-text" style="margin-left: 8px;">
-              <div class="card-header"><div class="item-name">${item.name}</div></div>
-              ${item.quantity ? `<div class="card-meta">${item.quantity}</div>` : ''}
+      <div class="section-header">
+        <div class="section-title">Offen (nach Supermarkt-Regal)</div>
+        <span class="badge">${open.length}</span>
+      </div>
+      ${open.length ? sortedAisles.map(aisle => `
+        <div style="margin-top: 12px; margin-bottom: 6px; font-weight: 700; font-size: 0.85rem; color: var(--text-soft); display: flex; align-items: center; gap: 6px;">
+          <i class="ph ph-${aisle.icon}"></i> <span>${aisle.label}</span>
+        </div>
+        ${aisle.items.map(item => `
+          <div class="card" style="margin-bottom: 8px;">
+            <div class="card-content" style="align-items: center;">
+              <button class="shopping-check" onclick="toggleShopping('${item.id}')"></button>
+              <div class="card-text" style="margin-left: 8px;">
+                <div class="card-header"><div class="item-name">${item.name}</div></div>
+                ${item.quantity ? `<div class="card-meta">${item.quantity}</div>` : ''}
+              </div>
+            </div>
+            <div class="card-actions">
+              <button class="action-btn remove" onclick="deleteShopping('${item.id}')"><i class="ph ph-trash"></i></button>
             </div>
           </div>
-          <div class="card-actions">
-            <button class="action-btn remove" onclick="deleteShopping('${item.id}')"><i class="ph ph-trash"></i></button>
-          </div>
-        </div>
+        `).join('')}
       `).join('') : `<div class="empty-state">Nichts auf der Liste</div>`}
     </div>
 
