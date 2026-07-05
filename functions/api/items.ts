@@ -7,6 +7,39 @@ async function requireMember(db: D1Database, userId: string, householdId: string
   if (!row) throw new Error('Forbidden');
 }
 
+// D1 (SQLite) has no native JSON column type: `items.barcodes` and
+// `items.nutrition` are stored as TEXT columns holding `JSON.stringify(...)`
+// output (see onRequestPost below). `SELECT *` returns those columns as raw
+// strings -- D1 never auto-parses them. The frontend types (src/types/index.ts)
+// declare `Item.barcodes: Barcode[]` and `Item.nutrition: Record<string, number>`,
+// i.e. real arrays/objects are expected, not JSON strings.
+//
+// Bug confirmed with an automated regression test (test/items-json-fields.test.ts)
+// using the project's MockD1Database, which -- like real D1 -- stores exactly
+// what is bound with no auto-parsing: a raw `SELECT * FROM items` row had
+// `typeof row.barcodes === 'string'`, and that string survived unparsed all
+// the way through `Response.json(...)`. This helper repairs that before any
+// row leaves the API boundary. (Duplicated in functions/api/items/[id].ts --
+// this project's own build.test.ts enforces "no external imports outside the
+// functions tree" via a substring check on `lib/`, so a shared functions/lib
+// module isn't viable here; the helper is tiny enough that duplication is the
+// simplest fix that respects that existing test's intent.)
+function parseItemRow<T extends { barcodes?: unknown; nutrition?: unknown }>(row: T): T {
+  return {
+    ...row,
+    barcodes: typeof row.barcodes === 'string' ? safeJsonParse(row.barcodes, []) : (row.barcodes ?? []),
+    nutrition: typeof row.nutrition === 'string' ? safeJsonParse(row.nutrition, {}) : (row.nutrition ?? {}),
+  };
+}
+
+function safeJsonParse(value: string, fallback: unknown) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const userId = request.headers.get('X-User-Id');
   const householdId = new URL(request.url).searchParams.get('householdId');
@@ -17,7 +50,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     .bind(householdId).all();
   const batches = await env.DB.prepare('SELECT * FROM batches WHERE item_id IN (SELECT id FROM items WHERE household_id = ?)')
     .bind(householdId).all();
-  return Response.json({ items: items.results, batches: batches.results });
+  return Response.json({ items: items.results.map(parseItemRow), batches: batches.results });
 };
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
@@ -37,5 +70,5 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   ).run();
 
   const item = await env.DB.prepare('SELECT * FROM items WHERE id = ?').bind(id).first();
-  return Response.json({ item }, { status: 201 });
+  return Response.json({ item: item ? parseItemRow(item as any) : item }, { status: 201 });
 };
