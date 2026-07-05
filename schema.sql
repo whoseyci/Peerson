@@ -85,3 +85,16 @@ CREATE TABLE IF NOT EXISTS shopping_items (
   linked_item_id TEXT REFERENCES items(id) ON DELETE SET NULL,
   created_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
+
+-- Performance & Foreign Key Indexes
+CREATE INDEX IF NOT EXISTS idx_household_members_user ON household_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_items_household ON items(household_id);
+CREATE INDEX IF NOT EXISTS idx_batches_item ON batches(item_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_household ON tasks(household_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_assigned ON tasks(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_expenses_household ON expenses(household_id);
+CREATE INDEX IF NOT EXISTS idx_expenses_paid_by ON expenses(paid_by);
+CREATE INDEX IF NOT EXISTS idx_expense_splits_expense ON expense_splits(expense_id);
+CREATE INDEX IF NOT EXISTS idx_expense_splits_user ON expense_splits(user_id);
+CREATE INDEX IF NOT EXISTS idx_shopping_items_household ON shopping_items(household_id);
+CREATE INDEX IF NOT EXISTS idx_shopping_items_linked ON shopping_items(linked_item_id);
