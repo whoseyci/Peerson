@@ -89,4 +89,13 @@ export const api = {
   users: {
     updateName: (name: string) => post('/api/users', { action: 'update_name', name }),
   },
+  bugReport: {
+    submit: (data: {
+      title: string;
+      description?: string;
+      context?: Record<string, string>;
+      lastActions?: string;
+      screenshot?: string;
+    }) => post('/api/bug-report', data) as Promise<{ url: string; number: number }>,
+  },
 };
