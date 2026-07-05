@@ -29,7 +29,7 @@ function getItemIcon(item: Item) {
 }
 
 function getTotal(itemId: string, batches: Batch[]) {
-  return batches.filter(b => b.item_id === itemId).reduce((a, b) => a + b.quantity, 0);
+  return batches.filter((b: any) => b.item_id === itemId).reduce((a, b) => a + b.quantity, 0);
 }
 
 function formatDate(d?: string) {
@@ -42,7 +42,7 @@ function getDays(d?: string) {
   return Math.ceil((new Date(d).getTime() - Date.now()) / 86400000);
 }
 
-function formatPrice(cents?: number | null) {
+function formatPrice(cents: any) {
   if (cents === null || cents === undefined) return null;
   return (cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
 }
@@ -71,12 +71,12 @@ function locationPath(locationId: string | null | undefined, locations: Location
 // ambiguous.
 function locationSelectOptions(locations: Location[], selectedId: string | null | undefined): string {
   const byParent = new Map<string | null, Location[]>();
-  locations.forEach(l => {
+  locations.forEach((l: any) => {
     const key = l.parent_id ?? null;
     if (!byParent.has(key)) byParent.set(key, []);
     byParent.get(key)!.push(l);
   });
-  byParent.forEach(list => list.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name)));
+  byParent.forEach(list => list.sort((a: any, b: any) => a.sort_order - b.sort_order || a.name.localeCompare(b.name)));
 
   const options: string[] = ['<option value="">Kein Ort</option>'];
   const walk = (parentId: string | null, depth: number) => {
@@ -95,10 +95,10 @@ export function renderInventoryView(app: App) {
   const s = app.state;
   const lowStock = s.items.filter(i => getTotal(i.id, s.batches) < i.threshold);
   const expiring = s.batches
-    .filter(b => b.expiry && getDays(b.expiry) <= 30)
-    .map(b => ({ ...b, item: s.items.find(i => i.id === b.item_id), days: getDays(b.expiry) }))
-    .filter(x => x.item)
-    .sort((a, b) => a.days - b.days);
+    .filter((b: any) => b.expiry && getDays(b.expiry) <= 30)
+    .map(b => ({ ...b, item: s.items.find((i: any) => i.id === b.item_id), days: getDays(b.expiry) }))
+    .filter((x: any) => x.item)
+    .sort((a: any, b: any) => a.days - b.days);
 
   return `
     <div class="header">
@@ -161,7 +161,10 @@ export function renderInventoryView(app: App) {
     </div>
 
     <div id="modals"></div>
-    <script>
+  `;
+}
+
+
       // Injected once per render from the TS-level NUTRITION_FIELDS const --
       // this whole block runs as a real <script> tag in the browser's
       // global scope, which is NOT the same scope as this .ts module, so
@@ -170,17 +173,17 @@ export function renderInventoryView(app: App) {
       // and addStockSelectedBarcode are below: App.setHtml() re-injects and
       // re-executes this <script> tag on every render(), and re-declaring a
       // top-level 'const' the second time throws.
-      var NUTRITION_FIELDS = ${JSON.stringify(NUTRITION_FIELDS)};
+      
 
-      function filterInventory() {
-        const term = document.getElementById('invSearch').value.toLowerCase();
-        document.getElementById('inventoryList').innerHTML = window.renderInventoryList(window.app, term);
+      export function filterInventory() {
+        const term = (document.getElementById('invSearch') as any).value.toLowerCase();
+        (document.getElementById('inventoryList') as any).innerHTML = (window as any).renderInventoryList((window as any).app, term);
       }
-      async function openAddItemModal(prefill) {
+      export async function openAddItemModal(prefill: any = {}) {
         prefill = prefill || {};
-        window._pendingNutrition = prefill.nutrition || {};
-        window._newItemNutritionPrefill = prefill.nutrition || {};
-        const categories = ${JSON.stringify(Object.entries(CATEGORY_META).map(([k, v]) => ({ value: k, label: v.label })))};
+        (window as any)._pendingNutrition = prefill.nutrition || {};
+        (window as any)._newItemNutritionPrefill = prefill.nutrition || {};
+        const categories = Object.entries(CATEGORY_META).map(([k, v]) => ({ value: k, label: v.label }));
         const preview = prefill.imageUrl || prefill.quantity ? (
           '<div class="product-preview">' +
             (prefill.imageUrl
@@ -192,14 +195,14 @@ export function renderInventoryView(app: App) {
             '</div>' +
           '</div>'
         ) : '';
-        window.app.showModal('itemModal',
-          '<div class="modal-header"><div class="modal-title">Neuer Artikel</div><button class="close-btn" onclick="window.app.closeModal(\\'itemModal\\')"><i class="ph ph-x"></i></button></div>' +
+        (window as any).app.showModal('itemModal',
+          '<div class="modal-header"><div class="modal-title">Neuer Artikel</div><button class="close-btn" onclick="(window as any).app.closeModal(\'itemModal\')"><i class="ph ph-x"></i></button></div>' +
           '<div class="modal-body">' +
             preview +
             '<div class="form-group"><label>Name</label><input type="text" id="newItemName" placeholder="z. B. Hafermilch" value="' + (prefill.name ? prefill.name.replace(/"/g, '&quot;') : '') + '"></div>' +
-            '<div class="form-group"><label>Kategorie</label><select id="newItemCategory">' + categories.map(c => '<option value="' + c.value + '"' + (c.value === prefill.category ? ' selected' : '') + '>' + c.label + '</option>').join('') + '</select></div>' +
+            '<div class="form-group"><label>Kategorie</label><select id="newItemCategory">' + categories.map((c: any) => '<option value="' + c.value + '"' + (c.value === prefill.category ? ' selected' : '') + '>' + c.label + '</option>').join('') + '</select></div>' +
             '<div class="form-group"><label>Mindestmenge</label><input type="number" id="newItemThreshold" value="2" min="0"></div>' +
-            (window.app.state.locations.length ? '<div class="form-group"><label>Ort</label><select id="newItemLocation">' + window.locationSelectOptions(window.app.state.locations, null) + '</select></div>' : '') +
+            ((window as any).app.state.locations.length ? '<div class="form-group"><label>Ort</label><select id="newItemLocation">' + (window as any).locationSelectOptions((window as any).app.state.locations, null) + '</select></div>' : '') +
             '<div class="form-group"><label>Preis (optional)</label><input type="text" inputmode="decimal" id="newItemPrice" placeholder="z. B. 2,49"></div>' +
             '<div class="form-group"><label>Barcode</label>' +
               '<div style="display:flex; gap:8px;">' +
@@ -211,76 +214,76 @@ export function renderInventoryView(app: App) {
           '</div>'
         );
       }
-      async function scanIntoBarcodeField() {
-        const handle = window.openBarcodeScanner();
+      export async function scanIntoBarcodeField() {
+        const handle = (window as any).openBarcodeScanner();
         const code = await handle.result;
-        if (code) document.getElementById('newItemBarcode').value = code;
+        if (code) (document.getElementById('newItemBarcode') as any).value = code;
       }
-      async function saveNewItem() {
+      export async function saveNewItem() {
         try {
-          const name = document.getElementById('newItemName').value.trim();
-          if (!name) return window.app.toast('Name erforderlich');
-          const priceInput = document.getElementById('newItemPrice');
+          const name = (document.getElementById('newItemName') as any).value.trim();
+          if (!name) return (window as any).app.toast('Name erforderlich');
+          const priceInput = (document.getElementById('newItemPrice') as any);
           const priceEuros = priceInput ? parseFloat(priceInput.value.replace(',', '.')) : NaN;
-          const item = await window.api.items.create({
-            household_id: window.app.state.householdId,
+          const item = await (window as any).api.items.create({
+            household_id: (window as any).app.state.householdId,
             name,
-            category: document.getElementById('newItemCategory').value,
-            threshold: parseInt(document.getElementById('newItemThreshold').value) || 0,
-            location_id: document.getElementById('newItemLocation') ? (document.getElementById('newItemLocation').value || null) : null,
-            barcodes: document.getElementById('newItemBarcode').value ? [{ code: document.getElementById('newItemBarcode').value, grams: 0 }] : [],
-            nutrition: window._pendingNutrition || window._newItemNutritionPrefill || {},
+            category: (document.getElementById('newItemCategory') as any).value,
+            threshold: parseInt((document.getElementById('newItemThreshold') as any).value) || 0,
+            location_id: (document.getElementById('newItemLocation') as any) ? ((document.getElementById('newItemLocation') as any).value || null) : null,
+            barcodes: (document.getElementById('newItemBarcode') as any).value ? [{ code: (document.getElementById('newItemBarcode') as any).value, grams: 0 }] : [],
+            nutrition: (window as any)._pendingNutrition || (window as any)._newItemNutritionPrefill || {},
             price_cents: !isNaN(priceEuros) ? Math.round(priceEuros * 100) : null,
           });
-          window.app.state.items.push(item.item);
-          window.app.closeModal('itemModal');
-          window.app.render();
-          window.app.toast('Artikel erstellt');
+          (window as any).app.state.items.push(item.item);
+          (window as any).app.closeModal('itemModal');
+          (window as any).app.render();
+          (window as any).app.toast('Artikel erstellt');
           maybeCheckOffShoppingList(name);
-        } catch (e) {
-          window.app.toast('Fehler: ' + (e.message || 'Unbekannter Fehler'));
+        } catch (e: any) {
+          (window as any).app.toast('Fehler: ' + (e.message || 'Unbekannter Fehler'));
         }
       }
-      function findItemByBarcode(code) {
-        return window.app.state.items.find(i =>
-          Array.isArray(i.barcodes) && i.barcodes.some(b => b.code === code)
+      export function findItemByBarcode(code: string) {
+        return (window as any).app.state.items.find((i: any) =>
+          Array.isArray(i.barcodes) && i.barcodes.some((b: any) => b.code === code)
         );
       }
       // Any item (other than itself) that already has this barcode linked --
       // used to enforce cross-item barcode uniqueness when editing an item's
       // barcode list, mirroring the old storage-inventory.html prototype's
       // "Barcode bereits mit X verknüpft" validation.
-      function findOtherItemWithBarcode(code, excludeItemId) {
-        return window.app.state.items.find(i =>
-          i.id !== excludeItemId && Array.isArray(i.barcodes) && i.barcodes.some(b => b.code === code)
+      export function findOtherItemWithBarcode(code: string, excludeItemId: string) {
+        return (window as any).app.state.items.find((i: any) =>
+          i.id !== excludeItemId && Array.isArray(i.barcodes) && i.barcodes.some((b: any) => b.code === code)
         );
       }
       // If something matching this name is still open on the shopping list,
       // mark it bought automatically -- scanning an item into the pantry
       // means it was just bought, so keeping it "open" on the list would be
       // a lie the user has to go clean up manually.
-      async function maybeCheckOffShoppingList(name) {
+      export async function maybeCheckOffShoppingList(name: string) {
         const normalized = name.trim().toLowerCase();
-        const match = window.app.state.shopping.find(s =>
+        const match = (window as any).app.state.shopping.find((s: any) =>
           s.status === 'open' && s.name.trim().toLowerCase() === normalized
         );
         if (!match) return;
         try {
-          await window.api.shopping.update(match.id, { status: 'bought' });
+          await (window as any).api.shopping.update(match.id, { status: 'bought' });
           match.status = 'bought';
-          window.app.toast('"' + name + '" von Einkaufsliste abgehakt');
-        } catch (e) {
+          (window as any).app.toast('"' + name + '" von Einkaufsliste abgehakt');
+        } catch (e: any) {
           // Non-critical -- the item was still added to inventory successfully.
         }
       }
-      async function startScanFlow() {
-        const handle = window.openBarcodeScanner();
+      export async function startScanFlow() {
+        const handle = (window as any).openBarcodeScanner();
         const code = await handle.result;
         if (!code) return;
 
         const existing = findItemByBarcode(code);
         if (existing) {
-          window.app.toast('"' + existing.name + '" erkannt');
+          (window as any).app.toast('"' + existing.name + '" erkannt');
           // Pass the scanned code through so, if the item has multiple
           // linked barcodes (different pack sizes), the matching variant
           // chip is preselected instead of defaulting to the first one.
@@ -288,9 +291,9 @@ export function renderInventoryView(app: App) {
           return;
         }
 
-        window.app.toast('Suche Produkt...');
+        (window as any).app.toast('Suche Produkt...');
         try {
-          const product = await window.api.products.lookup(code);
+          const product = await (window as any).api.products.lookup(code);
           if (product.found) {
             openAddItemModal({
               name: product.name,
@@ -301,11 +304,11 @@ export function renderInventoryView(app: App) {
               nutrition: product.nutrition || null,
             });
           } else {
-            window.app.toast('Produkt nicht gefunden — bitte manuell ausfüllen');
+            (window as any).app.toast('Produkt nicht gefunden — bitte manuell ausfüllen');
             openAddItemModal({ barcode: code });
           }
-        } catch (e) {
-          window.app.toast('Produktsuche fehlgeschlagen — bitte manuell ausfüllen');
+        } catch (e: any) {
+          (window as any).app.toast('Produktsuche fehlgeschlagen — bitte manuell ausfüllen');
           openAddItemModal({ barcode: code });
         }
       }
@@ -322,9 +325,9 @@ export function renderInventoryView(app: App) {
       // came back to life -- verified via a debug Playwright run that showed
       // pageerror events firing with exactly that message on the 2nd+
       // openItemDetail() call. 'var' re-declares safely in that scope.
-      var detailBarcodeDraft = [];
+      let detailBarcodeDraft: any[] = [];
 
-      function renderDetailBarcodeRows() {
+      export function renderDetailBarcodeRows() {
         if (!detailBarcodeDraft.length) {
           return '<div class="empty-state" style="padding:12px;">Keine Barcodes verknüpft</div>';
         }
@@ -337,18 +340,18 @@ export function renderInventoryView(app: App) {
         ).join('');
       }
 
-      function addDetailBarcodeRow() {
+      export function addDetailBarcodeRow() {
         detailBarcodeDraft.push({ code: '', grams: 0 });
-        document.getElementById('detailBarcodeRows').innerHTML = renderDetailBarcodeRows();
+        (document.getElementById('detailBarcodeRows') as any).innerHTML = renderDetailBarcodeRows();
       }
 
-      function removeDetailBarcodeRow(idx) {
+      export function removeDetailBarcodeRow(idx: number) {
         detailBarcodeDraft.splice(idx, 1);
-        document.getElementById('detailBarcodeRows').innerHTML = renderDetailBarcodeRows();
+        (document.getElementById('detailBarcodeRows') as any).innerHTML = renderDetailBarcodeRows();
       }
 
-      async function scanIntoDetailBarcodeRow() {
-        const handle = window.openBarcodeScanner();
+      export async function scanIntoDetailBarcodeRow() {
+        const handle = (window as any).openBarcodeScanner();
         const code = await handle.result;
         if (!code) return;
         if (detailBarcodeDraft.length && !detailBarcodeDraft[detailBarcodeDraft.length - 1].code) {
@@ -356,64 +359,64 @@ export function renderInventoryView(app: App) {
         } else {
           detailBarcodeDraft.push({ code, grams: 0 });
         }
-        document.getElementById('detailBarcodeRows').innerHTML = renderDetailBarcodeRows();
+        (document.getElementById('detailBarcodeRows') as any).innerHTML = renderDetailBarcodeRows();
       }
 
       // Renders a compact read-only nutrition table (per 100g) if the item
       // has any nutrition values set (from an Open Food Facts lookup or
       // manual entry) -- otherwise a hint + button to fill it in by hand,
       // since not every product a household tracks has a barcode.
-      function renderNutritionSection(item) {
+      export function renderNutritionSection(item: any) {
         const n = item.nutrition || {};
-        const hasAny = NUTRITION_FIELDS.some(f => n[f.key] !== undefined && n[f.key] !== null);
+        const hasAny = NUTRITION_FIELDS.some((f: any) => n[f.key] !== undefined && n[f.key] !== null);
         if (!hasAny) {
           return '<div class="form-group">' +
             '<label>Nährwerte (pro 100g)</label>' +
             '<div class="empty-state" style="padding:12px;">Keine Nährwerte hinterlegt</div>' +
-            '<button class="btn btn-secondary btn-small" onclick="openNutritionEditor(\\'' + item.id + '\\')"><i class="ph ph-pencil-simple"></i> Manuell eintragen</button>' +
+            '<button class="btn btn-secondary btn-small" onclick="openNutritionEditor(\'' + item.id + '\')"><i class="ph ph-pencil-simple"></i> Manuell eintragen</button>' +
           '</div>';
         }
         return '<div class="form-group">' +
           '<label>Nährwerte (pro 100g)</label>' +
           '<div class="nutrition-table">' +
-            NUTRITION_FIELDS.map(f =>
+            NUTRITION_FIELDS.map((f: any) =>
               '<div class="nutrition-row"><span>' + f.label + '</span><span>' + (n[f.key] ?? '—') + (n[f.key] != null ? ' ' + f.unit : '') + '</span></div>'
             ).join('') +
           '</div>' +
-          '<button class="btn btn-secondary btn-small mt-2" onclick="openNutritionEditor(\\'' + item.id + '\\')"><i class="ph ph-pencil-simple"></i> Bearbeiten</button>' +
+          '<button class="btn btn-secondary btn-small mt-2" onclick="openNutritionEditor(\'' + item.id + '\')"><i class="ph ph-pencil-simple"></i> Bearbeiten</button>' +
         '</div>';
       }
 
-      function openNutritionEditor(itemId) {
-        const item = window.app.state.items.find(i => i.id === itemId);
+      export function openNutritionEditor(itemId: string) {
+        const item = (window as any).app.state.items.find((i: any) => i.id === itemId);
         if (!item) return;
         const n = item.nutrition || {};
-        window.app.showModal('nutritionModal',
-          '<div class="modal-header"><div class="modal-title">Nährwerte (pro 100g)</div><button class="close-btn" onclick="window.app.closeModal(\\'nutritionModal\\')"><i class="ph ph-x"></i></button></div>' +
+        (window as any).app.showModal('nutritionModal',
+          '<div class="modal-header"><div class="modal-title">Nährwerte (pro 100g)</div><button class="close-btn" onclick="(window as any).app.closeModal(\'nutritionModal\')"><i class="ph ph-x"></i></button></div>' +
           '<div class="modal-body">' +
-            NUTRITION_FIELDS.map(f =>
+            NUTRITION_FIELDS.map((f: any) =>
               '<div class="form-group"><label>' + f.label + ' (' + f.unit + ')</label><input type="number" step="0.1" min="0" id="nutrition_' + f.key + '" value="' + (n[f.key] ?? '') + '"></div>'
             ).join('') +
-            '<button class="btn" onclick="saveNutritionEditor(\\'' + itemId + '\\')"><i class="ph-bold ph-check"></i></button>' +
+            '<button class="btn" onclick="saveNutritionEditor(\'' + itemId + '\')"><i class="ph-bold ph-check"></i></button>' +
           '</div>'
         );
       }
 
-      async function saveNutritionEditor(itemId) {
+      export async function saveNutritionEditor(itemId: string) {
         try {
-          const nutrition = {};
+          const nutrition: Record<string, number> = {};
           NUTRITION_FIELDS.forEach(f => {
-            const raw = document.getElementById('nutrition_' + f.key).value;
+            const raw = ((document.getElementById('nutrition_' + f.key) as any)?.value || '');
             if (raw !== '') nutrition[f.key] = parseFloat(raw);
           });
-          await window.api.items.update(itemId, { nutrition });
-          const item = window.app.state.items.find(i => i.id === itemId);
+          await (window as any).api.items.update(itemId, { nutrition });
+          const item = (window as any).app.state.items.find((i: any) => i.id === itemId);
           if (item) item.nutrition = nutrition;
-          window.app.closeModal('nutritionModal');
+          (window as any).app.closeModal('nutritionModal');
           openItemDetail(itemId);
-          window.app.toast('Nährwerte gespeichert');
-        } catch (e) {
-          window.app.toast('Fehler beim Speichern');
+          (window as any).app.toast('Nährwerte gespeichert');
+        } catch (e: any) {
+          (window as any).app.toast('Fehler beim Speichern');
         }
       }
 
@@ -423,25 +426,25 @@ export function renderInventoryView(app: App) {
       // functions/api/items/[id].ts for the full design rationale) -- so
       // fetching history is a separate, on-demand call rather than
       // something bundled into every item load.
-      async function openPriceHistory(itemId) {
-        const item = window.app.state.items.find(i => i.id === itemId);
+      export async function openPriceHistory(itemId: string) {
+        const item = (window as any).app.state.items.find((i: any) => i.id === itemId);
         if (!item) return;
         let historyHtml = '<div class="empty-state" style="padding:12px;">Lade...</div>';
-        window.app.showModal('priceHistoryModal',
-          '<div class="modal-header"><div class="modal-title">Preisverlauf</div><button class="close-btn" onclick="window.app.closeModal(\\'priceHistoryModal\\')"><i class="ph ph-x"></i></button></div>' +
+        (window as any).app.showModal('priceHistoryModal',
+          '<div class="modal-header"><div class="modal-title">Preisverlauf</div><button class="close-btn" onclick="(window as any).app.closeModal(\'priceHistoryModal\')"><i class="ph ph-x"></i></button></div>' +
           '<div class="modal-body" id="priceHistoryBody">' + historyHtml + '</div>'
         );
         try {
-          const data = await window.api.items.priceHistory(itemId);
+          const data = await (window as any).api.items.priceHistory(itemId);
           const rows = [...data.history];
-          const body = document.getElementById('priceHistoryBody');
+          const body = (document.getElementById('priceHistoryBody') as any);
           if (!body) return; // modal was closed before the request finished
           if (!rows.length && (item.price_cents === null || item.price_cents === undefined)) {
             body.innerHTML = '<div class="empty-state" style="padding:12px;">Kein Preis hinterlegt</div>';
             return;
           }
-          const fmt = (cents) => (cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
-          const fmtDate = (unixSeconds) => new Date(unixSeconds * 1000).toLocaleDateString('de-DE');
+          const fmt = (cents: any) => (cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+          const fmtDate = (unixSeconds: any) => new Date(unixSeconds * 1000).toLocaleDateString('de-DE');
           let html = '<div class="price-history-list">';
           rows.forEach(r => {
             html += '<div class="price-history-row"><span>' + fmtDate(r.effective_from) + ' \u2013 ' + fmtDate(r.effective_until) + '</span><span>' + fmt(r.price_cents) + '</span></div>';
@@ -462,30 +465,30 @@ export function renderInventoryView(app: App) {
             '</div>';
           }
           body.innerHTML = html;
-        } catch (e) {
-          const body = document.getElementById('priceHistoryBody');
+        } catch (e: any) {
+          const body = (document.getElementById('priceHistoryBody') as any);
           if (body) body.innerHTML = '<div class="empty-state" style="padding:12px;">Fehler beim Laden</div>';
         }
       }
 
-      async function openItemDetail(id) {
+      export async function openItemDetail(id: string) {
         try {
-          const item = window.app.state.items.find(i => i.id === id);
+          const item = (window as any).app.state.items.find((i: any) => i.id === id);
           if (!item) return;
-          const batches = window.app.state.batches.filter(b => b.item_id === id).sort((a, b) => (a.expiry || '').localeCompare(b.expiry || ''));
-          const catOptions = ${JSON.stringify(Object.entries(CATEGORY_META).map(([k, v]) => ({ value: k, label: v.label })))};
-          detailBarcodeDraft = (Array.isArray(item.barcodes) ? item.barcodes : []).map(b => ({ code: b.code, grams: b.grams || 0 }));
+          const batches = (window as any).app.state.batches.filter((b: any) => b.item_id === id).sort((a: any, b: any) => (a.expiry || '').localeCompare(b.expiry || ''));
+          const catOptions = Object.entries(CATEGORY_META).map(([k, v]) => ({ value: k, label: v.label }));
+          detailBarcodeDraft = (Array.isArray(item.barcodes) ? item.barcodes : []).map((b: any) => ({ code: b.code, grams: b.grams || 0 }));
           const priceEuros = (item.price_cents !== null && item.price_cents !== undefined) ? (item.price_cents / 100).toFixed(2).replace('.', ',') : '';
-          window.app.showModal('itemModal',
+          (window as any).app.showModal('itemModal',
             '<div class="modal-header"><div class="modal-title">' +
               '<input type="text" id="editName" value="' + item.name.replace(/"/g, '&quot;') + '" style="font-size:18px; font-weight:700; border:none; background:transparent; padding:0; width:100%;">' +
-            '</div><button class="close-btn" onclick="window.app.closeModal(\\'itemModal\\')"><i class="ph ph-x"></i></button></div>' +
+            '</div><button class="close-btn" onclick="(window as any).app.closeModal(\'itemModal\')"><i class="ph ph-x"></i></button></div>' +
             '<div class="modal-body">' +
-              '<div class="form-group"><label>Kategorie</label><select id="editCategory">' + catOptions.map(c => '<option value="' + c.value + '"' + (c.value === item.category ? ' selected' : '') + '>' + c.label + '</option>').join('') + '</select></div>' +
+              '<div class="form-group"><label>Kategorie</label><select id="editCategory">' + catOptions.map((c: any) => '<option value="' + c.value + '"' + (c.value === item.category ? ' selected' : '') + '>' + c.label + '</option>').join('') + '</select></div>' +
               '<div class="form-group"><label>Mindestmenge</label><input type="number" id="editThreshold" value="' + item.threshold + '"></div>' +
-              (window.app.state.locations.length ? '<div class="form-group"><label>Ort</label><select id="editLocation">' + window.locationSelectOptions(window.app.state.locations, item.location_id || null) + '</select></div>' : '') +
+              ((window as any).app.state.locations.length ? '<div class="form-group"><label>Ort</label><select id="editLocation">' + (window as any).locationSelectOptions((window as any).app.state.locations, item.location_id || null) + '</select></div>' : '') +
               '<div class="form-group"><label>Preis</label><input type="text" inputmode="decimal" id="editPrice" placeholder="z. B. 2,49" value="' + priceEuros + '">' +
-                '<button class="barcode-add-row" onclick="openPriceHistory(\\'' + item.id + '\\')" style="margin-top:4px;"><i class="ph ph-chart-line"></i> Preisverlauf ansehen</button>' +
+                '<button class="barcode-add-row" onclick="openPriceHistory(\'' + item.id + '\')" style="margin-top:4px;"><i class="ph ph-chart-line"></i> Preisverlauf ansehen</button>' +
               '</div>' +
               renderNutritionSection(item) +
               '<div class="form-group">' +
@@ -493,72 +496,72 @@ export function renderInventoryView(app: App) {
                 '<div id="detailBarcodeRows">' + renderDetailBarcodeRows() + '</div>' +
                 '<button class="barcode-add-row" onclick="addDetailBarcodeRow()"><i class="ph ph-plus"></i> Barcode hinzufügen</button>' +
               '</div>' +
-              '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;"><label style="margin:0">Chargen</label><button class="btn btn-small" onclick="openAddStock(\\'' + item.id + '\\')">+ Bestand</button></div>' +
+              '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;"><label style="margin:0">Chargen</label><button class="btn btn-small" onclick="openAddStock(\'' + item.id + '\')">+ Bestand</button></div>' +
               '<div class="detail-batch-list" style="margin-bottom:16px;">' +
-                (batches.length ? batches.map(b =>
+                (batches.length ? batches.map((b: any) =>
                   '<div class="detail-batch-item" style="display:flex; align-items:center; gap:8px; padding:8px; border-bottom:1px solid var(--border);">' +
                     '<span style="font-weight:700; width:32px; text-align:center;">' + b.quantity + '</span>' +
-                    '<input type="date" class="batch-expiry-input" value="' + (b.expiry || '') + '" onchange="updateBatchExpiry(\\' + b.id + '\\', this.value)" style="width:115px; padding:4px; font-size:12px;">' +
+                    '<input type="date" class="batch-expiry-input" value="' + (b.expiry || '') + '" onchange="updateBatchExpiry(&quot;' + b.id + '&quot;, this.value)" style="width:115px; padding:4px; font-size:12px;">' +
                     (b.price ? '<span style="font-size:12px; font-weight:600; color:var(--success); margin-left:6px;">' + b.price.toFixed(2) + ' €</span>' : '') +
                     '<span style="flex:1;"></span>' +
-                    '<button class="batch-del-btn" onclick="removeBatch(\\'' + b.id + '\\')"><i class="ph ph-minus"></i></button>' +
+                    '<button class="batch-del-btn" onclick="removeBatch(\'' + b.id + '\')"><i class="ph ph-minus"></i></button>' +
                   '</div>'
                 ).join('') : '<div class="empty-state" style="padding:16px;">Keine Chargen</div>') +
               '</div>' +
-              '<button class="btn" onclick="saveItemDetail(\\'' + item.id + '\\')"><i class="ph-bold ph-floppy-disk"></i> Speichern</button>' +
-              '<button class="btn btn-secondary" onclick="deleteItem(\\'' + item.id + '\\')" style="margin-top:8px;"><i class="ph-bold ph-trash"></i> Löschen</button>' +
+              '<button class="btn" onclick="saveItemDetail(\'' + item.id + '\')"><i class="ph-bold ph-floppy-disk"></i> Speichern</button>' +
+              '<button class="btn btn-secondary" onclick="deleteItem(\'' + item.id + '\')" style="margin-top:8px;"><i class="ph-bold ph-trash"></i> Löschen</button>' +
             '</div>'
           );
-        } catch (e) {
-          window.app.toast('Fehler beim Öffnen');
+        } catch (e: any) {
+          (window as any).app.toast('Fehler beim Öffnen');
         }
       }
-      async function updateBatchExpiry(batchId, value) {
+      export async function updateBatchExpiry(batchId: string, value: string) {
         try {
-          await window.api.batches.update(batchId, { expiry: value || null });
-          const b = window.app.state.batches.find(x => x.id === batchId);
+          await (window as any).api.batches.update(batchId, { expiry: value || null });
+          const b = (window as any).app.state.batches.find((x: any) => x.id === batchId);
           if (b) b.expiry = value || null;
-          window.app.toast('MHD aktualisiert');
-        } catch (e) {
-          window.app.toast('Fehler beim Speichern des MHD');
+          (window as any).app.toast('MHD aktualisiert');
+        } catch (e: any) {
+          (window as any).app.toast('Fehler beim Speichern des MHD');
         }
       }
-      async function saveItemDetail(id) {
+      export async function saveItemDetail(id: string) {
         try {
-          const name = document.getElementById('editName').value.trim();
-          if (!name) return window.app.toast('Name erforderlich');
-          const threshold = parseInt(document.getElementById('editThreshold').value) || 0;
-          const category = document.getElementById('editCategory').value;
-          const locationSelect = document.getElementById('editLocation');
+          const name = (document.getElementById('editName') as any).value.trim();
+          if (!name) return (window as any).app.toast('Name erforderlich');
+          const threshold = parseInt((document.getElementById('editThreshold') as any).value) || 0;
+          const category = (document.getElementById('editCategory') as any).value;
+          const locationSelect = (document.getElementById('editLocation') as any);
           const locationId = locationSelect ? (locationSelect.value || null) : undefined;
-          const priceInput = document.getElementById('editPrice');
+          const priceInput = (document.getElementById('editPrice') as any);
           const priceRaw = priceInput ? priceInput.value.trim() : '';
           const priceEuros = priceRaw ? parseFloat(priceRaw.replace(',', '.')) : NaN;
           const priceCents = priceRaw === '' ? null : (!isNaN(priceEuros) ? Math.round(priceEuros * 100) : undefined);
-          if (priceRaw !== '' && priceCents === undefined) return window.app.toast('Ungültiger Preis');
+          if (priceRaw !== '' && priceCents === undefined) return (window as any).app.toast('Ungültiger Preis');
 
           // Clean the draft: drop rows the user left empty, trim codes.
           const cleaned = detailBarcodeDraft
             .map(b => ({ code: (b.code || '').trim(), grams: b.grams || 0 }))
-            .filter(b => b.code);
+            .filter((b: any) => b.code);
 
           // Reject duplicate barcodes within this item's own list.
           const seen = new Set();
           for (const b of cleaned) {
-            if (seen.has(b.code)) return window.app.toast('Barcode doppelt: ' + b.code);
+            if (seen.has(b.code)) return (window as any).app.toast('Barcode doppelt: ' + b.code);
             seen.add(b.code);
           }
           // Reject a barcode already linked to a *different* item -- a
           // barcode should identify exactly one product across the household.
           for (const b of cleaned) {
-            const owner = findOtherItemWithBarcode(b.code, id);
-            if (owner) return window.app.toast('Barcode bereits mit "' + owner.name + '" verknüpft');
+            const owner = findOtherItemWithBarcode(b.code, id || '');
+            if (owner) return (window as any).app.toast('Barcode bereits mit "' + owner.name + '" verknüpft');
           }
 
-          const payload = { name, threshold, category, barcodes: cleaned, price_cents: priceCents };
+          const payload: any = { name, threshold, category, barcodes: cleaned, price_cents: priceCents };
           if (locationId !== undefined) payload.location_id = locationId;
-          const res = await window.api.items.update(id, payload);
-          const item = window.app.state.items.find(i => i.id === id);
+          const res = await (window as any).api.items.update(id, payload);
+          const item = (window as any).app.state.items.find((i: any) => i.id === id);
           if (item) {
             item.name = res.item.name;
             item.threshold = threshold;
@@ -567,20 +570,20 @@ export function renderInventoryView(app: App) {
             item.price_cents = res.item.price_cents;
             if (locationId !== undefined) item.location_id = locationId;
           }
-          window.app.closeModal('itemModal');
-          window.app.render();
-          window.app.toast('Gespeichert');
-        } catch (e) {
-          window.app.toast('Fehler beim Speichern');
+          (window as any).app.closeModal('itemModal');
+          (window as any).app.render();
+          (window as any).app.toast('Gespeichert');
+        } catch (e: any) {
+          (window as any).app.toast('Fehler beim Speichern');
         }
       }
-      async function deleteItem(id) {
-        const item = window.app.state.items.find(i => i.id === id);
+      export async function deleteItem(id: string) {
+        const item = (window as any).app.state.items.find((i: any) => i.id === id);
         if (!item) return;
-        window.app.closeModal('itemModal');
-        window.app.scheduleSoftDelete('item', item, window.app.state.items, '"' + item.name + '"', async () => {
-          await window.api.items.delete(id);
-          window.app.state.batches = window.app.state.batches.filter(b => b.item_id !== id);
+        (window as any).app.closeModal('itemModal');
+        (window as any).app.scheduleSoftDelete('item', item, (window as any).app.state.items, '"' + item.name + '"', async () => {
+          await (window as any).api.items.delete(id);
+          (window as any).app.state.batches = (window as any).app.state.batches.filter((b: any) => b.item_id !== id);
         });
       }
       // When an item has more than one linked barcode (e.g. two different
@@ -588,22 +591,22 @@ export function renderInventoryView(app: App) {
       // the user can say which barcode/pack-size they're adding stock for.
       // Selecting a variant auto-fills its known gram weight as a hint.
       // Same var-not-let reasoning as detailBarcodeDraft above.
-      var addStockSelectedBarcode = null;
+      let addStockSelectedBarcode: string | null = null;
 
-      function getAddStockBarcodeOptions(item) {
-        return Array.isArray(item.barcodes) ? item.barcodes.filter(b => b.code) : [];
+      export function getAddStockBarcodeOptions(item: any) {
+        return Array.isArray(item.barcodes) ? item.barcodes.filter((b: any) => b.code) : [];
       }
 
-      function renderAddStockVariantChips(itemId) {
-        const item = window.app.state.items.find(i => i.id === itemId);
+      export function renderAddStockVariantChips(itemId: string) {
+        const item = (window as any).app.state.items.find((i: any) => i.id === itemId);
         if (!item) return '';
         const options = getAddStockBarcodeOptions(item);
         if (options.length < 2) return '';
         return '<div class="form-group">' +
           '<label>Variante</label>' +
           '<div class="barcode-variant-row">' +
-            options.map((b, idx) =>
-              '<div class="barcode-variant-chip' + (addStockSelectedBarcode === b.code ? ' active' : '') + '" onclick="setAddStockVariant(\\'' + itemId + '\\', ' + idx + ')">' +
+            options.map((b: any, idx: number) =>
+              '<div class="barcode-variant-chip' + (addStockSelectedBarcode === b.code ? ' active' : '') + '" onclick="setAddStockVariant(\'' + itemId + '\', ' + idx + ')">' +
                 b.code + (b.grams ? ' · ' + b.grams + 'g' : '') +
               '</div>'
             ).join('') +
@@ -611,47 +614,47 @@ export function renderInventoryView(app: App) {
         '</div>';
       }
 
-      function setAddStockVariant(itemId, idx) {
-        const item = window.app.state.items.find(i => i.id === itemId);
+      export function setAddStockVariant(itemId: string, idx: number) {
+        const item = (window as any).app.state.items.find((i: any) => i.id === itemId);
         if (!item) return;
         const options = getAddStockBarcodeOptions(item);
         const chosen = options[idx];
         if (!chosen) return;
         addStockSelectedBarcode = chosen.code;
-        document.getElementById('stockVariantChips').innerHTML = renderAddStockVariantChips(itemId);
+        (document.getElementById('stockVariantChips') as any).innerHTML = renderAddStockVariantChips(itemId);
       }
 
-      async function openAddStock(itemId, preselectBarcode) {
+      export async function openAddStock(itemId: string, preselectBarcode?: string | null) {
         addStockSelectedBarcode = preselectBarcode || null;
         // If nothing was preselected but the item has variants, default to
         // the first one so commitAddStock always has something to record.
         if (!addStockSelectedBarcode) {
-          const item = window.app.state.items.find(i => i.id === itemId);
+          const item = (window as any).app.state.items.find((i: any) => i.id === itemId);
           const options = item ? getAddStockBarcodeOptions(item) : [];
           if (options.length) addStockSelectedBarcode = options[0].code;
         }
-        window.app.showModal('stockModal',
-          '<div class="modal-header"><div class="modal-title">Bestand hinzufügen</div><button class="close-btn" onclick="window.app.closeModal(\\'stockModal\\')"><i class="ph ph-x"></i></button></div>' +
+        (window as any).app.showModal('stockModal',
+          '<div class="modal-header"><div class="modal-title">Bestand hinzufügen</div><button class="close-btn" onclick="(window as any).app.closeModal(\'stockModal\')"><i class="ph ph-x"></i></button></div>' +
           '<div class="modal-body">' +
             '<div id="stockVariantChips">' + renderAddStockVariantChips(itemId) + '</div>' +
             '<div class="form-group"><label>Menge</label><input type="number" id="addQty" value="1" min="1"></div>' +
             '<div class="form-group"><label>MHD (optional)</label><input type="date" id="addExpiry"></div>' +
             '<div class="form-group"><label>Preis (€, optional)</label><input type="number" id="addPrice" step="0.01" min="0" placeholder="z. B. 1.79"></div>' +
-            '<button class="btn" onclick="commitAddStock(\\'' + itemId + '\\')"><i class="ph-bold ph-check"></i></button>' +
+            '<button class="btn" onclick="commitAddStock(\'' + itemId + '\')"><i class="ph-bold ph-check"></i></button>' +
           '</div>'
         );
       }
-      async function commitAddStock(itemId) {
+      export async function commitAddStock(itemId: string) {
         try {
-          const qty = parseInt(document.getElementById('addQty').value) || 0;
-          const expiry = document.getElementById('addExpiry').value;
+          const qty = parseInt((document.getElementById('addQty') as any).value) || 0;
+          const expiry = (document.getElementById('addExpiry') as any).value;
           if (qty <= 0) return;
-          const item = window.app.state.items.find(i => i.id === itemId);
+          const item = (window as any).app.state.items.find((i: any) => i.id === itemId);
           const options = item ? getAddStockBarcodeOptions(item) : [];
-          const variant = options.find(b => b.code === addStockSelectedBarcode);
-          const priceVal = document.getElementById('addPrice') ? document.getElementById('addPrice').value : null;
+          const variant = options.find((b: any) => b.code === addStockSelectedBarcode);
+          const priceVal = (document.getElementById('addPrice') as any) ? (document.getElementById('addPrice') as any).value : null;
           const price = priceVal ? parseFloat(priceVal) || null : null;
-          const batch = await window.api.batches.create({
+          const batch = await (window as any).api.batches.create({
             item_id: itemId,
             quantity: qty,
             expiry: expiry || null,
@@ -659,44 +662,72 @@ export function renderInventoryView(app: App) {
             grams_per_unit: variant ? (variant.grams || 0) : 0,
             price: price,
           });
-          window.app.state.batches.push(batch.batch);
-          window.app.closeModal('stockModal');
-          window.app.render();
-          window.app.toast('Hinzugefügt');
-        } catch (e) {
-          window.app.toast('Fehler beim Hinzufügen');
+          (window as any).app.state.batches.push(batch.batch);
+          (window as any).app.closeModal('stockModal');
+          (window as any).app.render();
+          (window as any).app.toast('Hinzugefügt');
+        } catch (e: any) {
+          (window as any).app.toast('Fehler beim Hinzufügen');
         }
       }
-      async function removeBatch(batchId) {
+      export async function removeBatch(batchId: string) {
         try {
-          const b = window.app.state.batches.find(x => x.id === batchId);
+          const b = (window as any).app.state.batches.find((x: any) => x.id === batchId);
           if (!b) return;
           if (b.quantity > 1) {
-            await window.api.batches.update(batchId, { quantity: b.quantity - 1 });
+            await (window as any).api.batches.update(batchId, { quantity: b.quantity - 1 });
             b.quantity -= 1;
           } else {
-            await window.api.batches.delete(batchId);
-            window.app.state.batches = window.app.state.batches.filter(x => x.id !== batchId);
+            await (window as any).api.batches.delete(batchId);
+            (window as any).app.state.batches = (window as any).app.state.batches.filter((x: any) => x.id !== batchId);
           }
-          window.app.render();
-          window.app.toast('Entnommen');
-        } catch (e) {
-          window.app.toast('Fehler beim Entnehmen');
+          (window as any).app.render();
+          (window as any).app.toast('Entnommen');
+        } catch (e: any) {
+          (window as any).app.toast('Fehler beim Entnehmen');
         }
       }
-      async function removeOne(itemId) {
-        const batches = window.app.state.batches.filter(b => b.item_id === itemId).sort((a, b) => (a.expiry || '').localeCompare(b.expiry || ''));
-        if (!batches.length) return window.app.toast('Kein Bestand');
+      export async function removeOne(itemId: string) {
+        const batches = (window as any).app.state.batches.filter((b: any) => b.item_id === itemId).sort((a: any, b: any) => (a.expiry || '').localeCompare(b.expiry || ''));
+        if (!batches.length) return (window as any).app.toast('Kein Bestand');
         await removeBatch(batches[0].id);
       }
-    </script>
-  `;
-}
+    
+// Attach all handlers to window for HTML onclick attributes
+Object.assign(window as any, {
+  filterInventory,
+  openAddItemModal,
+  scanIntoBarcodeField,
+  saveNewItem,
+  findItemByBarcode,
+  findOtherItemWithBarcode,
+  maybeCheckOffShoppingList,
+  startScanFlow,
+  renderDetailBarcodeRows,
+  addDetailBarcodeRow,
+  removeDetailBarcodeRow,
+  scanIntoDetailBarcodeRow,
+  renderNutritionSection,
+  openNutritionEditor,
+  saveNutritionEditor,
+  openPriceHistory,
+  openItemDetail,
+  updateBatchExpiry,
+  saveItemDetail,
+  deleteItem,
+  getAddStockBarcodeOptions,
+  renderAddStockVariantChips,
+  setAddStockVariant,
+  openAddStock,
+  commitAddStock,
+  removeBatch,
+  removeOne
+});
 
 function renderInventoryList(app: App, filter: string) {
   const sorted = [...app.state.items]
     .filter(i => !filter || i.name.toLowerCase().includes(filter))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a: any, b: any) => a.name.localeCompare(b.name));
 
   if (!sorted.length) return `<div class="empty-state">Keine Artikel</div>`;
 
@@ -704,9 +735,9 @@ function renderInventoryList(app: App, filter: string) {
     const total = getTotal(i.id, app.state.batches);
     const kcal = i.nutrition?.energy_kcal_100g || i.nutrition?.['energy-kcal_100g'];
     const nutriScore = i.nutrition?.nutriscore_grade ? String(i.nutrition.nutriscore_grade).toUpperCase() : null;
-    const latestBatch = app.state.batches.filter(b => b.item_id === i.id && typeof b.price === 'number' && b.price > 0).sort((a,b) => b.date_added - a.date_added)[0];
+    const latestBatch = app.state.batches.filter((b: any) => b.item_id === i.id && typeof b.price === 'number' && b.price > 0).sort((a,b) => b.date_added - a.date_added)[0];
     const priceStr = latestBatch ? ` · ca. ${latestBatch.price!.toFixed(2)} €` : '';
-    const nutriStr = (nutriScore || kcal) ? ` <span style="font-size:0.75rem; background:var(--border); padding:2px 6px; border-radius:4px; margin-left:6px; font-weight:600; display:inline-block; margin-top:2px;">${nutriScore ? `Nutri-Score ${nutriScore} ` : ''}${kcal ? `🔥 ${kcal} kcal` : ''}</span>` : '';
+    const nutriStr = (nutriScore || kcal) ? ` <span style="font-size:0.75rem; background:var(--border); padding:2px 6px; border-radius:4px; margin-left:6px; font-weight:600; display:inline-block; margin-top:2px;">${nutriScore ? `Nutri-Score ${nutriScore} ` : ''}${kcal ? `<i class="ph ph-fire"></i> ${kcal} kcal` : ''}</span>` : '';
     return `
       <div class="card">
         <div class="card-content" onclick="openItemDetail('${i.id}')">

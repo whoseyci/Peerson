@@ -46,10 +46,20 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   await requireMember(env.DB, userId, body.household_id);
 
   const id = crypto.randomUUID();
-  await env.DB.prepare(`
-    INSERT INTO expenses (id, household_id, title, amount, paid_by, split_type)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).bind(id, body.household_id, body.title || '', body.amount || 0, body.paid_by || userId, body.split_type || 'equal').run();
+  const category = body.category || 'sonstiges';
+  try {
+    await env.DB.prepare(`
+      INSERT INTO expenses (id, household_id, title, amount, paid_by, split_type, category)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(id, body.household_id, body.title || '', body.amount || 0, body.paid_by || userId, body.split_type || 'equal', category).run();
+  } catch (e: any) {
+    if (e?.message?.includes('no such column')) {
+      await env.DB.prepare(`
+        INSERT INTO expenses (id, household_id, title, amount, paid_by, split_type)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).bind(id, body.household_id, body.title || '', body.amount || 0, body.paid_by || userId, body.split_type || 'equal').run();
+    } else { throw e; }
+  }
 
   if (body.splits && Array.isArray(body.splits)) {
     for (const s of body.splits) {
@@ -60,5 +70,5 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
   }
 
-  return Response.json({ expense: { id, ...body } }, { status: 201 });
+  return Response.json({ expense: { id, ...body, category } }, { status: 201 });
 };

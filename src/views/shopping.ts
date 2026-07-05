@@ -13,7 +13,7 @@ const AISLE_META: Record<string, { label: string; icon: string; order: number }>
   sonstiges: { label: 'Sonstiges & Haushalt', icon: 'package', order: 8 },
 };
 
-function getItemAisle(item: ShoppingItem, app: App) {
+function getItemAisle(item: { linked_item_id?: string; name: string }, app: App) {
   const pantryItem = app.state.items.find(i => 
     i.id === item.linked_item_id || i.name.trim().toLowerCase() === item.name.trim().toLowerCase()
   );
@@ -32,67 +32,82 @@ export function renderShoppingView(app: App) {
   });
   const missingLowStock = lowStockItems.filter(i => !s.shopping.some(sh => sh.linked_item_id === i.id && sh.status === 'open'));
 
-  // Group open items by supermarket aisle
-  const groupedOpen = new Map<string, { label: string; icon: string; order: number; items: ShoppingItem[] }>();
+  // Combine actual open items + suggested low stock items directly into one aisle map (Issue #22)
+  const groupedOpen = new Map<string, { label: string; icon: string; order: number; items: Array<{ type: 'real' | 'suggested'; data: any }> }>();
+  
   open.forEach(item => {
     const aisle = getItemAisle(item, app);
-    if (!groupedOpen.has(aisle.label)) {
-      groupedOpen.set(aisle.label, { ...aisle, items: [] });
-    }
-    groupedOpen.get(aisle.label)!.items.push(item);
+    if (!groupedOpen.has(aisle.label)) groupedOpen.set(aisle.label, { ...aisle, items: [] });
+    groupedOpen.get(aisle.label)!.items.push({ type: 'real', data: item });
   });
+
+  missingLowStock.forEach(i => {
+    const needed = i.threshold - s.batches.filter(b => b.item_id === i.id).reduce((a, b) => a + b.quantity, 0);
+    const aisle = AISLE_META[i.category] || AISLE_META.sonstiges;
+    if (!groupedOpen.has(aisle.label)) groupedOpen.set(aisle.label, { ...aisle, items: [] });
+    groupedOpen.get(aisle.label)!.items.push({ type: 'suggested', data: { ...i, needed } });
+  });
+
   const sortedAisles = Array.from(groupedOpen.values()).sort((a, b) => a.order - b.order);
 
   return `
     <div class="header">
-      <h1><i class="ph ph-shopping-cart"></i> Einkaufen</h1>
+      <h1><i class="ph ph-shopping-cart-simple"></i> Einkaufen</h1>
       <div style="display:flex; gap:8px;">
         <button class="icon-btn" onclick="scanForShopping()" title="Barcode scannen"><i class="ph ph-barcode"></i></button>
         <button class="icon-btn" onclick="openAddShoppingModal()" title="Manuell hinzufügen"><i class="ph ph-plus"></i></button>
       </div>
     </div>
 
-    ${missingLowStock.length ? `
-    <div class="section">
-      <div class="section-header"><div class="section-title"><i class="ph ph-warning"></i> Automatisch vorgeschlagen</div></div>
-      ${missingLowStock.map(i => {
-        const needed = i.threshold - s.batches.filter(b => b.item_id === i.id).reduce((a, b) => a + b.quantity, 0);
-        return `
-        <div class="card warning">
-          <div class="card-content" onclick="autoAddShopping('${i.id}', ${needed})">
-            <div class="card-icon"><i class="ph ph-${i.icon || 'package'}"></i></div>
-            <div class="card-text">
-              <div class="card-header"><div class="item-name">${i.name}</div><div class="item-qty">+${needed}</div></div>
-              <div class="card-meta">Unter Mindestbestand</div>
-            </div>
-          </div>
-        </div>`;
-      }).join('')}
-    </div>` : ''}
-
     <div class="section">
       <div class="section-header">
         <div class="section-title">Offen (nach Supermarkt-Regal)</div>
-        <span class="badge">${open.length}</span>
+        <span class="badge">${open.length + missingLowStock.length}</span>
       </div>
-      ${open.length ? sortedAisles.map(aisle => `
+      ${sortedAisles.length ? sortedAisles.map(aisle => `
         <div style="margin-top: 12px; margin-bottom: 6px; font-weight: 700; font-size: 0.85rem; color: var(--text-soft); display: flex; align-items: center; gap: 6px;">
           <i class="ph ph-${aisle.icon}"></i> <span>${aisle.label}</span>
         </div>
-        ${aisle.items.map(item => `
-          <div class="card" style="margin-bottom: 8px;">
-            <div class="card-content" style="align-items: center;">
-              <button class="shopping-check" onclick="toggleShopping('${item.id}')"></button>
-              <div class="card-text" style="margin-left: 8px;">
-                <div class="card-header"><div class="item-name">${item.name}</div></div>
-                ${item.quantity ? `<div class="card-meta">${item.quantity}</div>` : ''}
+        ${aisle.items.map(entry => {
+          if (entry.type === 'suggested') {
+            const i = entry.data;
+            return `
+            <div class="card warning" style="margin-bottom: 8px;">
+              <div class="card-content" style="align-items: center;" onclick="autoAddShopping('${i.id}', ${i.needed})">
+                <div class="card-icon"><i class="ph ph-${i.icon || 'package'}"></i></div>
+                <div class="card-text">
+                  <div class="card-header">
+                    <div class="item-name">${i.name}</div>
+                    <span class="badge" style="font-size:0.7rem; background:var(--warning); color:#fff;"><i class="ph ph-warning"></i> Vorschlag</span>
+                  </div>
+                  <div class="card-meta">Unter Mindestbestand (+${i.needed} empfohlen)</div>
+                </div>
               </div>
-            </div>
-            <div class="card-actions">
-              <button class="action-btn remove" onclick="deleteShopping('${item.id}')"><i class="ph ph-trash"></i></button>
-            </div>
-          </div>
-        `).join('')}
+              <div class="card-actions">
+                <button class="action-btn add" onclick="event.stopPropagation(); autoAddShopping('${i.id}', ${i.needed})" title="Auf Liste setzen"><i class="ph ph-plus"></i></button>
+              </div>
+            </div>`;
+          } else {
+            const item = entry.data as ShoppingItem;
+            return `
+            <div class="card" style="margin-bottom: 8px;">
+              <div class="card-content" style="align-items: center;">
+                <button class="shopping-check" onclick="toggleShopping('${item.id}')"></button>
+                <div class="card-text" style="margin-left: 8px;">
+                  <div class="card-header"><div class="item-name">${item.name}</div></div>
+                  <div class="card-meta">
+                    ${item.quantity || ''}
+                    ${item.price ? ` · <span style="color:var(--success); font-weight:700;">${item.price.toFixed(2)} €</span>` : ''} 
+                    <button class="btn-mini" onclick="openBoughtDetailsModal('${item.id}', '${item.linked_item_id || ''}')" title="Im Laden gekauft (Menge/MHD/Preis loggen)" style="font-size:0.7rem; padding:2px 6px; margin-left:6px; vertical-align:middle;"><i class="ph ph-bag"></i> Gekauft</button>
+                  </div>
+                </div>
+              </div>
+              <div class="card-actions">
+                <button class="action-btn remove" onclick="deleteShopping('${item.id}')"><i class="ph ph-trash"></i></button>
+              </div>
+            </div>`;
+          }
+        }).join('')}
       `).join('') : `<div class="empty-state">Nichts auf der Liste</div>`}
     </div>
 
@@ -108,130 +123,202 @@ export function renderShoppingView(app: App) {
               ${item.price ? `<div class="card-meta" style="color:var(--success); font-weight:700;">${item.price.toFixed(2)} €</div>` : ''}
             </div>
           </div>
+          <div class="card-actions">
+            <button class="action-btn remove" onclick="deleteShopping('${item.id}')"><i class="ph ph-trash"></i></button>
+          </div>
         </div>
       `).join('')}
     </div>` : ''}
-
-    <script>
-      async function openAddShoppingModal(prefillName) {
-        window.app.showModal('shopModal',
-          '<div class="modal-header"><div class="modal-title">Zur Liste hinzufügen</div><button class="close-btn" onclick="window.app.closeModal(\\'shopModal\\')"><i class="ph ph-x"></i></button></div>' +
-          '<div class="modal-body">' +
-            '<div class="form-group"><label>Artikel</label><input type="text" id="shopName" placeholder="Was wird gebraucht?" value="' + (prefillName ? prefillName.replace(/"/g, '&quot;') : '') + '"></div>' +
-            '<div class="form-group"><label>Menge (optional)</label><input type="text" id="shopQty" placeholder="z. B. 2 Packungen"></div>' +
-            '<div class="form-group"><label>Preis (€, optional)</label><input type="number" id="shopPrice" step="0.01" min="0" placeholder="z. B. 1.99"></div>' +
-            '<button class="btn" onclick="saveShoppingItem()"><i class="ph-bold ph-check"></i></button>' +
-          '</div>'
-        );
-      }
-      async function scanForShopping() {
-        const handle = window.openBarcodeScanner();
-        const code = await handle.result;
-        if (!code) return;
-
-        const pantryItem = window.app.state.items.find(i =>
-          Array.isArray(i.barcodes) && i.barcodes.some(b => b.code === code)
-        );
-        if (pantryItem) {
-          const alreadyOpen = window.app.state.shopping.some(s => s.status === 'open' && s.name.trim().toLowerCase() === pantryItem.name.trim().toLowerCase());
-          if (alreadyOpen) {
-            window.app.toast('"' + pantryItem.name + '" steht schon auf der Liste');
-            return;
-          }
-          openAddShoppingModal(pantryItem.name);
-          return;
-        }
-
-        window.app.toast('Suche Produkt...');
-        try {
-          const product = await window.api.products.lookup(code);
-          openAddShoppingModal(product.found ? product.name : null);
-          if (!product.found) window.app.toast('Produkt nicht gefunden — bitte Namen eingeben');
-        } catch (e) {
-          openAddShoppingModal(null);
-        }
-      }
-      async function saveShoppingItem() {
-        try {
-          const name = document.getElementById('shopName').value.trim();
-          if (!name) return window.app.toast('Name erforderlich');
-          const priceVal = document.getElementById('shopPrice') ? document.getElementById('shopPrice').value : null;
-          const price = priceVal ? parseFloat(priceVal) || null : null;
-          const item = await window.api.shopping.create({
-            household_id: window.app.state.householdId,
-            name,
-            quantity: document.getElementById('shopQty').value || null,
-            price: price
-          });
-          window.app.state.shopping.push(item.item);
-          window.app.closeModal('shopModal');
-          window.app.render();
-          window.app.toast('Hinzugefügt');
-        } catch (e) {
-          window.app.toast('Fehler beim Hinzufügen');
-        }
-      }
-      async function autoAddShopping(itemId, needed) {
-        try {
-          const item = window.app.state.items.find(i => i.id === itemId);
-          if (!item) return;
-          const latestBatch = window.app.state.batches.filter(b => b.item_id === itemId && typeof b.price === 'number' && b.price > 0).sort((a,b) => b.date_added - a.date_added)[0];
-          const shop = await window.api.shopping.create({
-            household_id: window.app.state.householdId,
-            name: item.name,
-            quantity: needed + ' Stk',
-            linked_item_id: itemId,
-            price: latestBatch ? latestBatch.price : null
-          });
-          window.app.state.shopping.push(shop.item);
-          window.app.render();
-          window.app.toast('Zur Einkaufsliste hinzugefügt');
-        } catch (e) {
-          window.app.toast('Fehler beim Hinzufügen');
-        }
-      }
-      async function toggleShopping(id) {
-        try {
-          const item = window.app.state.shopping.find(s => s.id === id);
-          if (!item) return;
-          const newStatus = item.status === 'open' ? 'bought' : 'open';
-          await window.api.shopping.update(id, { status: newStatus });
-          item.status = newStatus;
-          window.app.render();
-        } catch (e) {
-          window.app.toast('Fehler beim Aktualisieren');
-        }
-      }
-      async function deleteShopping(id) {
-        const item = window.app.state.shopping.find(s => s.id === id);
-        if (!item) return;
-        window.app.scheduleSoftDelete('shopping', item, window.app.state.shopping, '"' + item.name + '"', async () => {
-          await window.api.shopping.delete(id);
-        });
-      }
-      async function openUpdateShopPrice(id, name, currentPrice) {
-        window.app.showModal('shopPriceModal',
-          '<div class="modal-header"><div class="modal-title">Preis für "' + name + '"</div><button class="close-btn" onclick="window.app.closeModal(\'shopPriceModal\')"><i class="ph ph-x"></i></button></div>' +
-          '<div class="modal-body">' +
-            '<div class="form-group"><label>Preis (€)</label><input type="number" id="quickShopPrice" step="0.01" min="0" value="' + (currentPrice || '') + '" placeholder="z. B. 1.99"></div>' +
-            '<button class="btn" onclick="saveShopPrice(\'' + id + '\')"><i class="ph-bold ph-check"></i> Speichern</button>' +
-          '</div>'
-        );
-      }
-      async function saveShopPrice(id) {
-        try {
-          const val = document.getElementById('quickShopPrice').value;
-          const price = val ? parseFloat(val) || null : null;
-          await window.api.shopping.update(id, { price });
-          const item = window.app.state.shopping.find(s => s.id === id);
-          if (item) item.price = price;
-          window.app.closeModal('shopPriceModal');
-          window.app.render();
-          window.app.toast('Preis aktualisiert');
-        } catch (e) {
-          window.app.toast('Fehler beim Aktualisieren');
-        }
-      }
-    </script>
   `;
 }
+
+export async function openAddShoppingModal(prefillName?: string | null) {
+  const app = (window as any).app;
+  app.showModal('shopModal', `
+    <div class="modal-header"><div class="modal-title">Zur Liste hinzufügen</div><button class="close-btn" onclick="window.app.closeModal('shopModal')"><i class="ph ph-x"></i></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Artikel</label><input type="text" id="shopName" placeholder="Was wird gebraucht?" value="${prefillName ? prefillName.replace(/"/g, '&quot;') : ''}"></div>
+      <div class="form-group"><label>Menge (optional)</label><input type="text" id="shopQty" placeholder="z. B. 2 Packungen"></div>
+      <div class="form-group"><label>Preis (€, optional)</label><input type="number" id="shopPrice" step="0.01" min="0" placeholder="z. B. 1.99"></div>
+      <button class="btn" onclick="saveShoppingItem()"><i class="ph-bold ph-check"></i> Hinzufügen</button>
+    </div>
+  `);
+}
+
+export async function scanForShopping() {
+  const app = (window as any).app;
+  const api = (window as any).api;
+  const handle = (window as any).openBarcodeScanner();
+  const code = await handle.result;
+  if (!code) return;
+
+  const pantryItem = app.state.items.find((i: any) =>
+    Array.isArray(i.barcodes) && i.barcodes.some((b: any) => b.code === code)
+  );
+  if (pantryItem) {
+    // Found in inventory! Open bought popup immediately (Issue #22)
+    const openShopItem = app.state.shopping.find((s: any) => s.status === 'open' && (s.linked_item_id === pantryItem.id || s.name.trim().toLowerCase() === pantryItem.name.trim().toLowerCase()));
+    openBoughtDetailsModal(openShopItem ? openShopItem.id : null, pantryItem.id, pantryItem.name);
+    return;
+  }
+
+  app.toast('Suche Produkt...');
+  try {
+    const product = await api.products.lookup(code);
+    openAddShoppingModal(product.found ? product.name : null);
+    if (!product.found) app.toast('Produkt nicht gefunden — bitte Namen eingeben');
+  } catch (e) {
+    openAddShoppingModal(null);
+  }
+}
+
+export async function saveShoppingItem() {
+  const app = (window as any).app;
+  const api = (window as any).api;
+  try {
+    const name = (document.getElementById('shopName') as HTMLInputElement)?.value.trim();
+    if (!name) return app.toast('Name erforderlich');
+    const priceVal = (document.getElementById('shopPrice') as HTMLInputElement)?.value;
+    const price = priceVal ? parseFloat(priceVal) || null : null;
+    const item = await api.shopping.create({
+      household_id: app.state.householdId,
+      name,
+      quantity: (document.getElementById('shopQty') as HTMLInputElement)?.value || null,
+      price
+    });
+    app.state.shopping.push(item.item);
+    app.closeModal('shopModal');
+    app.render();
+    app.toast('Hinzugefügt');
+  } catch (e) {
+    app.toast('Fehler beim Hinzufügen');
+  }
+}
+
+export async function autoAddShopping(itemId: string, needed: number) {
+  const app = (window as any).app;
+  const api = (window as any).api;
+  try {
+    const item = app.state.items.find((i: any) => i.id === itemId);
+    if (!item) return;
+    const latestBatch = app.state.batches.filter((b: any) => b.item_id === itemId && typeof b.price === 'number' && b.price > 0).sort((a: any, b: any) => b.date_added - a.date_added)[0];
+    const shop = await api.shopping.create({
+      household_id: app.state.householdId,
+      name: item.name,
+      quantity: needed + ' Stk',
+      linked_item_id: itemId,
+      price: latestBatch ? latestBatch.price : null
+    });
+    app.state.shopping.push(shop.item);
+    app.render();
+    app.toast('Zur Einkaufsliste hinzugefügt');
+  } catch (e) {
+    app.toast('Fehler beim Hinzufügen');
+  }
+}
+
+export async function toggleShopping(id: string) {
+  const app = (window as any).app;
+  const api = (window as any).api;
+  try {
+    const item = app.state.shopping.find((s: any) => s.id === id);
+    if (!item) return;
+    const newStatus = item.status === 'open' ? 'bought' : 'open';
+    await api.shopping.update(id, { status: newStatus });
+    item.status = newStatus;
+    app.render();
+  } catch (e) {
+    app.toast('Fehler beim Aktualisieren');
+  }
+}
+
+export async function deleteShopping(id: string) {
+  const app = (window as any).app;
+  const api = (window as any).api;
+  const item = app.state.shopping.find((s: any) => s.id === id);
+  if (!item) return;
+  app.scheduleSoftDelete('shopping', item, app.state.shopping, '"' + item.name + '"', async () => {
+    await api.shopping.delete(id);
+  });
+}
+
+export async function openBoughtDetailsModal(shopItemId: string | null, linkedItemId?: string | null, customName?: string) {
+  const app = (window as any).app;
+  let name = customName || 'Artikel';
+  let priceVal = '';
+  let linkedId = linkedItemId || null;
+
+  if (shopItemId) {
+    const sItem = app.state.shopping.find((s: any) => s.id === shopItemId);
+    if (sItem) {
+      name = sItem.name;
+      if (sItem.price) priceVal = String(sItem.price);
+      if (sItem.linked_item_id) linkedId = sItem.linked_item_id;
+    }
+  }
+
+  if (!linkedId) {
+    const pItem = app.state.items.find((i: any) => i.name.trim().toLowerCase() === name.trim().toLowerCase());
+    if (pItem) linkedId = pItem.id;
+  }
+
+  app.showModal('boughtDetailsModal', `
+    <div class="modal-header"><div class="modal-title"><i class="ph ph-bag"></i> Im Laden gekauft</div><button class="close-btn" onclick="window.app.closeModal('boughtDetailsModal')"><i class="ph ph-x"></i></button></div>
+    <div class="modal-body">
+      <div style="font-weight:700; font-size:1.1rem; margin-bottom:12px;">${name}</div>
+      <div class="form-group"><label>Gekaufte Menge</label><input type="number" id="boughtQty" value="1" min="1"></div>
+      <div class="form-group"><label>Preis gezahlt (€)</label><input type="number" id="boughtPrice" step="0.01" min="0" value="${priceVal}" placeholder="z. B. 1.99"></div>
+      <div class="form-group"><label>MHD (optional)</label><input type="date" id="boughtExpiry"></div>
+      <button class="btn" onclick="saveBoughtDetails('${shopItemId || ''}', '${linkedId || ''}')"><i class="ph-bold ph-check"></i> In Vorrat übernehmen & abhaken</button>
+    </div>
+  `);
+}
+
+export async function saveBoughtDetails(shopItemId: string, linkedItemId: string) {
+  const app = (window as any).app;
+  const api = (window as any).api;
+  try {
+    const qty = parseInt((document.getElementById('boughtQty') as HTMLInputElement)?.value) || 1;
+    const priceVal = (document.getElementById('boughtPrice') as HTMLInputElement)?.value;
+    const price = priceVal ? parseFloat(priceVal) || null : null;
+    const expiry = (document.getElementById('boughtExpiry') as HTMLInputElement)?.value || null;
+
+    if (shopItemId) {
+      await api.shopping.update(shopItemId, { status: 'bought', price });
+      const sItem = app.state.shopping.find((s: any) => s.id === shopItemId);
+      if (sItem) { sItem.status = 'bought'; sItem.price = price; }
+    }
+
+    if (linkedItemId) {
+      const pItem = app.state.items.find((i: any) => i.id === linkedItemId);
+      const barcodeCode = (pItem && Array.isArray(pItem.barcodes) && pItem.barcodes.length > 0) ? pItem.barcodes[0].code : null;
+      const batch = await api.batches.create({
+        item_id: linkedItemId,
+        quantity: qty,
+        price,
+        expiry,
+        barcode_code: barcodeCode,
+        grams_per_unit: 0
+      });
+      app.state.batches.push(batch.batch);
+    }
+
+    app.closeModal('boughtDetailsModal');
+    app.render();
+    app.toast('Erfolgreich verbucht & in Vorrat übertragen!');
+  } catch (e) {
+    app.toast('Fehler beim Verbuchen');
+  }
+}
+
+// Attach to window so HTML onclick attributes work without inline script blocks!
+Object.assign(window as any, {
+  openAddShoppingModal,
+  scanForShopping,
+  saveShoppingItem,
+  autoAddShopping,
+  toggleShopping,
+  deleteShopping,
+  openBoughtDetailsModal,
+  saveBoughtDetails
+});

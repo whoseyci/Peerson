@@ -143,3 +143,10 @@ CREATE INDEX IF NOT EXISTS idx_shopping_items_linked ON shopping_items(linked_it
 -- Price Tracking Columns
 ALTER TABLE batches ADD COLUMN price REAL DEFAULT NULL;
 ALTER TABLE shopping_items ADD COLUMN price REAL DEFAULT NULL;
+
+-- Tasks Recurrence & Rotation Columns
+ALTER TABLE tasks ADD COLUMN recurrence TEXT DEFAULT NULL;
+ALTER TABLE tasks ADD COLUMN rotation_users TEXT DEFAULT NULL;
+
+-- Expenses Category Column
+ALTER TABLE expenses ADD COLUMN category TEXT DEFAULT 'sonstiges';

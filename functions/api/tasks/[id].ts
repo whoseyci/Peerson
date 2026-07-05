@@ -7,6 +7,17 @@ async function requireMember(db: D1Database, userId: string, householdId: string
   if (!row) throw new Error('Forbidden');
 }
 
+function parseTaskRow<T extends { rotation_users?: unknown }>(row: T): T {
+  return {
+    ...row,
+    rotation_users: typeof row.rotation_users === 'string' ? safeJsonParse(row.rotation_users, null) : (row.rotation_users ?? null),
+  };
+}
+
+function safeJsonParse(value: string, fallback: unknown) {
+  try { return JSON.parse(value); } catch { return fallback; }
+}
+
 export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params }) => {
   const userId = request.headers.get('X-User-Id');
   const id = String(params.id);
@@ -24,12 +35,24 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
   if (body.assigned_to !== undefined) { fields.push('assigned_to = ?'); values.push(body.assigned_to); }
   if (body.status !== undefined) { fields.push('status = ?'); values.push(body.status); }
   if (body.due_date !== undefined) { fields.push('due_date = ?'); values.push(body.due_date); }
-  if (fields.length === 0) return Response.json({ task: existing });
+  if (body.recurrence !== undefined) { fields.push('recurrence = ?'); values.push(body.recurrence || null); }
+  if (body.rotation_users !== undefined) { fields.push('rotation_users = ?'); values.push(body.rotation_users ? JSON.stringify(body.rotation_users) : null); }
+  if (fields.length === 0) return Response.json({ task: parseTaskRow(existing as any) });
 
   values.push(id);
-  await env.DB.prepare(`UPDATE tasks SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
+  try {
+    await env.DB.prepare(`UPDATE tasks SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
+  } catch (e: any) {
+    if (e?.message?.includes('no such column')) {
+      const fallbackFields = fields.filter(f => !f.startsWith('recurrence') && !f.startsWith('rotation_users'));
+      if (fallbackFields.length > 0) {
+        const fallbackValues = values.filter((_, idx) => !fields[idx].startsWith('recurrence') && !fields[idx].startsWith('rotation_users'));
+        await env.DB.prepare(`UPDATE tasks SET ${fallbackFields.join(', ')} WHERE id = ?`).bind(...fallbackValues).run();
+      }
+    } else { throw e; }
+  }
   const task = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(id).first();
-  return Response.json({ task });
+  return Response.json({ task: task ? parseTaskRow(task as any) : task });
 };
 
 export const onRequestDelete: PagesFunction<Env> = async ({ request, env, params }) => {
