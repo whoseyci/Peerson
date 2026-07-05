@@ -723,3 +723,23 @@ body.dark-mode .toast-progress-bar { background: rgba(0,0,0,0.35); }
 .w-full { width: 100%; }
 .text-sm { font-size: 13px; }
 .text-soft { color: var(--text-soft); }
+
+
+/* Location Tree Rows (Issue #34 & #29) */
+.location-tree-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
+}
+.location-tree-row:last-child { border-bottom: none; }
+.location-name { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 15px; color: var(--text); }
+.location-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.location-actions .icon-btn {
+  width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface); display: inline-flex; align-items: center; justify-content: center;
+  color: var(--text-soft); cursor: pointer; padding: 0; font-size: 16px;
+}
+.location-actions .icon-btn:hover { background: var(--bg); color: var(--text); border-color: var(--text-soft); }

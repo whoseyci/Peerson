@@ -8,8 +8,12 @@ import type { Item, Batch, Location } from '../types';
 const NUTRITION_FIELDS: Array<{ key: string; label: string; unit: string }> = [
   { key: 'energy_kcal_100g', label: 'Energie', unit: 'kcal' },
   { key: 'fat_100g', label: 'Fett', unit: 'g' },
+  { key: 'saturated_fat_100g', label: ' davon gesättigt', unit: 'g' },
   { key: 'carbohydrates_100g', label: 'Kohlenhydrate', unit: 'g' },
-  { key: 'proteins_100g', label: 'Eiweiß', unit: 'g' },
+  { key: 'sugars_100g', label: ' davon Zucker', unit: 'g' },
+  { key: 'fiber_100g', label: 'Ballaststoffe', unit: 'g' },
+  { key: 'proteins_100g', label: 'Eiweiß / Protein', unit: 'g' },
+  { key: 'salt_100g', label: 'Salz', unit: 'g' },
 ];
 
 const CATEGORY_META: Record<string, { icon: string; label: string }> = {

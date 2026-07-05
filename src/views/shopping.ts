@@ -30,7 +30,10 @@ export function renderShoppingView(app: App) {
     const total = s.batches.filter(b => b.item_id === i.id).reduce((a, b) => a + b.quantity, 0);
     return total < i.threshold;
   });
-  const missingLowStock = lowStockItems.filter(i => !s.shopping.some(sh => sh.linked_item_id === i.id && sh.status === 'open'));
+  const key = `peerson_dismissed_sug_${s.householdId}`;
+  let dismissed: string[] = [];
+  try { dismissed = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) {}
+  const missingLowStock = lowStockItems.filter(i => !s.shopping.some(sh => sh.linked_item_id === i.id && sh.status === 'open') && !dismissed.includes(i.id));
 
   // Combine actual open items + suggested low stock items directly into one aisle map (Issue #22)
   const groupedOpen = new Map<string, { label: string; icon: string; order: number; items: Array<{ type: 'real' | 'suggested'; data: any }> }>();
@@ -73,9 +76,9 @@ export function renderShoppingView(app: App) {
             const i = entry.data;
             return `
             <div class="card warning" style="margin-bottom: 8px;">
-              <div class="card-content" style="align-items: center;" onclick="autoAddShopping('${i.id}', ${i.needed})">
-                <div class="card-icon"><i class="ph ph-${i.icon || 'package'}"></i></div>
-                <div class="card-text">
+              <div class="card-content" style="align-items: center;">
+                <button class="shopping-check" onclick="autoAddAndToggleShopping('${i.id}', ${i.needed}, '${i.name.replace(/'/g, "\'")}')"></button>
+                <div class="card-text" style="margin-left: 8px;">
                   <div class="card-header">
                     <div class="item-name">${i.name}</div>
                     <span class="badge" style="font-size:0.7rem; background:var(--warning); color:#fff;"><i class="ph ph-warning"></i> Vorschlag</span>
@@ -83,8 +86,9 @@ export function renderShoppingView(app: App) {
                   <div class="card-meta">Unter Mindestbestand (+${i.needed} empfohlen)</div>
                 </div>
               </div>
-              <div class="card-actions">
-                <button class="action-btn add" onclick="event.stopPropagation(); autoAddShopping('${i.id}', ${i.needed})" title="Auf Liste setzen"><i class="ph ph-plus"></i></button>
+              <div class="card-actions" style="width: auto; flex-direction: row; border-left: 1px solid var(--border);">
+                <button class="action-btn" onclick="autoAddAndOpenBought('${i.id}', ${i.needed}, '${i.name.replace(/'/g, "\'")}')" title="Gekauft (Menge/MHD/Preis loggen)" style="width: 44px; border-right: 1px solid var(--border);"><i class="ph ph-bag"></i></button>
+                <button class="action-btn remove" onclick="dismissSuggestion('${i.id}')" title="Vorschlag ausblenden" style="width: 44px;"><i class="ph ph-trash"></i></button>
               </div>
             </div>`;
           } else {
@@ -97,13 +101,13 @@ export function renderShoppingView(app: App) {
                   <div class="card-header"><div class="item-name">${item.name}</div></div>
                   <div class="card-meta">
                     ${item.quantity || ''}
-                    ${item.price ? ` · <span style="color:var(--success); font-weight:700;">${item.price.toFixed(2)} €</span>` : ''} 
-                    <button class="btn-mini" onclick="openBoughtDetailsModal('${item.id}', '${item.linked_item_id || ''}')" title="Im Laden gekauft (Menge/MHD/Preis loggen)" style="font-size:0.7rem; padding:2px 6px; margin-left:6px; vertical-align:middle;"><i class="ph ph-bag"></i> Gekauft</button>
+                    ${item.price ? ` · <span style="color:var(--success); font-weight:700;">${item.price.toFixed(2)} €</span>` : ''}
                   </div>
                 </div>
               </div>
-              <div class="card-actions">
-                <button class="action-btn remove" onclick="deleteShopping('${item.id}')"><i class="ph ph-trash"></i></button>
+              <div class="card-actions" style="width: auto; flex-direction: row; border-left: 1px solid var(--border);">
+                <button class="action-btn" onclick="openBoughtDetailsModal('${item.id}', '${item.linked_item_id || ''}')" title="Gekauft (Menge/MHD/Preis loggen)" style="width: 44px; border-right: 1px solid var(--border);"><i class="ph ph-bag"></i></button>
+                <button class="action-btn remove" onclick="deleteShopping('${item.id}')" title="Löschen" style="width: 44px;"><i class="ph ph-trash"></i></button>
               </div>
             </div>`;
           }
@@ -320,5 +324,59 @@ Object.assign(window as any, {
   toggleShopping,
   deleteShopping,
   openBoughtDetailsModal,
-  saveBoughtDetails
+  saveBoughtDetails,
+  autoAddAndToggleShopping,
+  autoAddAndOpenBought,
+  dismissSuggestion
 });
+
+export async function autoAddAndToggleShopping(itemId: string, needed: number, customName: string) {
+  const app = (window as any).app;
+  const api = (window as any).api;
+  try {
+    const item = app.state.items.find((i: any) => i.id === itemId);
+    if (!item) return;
+    const latestBatch = app.state.batches.filter((b: any) => b.item_id === itemId && typeof b.price === 'number' && b.price > 0).sort((a: any, b: any) => b.date_added - a.date_added)[0];
+    const shop = await api.shopping.create({
+      household_id: app.state.householdId,
+      name: item.name,
+      quantity: needed + ' Stk',
+      linked_item_id: itemId,
+      price: latestBatch ? latestBatch.price : null,
+      status: 'bought'
+    });
+    app.state.shopping.push(shop.item);
+    app.render();
+    app.toast('Von Liste abgehakt');
+  } catch (e) { app.toast('Fehler'); }
+}
+
+export async function autoAddAndOpenBought(itemId: string, needed: number, customName: string) {
+  const app = (window as any).app;
+  const api = (window as any).api;
+  try {
+    const item = app.state.items.find((i: any) => i.id === itemId);
+    if (!item) return;
+    const latestBatch = app.state.batches.filter((b: any) => b.item_id === itemId && typeof b.price === 'number' && b.price > 0).sort((a: any, b: any) => b.date_added - a.date_added)[0];
+    const shop = await api.shopping.create({
+      household_id: app.state.householdId,
+      name: item.name,
+      quantity: needed + ' Stk',
+      linked_item_id: itemId,
+      price: latestBatch ? latestBatch.price : null
+    });
+    app.state.shopping.push(shop.item);
+    openBoughtDetailsModal(shop.item.id, itemId, item.name);
+  } catch (e) { app.toast('Fehler'); }
+}
+
+export function dismissSuggestion(itemId: string) {
+  const app = (window as any).app;
+  const key = `peerson_dismissed_sug_${app.state.householdId}`;
+  let dismissed: string[] = [];
+  try { dismissed = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) {}
+  if (!dismissed.includes(itemId)) dismissed.push(itemId);
+  localStorage.setItem(key, JSON.stringify(dismissed));
+  app.render();
+  app.toast('Vorschlag ausgeblendet');
+}

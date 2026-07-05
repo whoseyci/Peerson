@@ -181,6 +181,32 @@ export class App {
         </button>
       </div>
     `);
+    setTimeout(() => {
+      const descEl = document.getElementById('bugDesc') as HTMLTextAreaElement;
+      if (descEl) {
+        descEl.addEventListener('keydown', e => {
+          if (e.key === 'Enter') {
+            const val = descEl.value;
+            const selStart = descEl.selectionStart;
+            const currentLine = val.substring(0, selStart).split('\n').pop()!;
+            const listMatch = currentLine.match(/^(\s*)(\d+)\.\s+/);
+            const bulletMatch = currentLine.match(/^(\s*)[-*+]\s+/);
+            if (listMatch) {
+              e.preventDefault();
+              const nextNum = parseInt(listMatch[2], 10) + 1;
+              const insertion = `\n${listMatch[1]}${nextNum}. `;
+              descEl.setRangeText(insertion, selStart, descEl.selectionEnd, 'end');
+              descEl.selectionStart = descEl.selectionEnd = selStart + insertion.length;
+            } else if (bulletMatch) {
+              e.preventDefault();
+              const insertion = `\n${bulletMatch[0]}`;
+              descEl.setRangeText(insertion, selStart, descEl.selectionEnd, 'end');
+              descEl.selectionStart = descEl.selectionEnd = selStart + insertion.length;
+            }
+          }
+        });
+      }
+    }, 10);
   }
 
   async submitBugReport() {
@@ -460,6 +486,11 @@ export class App {
     }
     this.setHtml(modal, `<div class="modal-content">${content}</div>`);
     modal.classList.add('active');
+
+    modal.querySelectorAll('.close-btn').forEach(btn => {
+      btn.addEventListener('click', () => this.closeModal(id));
+    });
+    (window as any).closeModal = (cid: string) => this.closeModal(cid);
   }
 
   closeModal(id: string) {
