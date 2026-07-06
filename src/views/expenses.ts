@@ -1,5 +1,6 @@
 import type { App } from '../app';
 import type { Expense } from '../types';
+import { escapeAttr, escapeHtml, escapeJsAttr } from '../utils/html';
 
 const EXPENSE_CATEGORIES: Record<string, { icon: string; label: string }> = {
   groceries: { icon: 'shopping-cart-simple', label: 'Lebensmittel' },
@@ -39,7 +40,7 @@ export function renderExpensesView(app: App) {
             <div class="card-icon"><i class="ph ph-user"></i></div>
             <div class="card-text">
               <div class="card-header">
-                <div class="item-name">${b.name}</div>
+                <div class="item-name">${escapeHtml(b.name)}</div>
                 <div class="item-qty ${b.balance >= 0 ? 'balance-positive' : 'balance-negative'}">
                   ${b.balance >= 0 ? '+' : ''}${b.balance.toFixed(2)} €
                 </div>
@@ -54,20 +55,22 @@ export function renderExpensesView(app: App) {
     <div class="section">
       <div class="section-header"><div class="section-title">Ausgaben</div></div>
       ${s.expenses.length ? s.expenses.map(e => {
-        const payer = app.getMemberName(e.paid_by);
+        const payer = escapeHtml(app.getMemberName(e.paid_by));
+        const expenseId = escapeJsAttr(e.id);
+        const title = escapeHtml(e.title);
         const isSettlement = e.title.includes('Schuldenausgleich') || e.title.includes('Ausgleich');
         const cat = EXPENSE_CATEGORIES[e.category || 'sonstiges'] || EXPENSE_CATEGORIES.sonstiges;
         return `
         <div class="card ${isSettlement ? 'settlement-card' : ''}" style="${isSettlement ? 'border-left: 3px solid var(--success);' : ''}">
-          <div class="card-content" onclick="openEditExpenseModal('${e.id}')">
+          <div class="card-content" onclick="openEditExpenseModal('${expenseId}')">
             <div class="card-text">
-              <div class="card-header"><div class="item-name">${e.title}</div><div class="expense-amount">${e.amount.toFixed(2)} €</div></div>
+              <div class="card-header"><div class="item-name">${title}</div><div class="expense-amount">${e.amount.toFixed(2)} €</div></div>
               <div class="card-meta"><span><i class="ph ph-${cat.icon}"></i> ${cat.label}</span> · <span>Bezahlt von ${payer}</span> · <span>${new Date(e.created_at * 1000).toLocaleDateString('de-DE')}</span></div>
             </div>
           </div>
           <div class="card-actions">
-            <button class="action-btn" onclick="event.stopPropagation(); openEditExpenseModal('${e.id}')" title="Bearbeiten"><i class="ph ph-pencil-simple"></i></button>
-            <button class="action-btn remove" onclick="event.stopPropagation(); deleteExpense('${e.id}')" title="Löschen"><i class="ph ph-trash"></i></button>
+            <button class="action-btn" onclick="event.stopPropagation(); openEditExpenseModal('${expenseId}')" title="Bearbeiten"><i class="ph ph-pencil-simple"></i></button>
+            <button class="action-btn remove" onclick="event.stopPropagation(); deleteExpense('${expenseId}')" title="Löschen"><i class="ph ph-trash"></i></button>
           </div>
         </div>
         `;
@@ -110,7 +113,7 @@ export function openSettleModal() {
 
   const transfersHtml = transfers.map(t => `
     <div class="card" style="margin-bottom:8px; padding:12px; display:flex; justify-content:space-between; align-items:center;">
-      <div><strong>${t.fromName}</strong> <i class="ph ph-arrow-right" style="vertical-align:middle; margin:0 4px;"></i> <strong>${t.toName}</strong></div>
+      <div><strong>${escapeHtml(t.fromName)}</strong> <i class="ph ph-arrow-right" style="vertical-align:middle; margin:0 4px;"></i> <strong>${escapeHtml(t.toName)}</strong></div>
       <div style="font-weight:700; color:var(--success);">${t.amount.toFixed(2)} €</div>
     </div>
   `).join('');
@@ -172,12 +175,12 @@ function renderExpenseEditorModal(existingExpense?: Expense, existingSplits?: an
   const app = (window as any).app;
   const members = app.state.members;
   const isEdit = !!existingExpense;
-  const titleVal = existingExpense ? existingExpense.title.replace(/"/g, '&quot;') : '';
+  const titleVal = existingExpense ? escapeAttr(existingExpense.title) : '';
   const amtVal = existingExpense ? existingExpense.amount : '';
   const paidByVal = existingExpense ? existingExpense.paid_by : app.state.userId;
   const catVal = existingExpense?.category || 'groceries';
 
-  const payerOptions = members.map((m: any) => `<option value="${m.id}" ${paidByVal === m.id ? 'selected' : ''}>${m.name}</option>`).join('');
+  const payerOptions = members.map((m: any) => `<option value="${escapeAttr(m.id)}" ${paidByVal === m.id ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('');
   const catOptions = Object.entries(EXPENSE_CATEGORIES).map(([k, v]) => `<option value="${k}" ${catVal === k ? 'selected' : ''}>${v.label}</option>`).join('');
 
   // Default spend split rule check (Issue #25 & #5)
@@ -202,12 +205,12 @@ function renderExpenseEditorModal(existingExpense?: Expense, existingSplits?: an
     return `
       <div class="split-row" style="display:flex; align-items:center; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--border);">
         <label class="checkbox-label" style="font-size:0.9rem; margin:0;">
-          <input type="checkbox" class="split-check-member" value="${m.id}" ${checked ? 'checked' : ''} onchange="updateSplitAmounts()">
-          <span>${m.name}</span>
+          <input type="checkbox" class="split-check-member" value="${escapeAttr(m.id)}" ${checked ? 'checked' : ''} onchange="updateSplitAmounts()">
+          <span>${escapeHtml(m.name)}</span>
         </label>
         <div style="display:flex; align-items:center; gap:6px;">
-          <input type="number" class="split-pct-input" data-user="${m.id}" value="${Math.round(pct)}" min="0" max="100" style="width:60px; padding:4px; text-align:right; display:none;" oninput="updateSplitAmounts('pct')"> <span class="pct-symbol" style="display:none;">%</span>
-          <input type="number" class="split-amt-input" data-user="${m.id}" value="${customAmt.toFixed(2)}" step="0.01" min="0" style="width:80px; padding:4px; text-align:right;" oninput="updateSplitAmounts('amt')"> <span>€</span>
+          <input type="number" class="split-pct-input" data-user="${escapeAttr(m.id)}" value="${Math.round(pct)}" min="0" max="100" style="width:60px; padding:4px; text-align:right; display:none;" oninput="updateSplitAmounts('pct')"> <span class="pct-symbol" style="display:none;">%</span>
+          <input type="number" class="split-amt-input" data-user="${escapeAttr(m.id)}" value="${customAmt.toFixed(2)}" step="0.01" min="0" style="width:80px; padding:4px; text-align:right;" oninput="updateSplitAmounts('amt')"> <span>€</span>
         </div>
       </div>
     `;
@@ -239,7 +242,7 @@ function renderExpenseEditorModal(existingExpense?: Expense, existingSplits?: an
         </div>
       </div>
 
-      <button class="btn mt-3" onclick="${isEdit ? `saveEditedExpense('${existingExpense.id}')` : 'saveNewExpense()'}"><i class="ph-bold ph-check"></i> ${isEdit ? 'Änderungen speichern' : 'Ausgabe erstellen'}</button>
+      <button class="btn mt-3" onclick="${isEdit ? `saveEditedExpense('${escapeJsAttr(existingExpense.id)}')` : 'saveNewExpense()'}"><i class="ph-bold ph-check"></i> ${isEdit ? 'Änderungen speichern' : 'Ausgabe erstellen'}</button>
     </div>
   `);
 

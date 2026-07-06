@@ -1,5 +1,6 @@
 import type { App } from '../app';
 import type { Task } from '../types';
+import { escapeAttr, escapeHtml, escapeJsAttr } from '../utils/html';
 
 export function renderTasksView(app: App) {
   const s = app.state;
@@ -17,22 +18,25 @@ export function renderTasksView(app: App) {
       ${todo.length ? todo.map(t => {
         const recLabel = t.recurrence === 'daily' ? 'Täglich' : t.recurrence === 'weekly' ? 'Wöchentlich' : t.recurrence === 'monthly' ? 'Monatlich' : '';
         const rotLabel = (t.rotation_users && t.rotation_users.length > 1) ? ' (Rotation)' : '';
+        const taskId = escapeJsAttr(t.id);
+        const title = escapeHtml(t.title);
+        const assignee = escapeHtml(app.getMemberName(t.assigned_to));
         return `
         <div class="card">
-          <div class="card-content" style="align-items: flex-start;" onclick="openEditTaskModal('${t.id}')">
-            <button class="shopping-check" style="margin-top: 2px;" onclick="event.stopPropagation(); toggleTask('${t.id}')"></button>
+          <div class="card-content" style="align-items: flex-start;" onclick="openEditTaskModal('${taskId}')">
+            <button class="shopping-check" style="margin-top: 2px;" onclick="event.stopPropagation(); toggleTask('${taskId}')" aria-label="${title} erledigen"></button>
             <div class="card-text" style="margin-left: 8px;">
-              <div class="card-header"><div class="item-name">${t.title}</div></div>
-              ${t.description ? `<div class="task-meta">${t.description}</div>` : ''}
+              <div class="card-header"><div class="item-name">${title}</div></div>
+              ${t.description ? `<div class="task-meta">${escapeHtml(t.description)}</div>` : ''}
               <div class="task-meta">
-                <span class="task-assignee"><i class="ph ph-user"></i> ${app.getMemberName(t.assigned_to)}${rotLabel}</span>
+                <span class="task-assignee"><i class="ph ph-user"></i> ${assignee}${rotLabel}</span>
                 ${t.due_date ? `<span>· ${new Date(t.due_date).toLocaleDateString('de-DE')}</span>` : ''}
                 ${recLabel ? `<span style="color:var(--accent); font-weight:600;">· <i class="ph ph-arrows-clockwise"></i> ${recLabel}</span>` : ''}
               </div>
             </div>
           </div>
           <div class="card-actions">
-            <button class="action-btn remove" onclick="event.stopPropagation(); deleteTask('${t.id}')"><i class="ph ph-trash"></i></button>
+            <button class="action-btn remove" onclick="event.stopPropagation(); deleteTask('${taskId}')" aria-label="${title} löschen"><i class="ph ph-trash"></i></button>
           </div>
         </div>`;
       }).join('') : `<div class="empty-state">Alles erledigt!</div>`}
@@ -41,19 +45,22 @@ export function renderTasksView(app: App) {
     ${done.length ? `
     <div class="section">
       <div class="section-header"><div class="section-title">Erledigt</div></div>
-      ${done.map(t => `
+      ${done.map(t => {
+        const taskId = escapeJsAttr(t.id);
+        const title = escapeHtml(t.title);
+        return `
         <div class="card" style="opacity: 0.6;">
-          <div class="card-content" style="align-items: flex-start;" onclick="openEditTaskModal('${t.id}')">
-            <button class="shopping-check checked" style="margin-top: 2px;" onclick="event.stopPropagation(); toggleTask('${t.id}')"><i class="ph-bold ph-check"></i></button>
+          <div class="card-content" style="align-items: flex-start;" onclick="openEditTaskModal('${taskId}')">
+            <button class="shopping-check checked" style="margin-top: 2px;" onclick="event.stopPropagation(); toggleTask('${taskId}')" aria-label="${title} wieder öffnen"><i class="ph-bold ph-check"></i></button>
             <div class="card-text" style="margin-left: 8px;">
-              <div class="card-header"><div class="item-name" style="text-decoration: line-through;">${t.title}</div></div>
+              <div class="card-header"><div class="item-name" style="text-decoration: line-through;">${title}</div></div>
             </div>
           </div>
           <div class="card-actions">
-            <button class="action-btn remove" onclick="event.stopPropagation(); deleteTask('${t.id}')"><i class="ph ph-trash"></i></button>
+            <button class="action-btn remove" onclick="event.stopPropagation(); deleteTask('${taskId}')" aria-label="${title} löschen"><i class="ph ph-trash"></i></button>
           </div>
         </div>
-      `).join('')}
+      `}).join('')}
     </div>` : ''}
   `;
 }
@@ -61,11 +68,11 @@ export function renderTasksView(app: App) {
 export async function openAddTaskModal() {
   const app = (window as any).app;
   const members = app.state.members;
-  const memberOptions = members.map((m: any) => `<option value="${m.id}">${m.name}</option>`).join('');
+  const memberOptions = members.map((m: any) => `<option value="${escapeAttr(m.id)}">${escapeHtml(m.name)}</option>`).join('');
   const rotCheckboxes = members.map((m: any) => `
     <label class="checkbox-label" style="font-size:0.85rem; padding:4px 0;">
-      <input type="checkbox" class="rot-check" value="${m.id}" checked>
-      <span>${m.name}</span>
+      <input type="checkbox" class="rot-check" value="${escapeAttr(m.id)}" checked>
+      <span>${escapeHtml(m.name)}</span>
     </label>
   `).join('');
 
@@ -100,20 +107,20 @@ export async function openEditTaskModal(id: string) {
   if (!t) return;
 
   const members = app.state.members;
-  const memberOptions = members.map((m: any) => `<option value="${m.id}" ${t.assigned_to === m.id ? 'selected' : ''}>${m.name}</option>`).join('');
+  const memberOptions = members.map((m: any) => `<option value="${escapeAttr(m.id)}" ${t.assigned_to === m.id ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('');
   const rotUsers = Array.isArray(t.rotation_users) ? t.rotation_users : [];
   const rotCheckboxes = members.map((m: any) => `
     <label class="checkbox-label" style="font-size:0.85rem; padding:4px 0;">
-      <input type="checkbox" class="rot-check" value="${m.id}" ${rotUsers.includes(m.id) || !rotUsers.length ? 'checked' : ''}>
-      <span>${m.name}</span>
+      <input type="checkbox" class="rot-check" value="${escapeAttr(m.id)}" ${rotUsers.includes(m.id) || !rotUsers.length ? 'checked' : ''}>
+      <span>${escapeHtml(m.name)}</span>
     </label>
   `).join('');
 
   app.showModal('taskModal', `
     <div class="modal-header"><div class="modal-title">Aufgabe bearbeiten</div><button class="close-btn" onclick="window.app.closeModal('taskModal')"><i class="ph ph-x"></i></button></div>
     <div class="modal-body">
-      <div class="form-group"><label>Titel</label><input type="text" id="taskTitle" value="${t.title.replace(/"/g, '&quot;')}"></div>
-      <div class="form-group"><label>Beschreibung</label><textarea id="taskDesc" rows="2">${t.description || ''}</textarea></div>
+      <div class="form-group"><label>Titel</label><input type="text" id="taskTitle" value="${escapeAttr(t.title)}"></div>
+      <div class="form-group"><label>Beschreibung</label><textarea id="taskDesc" rows="2">${escapeHtml(t.description || '')}</textarea></div>
       <div class="form-group"><label>Zugewiesen an</label><select id="taskAssignee"><option value="">Niemand</option>${memberOptions}</select></div>
       <div class="form-group"><label>Fällig am</label><input type="date" id="taskDue" value="${t.due_date || ''}"></div>
       <div class="form-group">
@@ -129,7 +136,7 @@ export async function openEditTaskModal(id: string) {
         <label style="margin-bottom:6px;">Team-Rotation (Wer wechselt sich ab?)</label>
         <div style="display:flex; flex-direction:column; gap:4px;">${rotCheckboxes}</div>
       </div>
-      <button class="btn" onclick="updateExistingTask('${t.id}')"><i class="ph-bold ph-check"></i> Änderungen speichern</button>
+      <button class="btn" onclick="updateExistingTask('${escapeJsAttr(t.id)}')"><i class="ph-bold ph-check"></i> Änderungen speichern</button>
     </div>
   `);
 }

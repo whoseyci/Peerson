@@ -24,7 +24,9 @@ describe('CORS Middleware', () => {
     const request = makeRequest('http://test/api/households', { method: 'OPTIONS' });
     const response = await runHandler(onRequest, request, env);
     expect(response.status).toBe(204);
-    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('http://test');
+    expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
+    expect(response.headers.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin');
   });
 });
 

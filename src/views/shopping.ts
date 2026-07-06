@@ -1,5 +1,6 @@
 import type { App } from '../app';
 import type { ShoppingItem } from '../types';
+import { escapeAttr, escapeHtml, escapeJsAttr } from '../utils/html';
 
 const AISLE_META: Record<string, { label: string; icon: string; order: number }> = {
   obst: { label: 'Obst & Gemüse', icon: 'apple-logo', order: 1 },
@@ -74,40 +75,47 @@ export function renderShoppingView(app: App) {
         ${aisle.items.map(entry => {
           if (entry.type === 'suggested') {
             const i = entry.data;
+            const itemId = escapeJsAttr(i.id);
+            const itemName = escapeHtml(i.name);
+            const itemNameJs = escapeJsAttr(i.name);
             return `
             <div class="card warning" style="margin-bottom: 8px;">
               <div class="card-content" style="align-items: center;">
-                <button class="shopping-check" onclick="autoAddAndToggleShopping('${i.id}', ${i.needed}, '${i.name.replace(/'/g, "\'")}')"></button>
+                <button class="shopping-check" onclick="autoAddAndToggleShopping('${itemId}', ${i.needed}, '${itemNameJs}')"></button>
                 <div class="card-text" style="margin-left: 8px;">
                   <div class="card-header">
-                    <div class="item-name">${i.name}</div>
+                    <div class="item-name">${itemName}</div>
                     <span class="badge" style="font-size:0.7rem; background:var(--warning); color:#fff;"><i class="ph ph-warning"></i> Vorschlag</span>
                   </div>
                   <div class="card-meta">Unter Mindestbestand (+${i.needed} empfohlen)</div>
                 </div>
               </div>
               <div class="card-actions" style="width: auto; flex-direction: row; border-left: 1px solid var(--border);">
-                <button class="action-btn" onclick="autoAddAndOpenBought('${i.id}', ${i.needed}, '${i.name.replace(/'/g, "\'")}')" title="Gekauft (Menge/MHD/Preis loggen)" style="width: 44px; border-right: 1px solid var(--border);"><i class="ph ph-bag"></i></button>
-                <button class="action-btn remove" onclick="dismissSuggestion('${i.id}')" title="Vorschlag ausblenden" style="width: 44px;"><i class="ph ph-trash"></i></button>
+                <button class="action-btn" onclick="autoAddAndOpenBought('${itemId}', ${i.needed}, '${itemNameJs}')" title="Gekauft (Menge/MHD/Preis loggen)" style="width: 44px; border-right: 1px solid var(--border);"><i class="ph ph-bag"></i></button>
+                <button class="action-btn remove" onclick="dismissSuggestion('${itemId}')" title="Vorschlag ausblenden" style="width: 44px;"><i class="ph ph-trash"></i></button>
               </div>
             </div>`;
           } else {
             const item = entry.data as ShoppingItem;
+            const shopId = escapeJsAttr(item.id);
+            const linkedId = escapeJsAttr(item.linked_item_id || '');
+            const itemName = escapeHtml(item.name);
+            const quantity = escapeHtml(item.quantity || '');
             return `
             <div class="card" style="margin-bottom: 8px;">
               <div class="card-content" style="align-items: center;">
-                <button class="shopping-check" onclick="toggleShopping('${item.id}')"></button>
+                <button class="shopping-check" onclick="toggleShopping('${shopId}')"></button>
                 <div class="card-text" style="margin-left: 8px;">
-                  <div class="card-header"><div class="item-name">${item.name}</div></div>
+                  <div class="card-header"><div class="item-name">${itemName}</div></div>
                   <div class="card-meta">
-                    ${item.quantity || ''}
+                    ${quantity}
                     ${item.price ? ` · <span style="color:var(--success); font-weight:700;">${item.price.toFixed(2)} €</span>` : ''}
                   </div>
                 </div>
               </div>
               <div class="card-actions" style="width: auto; flex-direction: row; border-left: 1px solid var(--border);">
-                <button class="action-btn" onclick="openBoughtDetailsModal('${item.id}', '${item.linked_item_id || ''}')" title="Gekauft (Menge/MHD/Preis loggen)" style="width: 44px; border-right: 1px solid var(--border);"><i class="ph ph-bag"></i></button>
-                <button class="action-btn remove" onclick="deleteShopping('${item.id}')" title="Löschen" style="width: 44px;"><i class="ph ph-trash"></i></button>
+                <button class="action-btn" onclick="openBoughtDetailsModal('${shopId}', '${linkedId}')" title="Gekauft (Menge/MHD/Preis loggen)" style="width: 44px; border-right: 1px solid var(--border);"><i class="ph ph-bag"></i></button>
+                <button class="action-btn remove" onclick="deleteShopping('${shopId}')" title="Löschen" style="width: 44px;"><i class="ph ph-trash"></i></button>
               </div>
             </div>`;
           }
@@ -118,20 +126,23 @@ export function renderShoppingView(app: App) {
     ${bought.length ? `
     <div class="section">
       <div class="section-header"><div class="section-title">Erledigt</div></div>
-      ${bought.map(item => `
+      ${bought.map(item => {
+        const shopId = escapeJsAttr(item.id);
+        const itemName = escapeHtml(item.name);
+        return `
         <div class="card" style="opacity: 0.7;">
           <div class="card-content" style="align-items: center;">
-            <button class="shopping-check checked" onclick="toggleShopping('${item.id}')"><i class="ph-bold ph-check"></i></button>
+            <button class="shopping-check checked" onclick="toggleShopping('${shopId}')" aria-label="${itemName} wieder öffnen"><i class="ph-bold ph-check"></i></button>
             <div class="card-text" style="margin-left: 8px;">
-              <div class="card-header"><div class="item-name" style="text-decoration: line-through;">${item.name}</div></div>
+              <div class="card-header"><div class="item-name" style="text-decoration: line-through;">${itemName}</div></div>
               ${item.price ? `<div class="card-meta" style="color:var(--success); font-weight:700;">${item.price.toFixed(2)} €</div>` : ''}
             </div>
           </div>
           <div class="card-actions">
-            <button class="action-btn remove" onclick="deleteShopping('${item.id}')"><i class="ph ph-trash"></i></button>
+            <button class="action-btn remove" onclick="deleteShopping('${shopId}')" aria-label="${itemName} löschen"><i class="ph ph-trash"></i></button>
           </div>
         </div>
-      `).join('')}
+      `}).join('')}
     </div>` : ''}
   `;
 }
@@ -141,7 +152,7 @@ export async function openAddShoppingModal(prefillName?: string | null) {
   app.showModal('shopModal', `
     <div class="modal-header"><div class="modal-title">Zur Liste hinzufügen</div><button class="close-btn" onclick="window.app.closeModal('shopModal')"><i class="ph ph-x"></i></button></div>
     <div class="modal-body">
-      <div class="form-group"><label>Artikel</label><input type="text" id="shopName" placeholder="Was wird gebraucht?" value="${prefillName ? prefillName.replace(/"/g, '&quot;') : ''}"></div>
+      <div class="form-group"><label>Artikel</label><input type="text" id="shopName" placeholder="Was wird gebraucht?" value="${prefillName ? escapeAttr(prefillName) : ''}"></div>
       <div class="form-group"><label>Menge (optional)</label><input type="text" id="shopQty" placeholder="z. B. 2 Packungen"></div>
       <div class="form-group"><label>Preis (€, optional)</label><input type="number" id="shopPrice" step="0.01" min="0" placeholder="z. B. 1.99"></div>
       <button class="btn" onclick="saveShoppingItem()"><i class="ph-bold ph-check"></i> Hinzufügen</button>
@@ -269,7 +280,7 @@ export async function openBoughtDetailsModal(shopItemId: string | null, linkedIt
   app.showModal('boughtDetailsModal', `
     <div class="modal-header"><div class="modal-title"><i class="ph ph-bag"></i> Im Laden gekauft</div><button class="close-btn" onclick="window.app.closeModal('boughtDetailsModal')"><i class="ph ph-x"></i></button></div>
     <div class="modal-body">
-      <div style="font-weight:700; font-size:1.1rem; margin-bottom:12px;">${name}</div>
+      <div style="font-weight:700; font-size:1.1rem; margin-bottom:12px;">${escapeHtml(name)}</div>
       <div class="form-group"><label>Gekaufte Menge</label><input type="number" id="boughtQty" value="1" min="1"></div>
       <div class="form-group"><label>Preis gezahlt (€)</label><input type="number" id="boughtPrice" step="0.01" min="0" value="${priceVal}" placeholder="z. B. 1.99"></div>
       <div class="form-group"><label>MHD (optional)</label><input type="date" id="boughtExpiry"></div>

@@ -5,6 +5,7 @@ import { renderInventoryView } from './views/inventory';
 import { renderShoppingView } from './views/shopping';
 import { renderTasksView } from './views/tasks';
 import { renderExpensesView } from './views/expenses';
+import { escapeHtml } from './utils/html';
 import { loadExternalScript } from './utils/loadExternalScript';
 
 interface ActionLog {
@@ -18,6 +19,22 @@ interface ActionLog {
 // also triggers an immediate refresh so switching back to the tab always
 // feels current even between polls.
 const SYNC_INTERVAL_MS = 3000;
+
+function redactSensitive(value: string) {
+  return value
+    .replace(/github_pat_[A-Za-z0-9_]+/g, '[redacted-token]')
+    .replace(/([?&]join=)[^&]+/gi, '$1[redacted]')
+    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi, '[redacted-user-id]')
+    .replace(/(Einladung beitreten\s*[—-]\s*)[A-Z0-9]{6,12}/gi, '$1[redacted-code]');
+}
+
+function safeLastActions(actions: ActionLog[]) {
+  return actions.slice(0, 3).map((a, i) => {
+    const time = new Date(a.timestamp).toLocaleTimeString('de-DE');
+    const details = a.details ? ' — ' + redactSensitive(a.details) : '';
+    return `${i + 1}. [${time}] ${redactSensitive(a.action)}${details}`;
+  }).join('\n') || 'Keine Aktionen aufgezeichnet';
+}
 
 type DeletableType = 'item' | 'task' | 'shopping' | 'expense';
 
@@ -144,10 +161,7 @@ export class App {
   }
 
   openBugReport() {
-    const lastActions = this.actionLog.slice(0, 3).map((a, i) => {
-      const time = new Date(a.timestamp).toLocaleTimeString('de-DE');
-      return `${i + 1}. [${time}] ${a.action}${a.details ? ' — ' + a.details : ''}`;
-    }).join('\n') || 'Keine Aktionen aufgezeichnet';
+    const lastActions = safeLastActions(this.actionLog);
 
     this.showModal('bugModal', `
       <div class="modal-header">
@@ -166,17 +180,17 @@ export class App {
         <div class="form-group">
           <label class="checkbox-label">
             <input type="checkbox" id="bugScreenshot" checked>
-            <span>Screenshot anhängen</span>
+            <span>Screenshot anhängen (kann sichtbare Einladungscodes enthalten)</span>
           </label>
         </div>
         <div class="bug-context">
           <div style="font-weight:700; margin-bottom:6px;">Auto-Kontext</div>
           <div>View: <strong>${this.state.view}</strong></div>
-          <div>Haushalt: <strong>${this.state.household?.name || '—'}</strong></div>
-          <div>User: <strong>${this.state.userName || 'Anonym'}</strong></div>
+          <div>Haushalt: <strong>${escapeHtml(this.state.household?.name || '—')}</strong></div>
+          <div>User: <strong>${escapeHtml(this.state.userName || 'Anonym')}</strong></div>
           <div>Screen: <strong>${window.innerWidth}x${window.innerHeight}</strong></div>
           <div style="margin-top:6px; font-weight:700;">Letzte Aktionen:</div>
-          <pre>${lastActions}</pre>
+          <pre>${escapeHtml(lastActions)}</pre>
         </div>
         <button class="btn" id="bugSubmitBtn" onclick="app.submitBugReport()">
           <i class="ph-bold ph-paper-plane-tilt"></i> Bug melden
@@ -222,10 +236,7 @@ export class App {
       return;
     }
 
-    const lastActions = this.actionLog.slice(0, 3).map((a, i) => {
-      const time = new Date(a.timestamp).toLocaleTimeString('de-DE');
-      return `${i + 1}. [${time}] ${a.action}${a.details ? ' \u2014 ' + a.details : ''}`;
-    }).join('\n') || 'Keine Aktionen aufgezeichnet';
+    const lastActions = safeLastActions(this.actionLog);
 
     if (submitBtn) {
       submitBtn.disabled = true;
@@ -255,7 +266,7 @@ export class App {
       Haushalt: this.state.household?.name || '\u2014',
       User: this.state.userName || 'Anonym',
       Screen: `${window.innerWidth}x${window.innerHeight}`,
-      URL: location.href,
+      URL: redactSensitive(location.href),
       'User-Agent': navigator.userAgent,
     };
 
@@ -459,21 +470,21 @@ export class App {
       ${viewHtml}
       <nav class="bottom-dock">
         <button class="dock-btn ${this.state.view === 'inventory' ? 'active' : ''}" onclick="app.navigate('inventory')" title="Vorrat" aria-label="Vorrat öffnen">
-          <i class="ph ph-package"></i>
+          <i class="ph ph-package"></i><span class="dock-label">Vorrat</span>
           ${lowStock > 0 ? `<span class="badge">${lowStock}</span>` : ''}
         </button>
         <button class="dock-btn ${this.state.view === 'shopping' ? 'active' : ''}" onclick="app.navigate('shopping')" title="Einkaufen" aria-label="Einkaufen öffnen">
-          <i class="ph ph-shopping-cart"></i>
+          <i class="ph ph-shopping-cart"></i><span class="dock-label">Einkauf</span>
         </button>
         <button class="dock-btn ${this.state.view === 'tasks' ? 'active' : ''}" onclick="app.navigate('tasks')" title="Aufgaben" aria-label="Aufgaben öffnen">
-          <i class="ph ph-check-circle"></i>
+          <i class="ph ph-check-circle"></i><span class="dock-label">Aufgaben</span>
           ${unreadTasks > 0 ? `<span class="badge">${unreadTasks}</span>` : ''}
         </button>
         <button class="dock-btn ${this.state.view === 'expenses' ? 'active' : ''}" onclick="app.navigate('expenses')" title="Finanzen" aria-label="Finanzen öffnen">
-          <i class="ph ph-currency-eur"></i>
+          <i class="ph ph-currency-eur"></i><span class="dock-label">Finanzen</span>
         </button>
         <button class="dock-btn ${this.state.view === 'household' ? 'active' : ''}" onclick="app.navigate('household')" title="Haushalt" aria-label="Haushalt öffnen">
-          <i class="ph ph-users"></i>
+          <i class="ph ph-users"></i><span class="dock-label">Haushalt</span>
         </button>
       </nav>
     `);
@@ -506,6 +517,8 @@ export class App {
   toast(msg: string) {
     const t = document.createElement('div');
     t.className = 'toast';
+    t.setAttribute('role', 'status');
+    t.setAttribute('aria-live', 'polite');
     t.textContent = msg;
     document.body.appendChild(t);
     requestAnimationFrame(() => t.classList.add('visible'));
@@ -518,6 +531,8 @@ export class App {
   private undoToast(msg: string, durationMs: number, onUndo: () => void, onExpire: () => void) {
     const t = document.createElement('div');
     t.className = 'toast toast-undo';
+    t.setAttribute('role', 'status');
+    t.setAttribute('aria-live', 'polite');
 
     const message = document.createElement('span');
     message.textContent = msg;
@@ -529,15 +544,14 @@ export class App {
 
     const progress = document.createElement('div');
     progress.className = 'toast-progress';
-    const barEl = document.createElement('div');
-    barEl.className = 'toast-progress-bar';
-    progress.appendChild(barEl);
+    const bar = document.createElement('div');
+    bar.className = 'toast-progress-bar';
+    progress.appendChild(bar);
 
     t.append(message, undoBtn, progress);
     document.body.appendChild(t);
     requestAnimationFrame(() => t.classList.add('visible'));
 
-    const bar = barEl;
     if (bar) {
       bar.style.transitionDuration = `${durationMs}ms`;
       requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.transform = 'scaleX(0)'; }));
