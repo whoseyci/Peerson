@@ -856,3 +856,53 @@ body.dark-mode .toast-progress-bar { background: rgba(0,0,0,0.35); }
   font-size: 13px;
   padding: 4px 2px;
 }
+
+/* Daily brief */
+.brief-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  background: linear-gradient(135deg, var(--surface), var(--bg));
+  border: 1px solid var(--border);
+  border-radius: 26px;
+  padding: 20px;
+  margin-bottom: 18px;
+  box-shadow: var(--shadow);
+}
+.brief-hero h2 {
+  margin: 4px 0 4px;
+  font-size: 24px;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+.brief-hero p { color: var(--text-soft); font-weight: 600; }
+.brief-hero > i {
+  font-size: 42px;
+  color: var(--text-soft);
+  opacity: 0.65;
+}
+.brief-kicker {
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.brief-actions { margin-bottom: 24px; }
+.quick-button {
+  width: 100%;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  text-align: left;
+}
+.expense-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.payment-history-row small {
+  color: var(--text-soft);
+  font-size: 12px;
+}
