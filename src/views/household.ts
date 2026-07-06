@@ -43,6 +43,13 @@ function renderLocationTree(nodes: LocationNode[], depth: number): string {
     }).join('');
 }
 
+function formatJoinedAt(joinedAt: unknown): string {
+  const seconds = typeof joinedAt === 'number' ? joinedAt : Number(joinedAt);
+  if (!Number.isFinite(seconds) || seconds <= 0) return 'unbekannt';
+  const date = new Date(seconds * 1000);
+  return Number.isNaN(date.getTime()) ? 'unbekannt' : date.toLocaleDateString('de-DE');
+}
+
 export function renderHouseholdView(app: App) {
   const s = app.state;
 
@@ -144,7 +151,7 @@ export function renderHouseholdView(app: App) {
             <div class="card-icon"><i class="ph ph-user"></i></div>
             <div class="card-text">
               <div class="card-header"><div class="item-name">${memberName} ${m.id === s.userId ? '(Du)' : ''}</div></div>
-              <div class="card-meta">Dabei seit ${new Date(m.joined_at * 1000).toLocaleDateString('de-DE')}</div>
+              <div class="card-meta">Dabei seit ${formatJoinedAt(m.joined_at)}</div>
             </div>
           </div>
           ${(m.id !== s.userId) ? `
