@@ -57,7 +57,7 @@ export function renderHomeView(app: App) {
     ${stack.length ? `<div class="swipe-progress">${stack.map((_, i) => `<span class="${i === 0 ? '' : ''}" data-dot="${i}"></span>`).join('')}</div>` : ''}
 
     <div class="quick-row">
-      <button class="quick-tile" onclick="openCaptureSheet()"><span class="qt-icon"><i class="ph ph-shopping-cart-simple"></i></span>Tour starten</button>
+      <button class="quick-tile" onclick="openShoppingTrip()"><span class="qt-icon"><i class="ph ph-shopping-cart-simple"></i></span>Tour starten</button>
       <button class="quick-tile" onclick="startScanFlow()"><span class="qt-icon"><i class="ph ph-barcode"></i></span>Scannen</button>
       <button class="quick-tile" onclick="openAddTaskModal()"><span class="qt-icon"><i class="ph ph-check-circle"></i></span>Aufgabe</button>
       <button class="quick-tile" onclick="openAddExpenseModal()"><span class="qt-icon"><i class="ph ph-currency-eur"></i></span>Ausgabe</button>

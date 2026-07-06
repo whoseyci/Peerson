@@ -40,7 +40,7 @@ function daysUntil(dateString?: string | null): number {
 }
 
 export function computeFeed(
-  state: Pick<AppState, 'items' | 'batches' | 'tasks' | 'expenses' | 'splits' | 'members' | 'userId'>,
+  state: Pick<AppState, 'items' | 'batches' | 'tasks' | 'expenses' | 'splits' | 'members' | 'userId'> & Pick<Partial<AppState>, 'shopping'>,
   snoozed: Set<string>
 ): FeedItem[] {
   const items: FeedItem[] = [];
@@ -69,10 +69,17 @@ export function computeFeed(
     });
   });
 
-  // Low-stock items.
+  // Low-stock items that are not already on the open shopping list.
+  const openShopping = state.shopping || [];
   state.items.forEach(item => {
     const total = state.batches.filter(b => b.item_id === item.id).reduce((a, b) => a + b.quantity, 0);
     if (total >= item.threshold) return;
+    const alreadyOnShoppingList = openShopping.some(sh =>
+      sh.status === 'open' && (
+        sh.linked_item_id === item.id || sh.name.trim().toLowerCase() === item.name.trim().toLowerCase()
+      )
+    );
+    if (alreadyOnShoppingList) return;
     const key = `lowstock:${item.id}`;
     if (snoozed.has(key)) return;
     items.push({

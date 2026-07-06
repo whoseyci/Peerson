@@ -1255,3 +1255,13 @@ body.dark-mode .capture-fab { border-color: var(--bg); }
   font-size: 20px; font-weight: 800; cursor: pointer; color: var(--text);
 }
 .qty-stepper .qty-big { font-size: 28px; font-weight: 800; min-width: 40px; text-align: center; }
+.trip-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.trip-actions .btn {
+  justify-content: center;
+  margin-top: 0;
+}

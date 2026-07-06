@@ -1,20 +1,11 @@
 import type { App } from '../app';
-import { escapeHtml, escapeJsAttr } from '../utils/html';
-
-// Full-screen guided "Einkaufstour" flow -- walks through every open
-// shopping-list entry one at a time. Deliberately reuses the shopping
-// list's existing purchase-logging plumbing (openBoughtDetailsModal /
-// saveBoughtDetails from shopping.ts) rather than re-implementing
-// "convert a shopping-list line into inventory batches" a second time;
-// this view only adds the step-through/progress-bar/summary chrome around
-// that already-tested logic, plus a lighter-weight "quick log" sheet for
-// the common case of just wanting to check something off (with
-// quantity+price) without diving into the fuller bought-details modal.
+import { escapeAttr, escapeHtml, escapeJsAttr } from '../utils/html';
 
 interface TripState {
   ids: string[];
   checkedIds: Set<string>;
   totalSpent: number;
+  summary: boolean;
 }
 
 let trip: TripState | null = null;
@@ -22,11 +13,7 @@ let trip: TripState | null = null;
 export function openShoppingTrip() {
   const app = (window as any).app as App;
   const open = app.state.shopping.filter(s => s.status === 'open');
-  if (!open.length) {
-    app.toast('Die Einkaufsliste ist leer');
-    return;
-  }
-  trip = { ids: open.map(s => s.id), checkedIds: new Set(), totalSpent: 0 };
+  trip = { ids: open.map(s => s.id), checkedIds: new Set(), totalSpent: 0, summary: false };
   renderTripScreen();
   requestAnimationFrame(() => {
     document.getElementById('tripScreen')?.classList.add('show');
@@ -46,7 +33,7 @@ function renderTripScreen() {
   if (!trip) return;
   const total = trip.ids.length;
   const done = trip.checkedIds.size;
-  const allDone = done === total;
+  const allDone = total > 0 && done === total;
 
   let el = document.getElementById('tripScreen');
   if (!el) {
@@ -56,51 +43,84 @@ function renderTripScreen() {
     document.body.appendChild(el);
   }
 
-  if (allDone) {
-    el.innerHTML = `
-      <div class="trip-head">
-        <button class="icon-btn" onclick="closeShoppingTrip()"><i class="ph ph-x"></i></button>
-        <h2>Einkaufstour</h2>
-        <div style="width:38px;"></div>
-      </div>
-      <div class="trip-progress-track"><div class="trip-progress-fill" style="width:100%"></div></div>
-      <div class="trip-body">
-        <div class="trip-summary">
-          <div class="ts-icon"><i class="ph-bold ph-check"></i></div>
-          <div class="ts-total">${trip.totalSpent.toFixed(2)} €</div>
-          <div style="color:var(--text-soft); font-weight:600;">Insgesamt ausgegeben</div>
-          <button class="btn mt-3" onclick="logTripAsExpense()"><i class="ph-bold ph-currency-eur"></i> Als Ausgabe verbuchen (gleichmäßig teilen)</button>
-          <button class="btn btn-secondary" onclick="closeShoppingTrip()">Fertig</button>
-        </div>
-      </div>
-    `;
+  if (trip.summary || allDone) {
+    renderTripSummary(el, done, total);
     return;
   }
 
   el.innerHTML = `
     <div class="trip-head">
-      <button class="icon-btn" onclick="closeShoppingTrip()"><i class="ph ph-x"></i></button>
+      <button class="icon-btn" onclick="closeShoppingTrip()" aria-label="Einkaufstour schließen"><i class="ph ph-x"></i></button>
       <h2>Einkaufstour · ${done}/${total}</h2>
-      <div style="width:38px;"></div>
+      <button class="btn btn-small btn-secondary" style="width:auto; margin-top:0;" onclick="finishShoppingTrip()">Beenden</button>
     </div>
-    <div class="trip-progress-track"><div class="trip-progress-fill" style="width:${(done / total) * 100}%"></div></div>
+    <div class="trip-progress-track"><div class="trip-progress-fill" style="width:${total ? (done / total) * 100 : 0}%"></div></div>
     <div class="trip-body">
-      ${trip.ids.map(id => {
+      <div class="trip-actions">
+        <button class="btn btn-secondary btn-small" onclick="scanTripExtra()"><i class="ph ph-barcode"></i> Barcode</button>
+        <button class="btn btn-secondary btn-small" onclick="openTripManualAdd()"><i class="ph ph-plus"></i> Ohne Barcode</button>
+      </div>
+      ${total ? trip.ids.map(id => {
         const item = app.state.shopping.find(s => s.id === id);
         if (!item) return '';
         const checked = trip!.checkedIds.has(id);
         return `
           <div class="trip-item-card ${checked ? 'checked' : ''}" onclick="${checked ? '' : `openTripQuickLog('${escapeJsAttr(id)}')`}">
             <div class="check-circle">${checked ? '<i class="ph-bold ph-check"></i>' : ''}</div>
-            <div style="flex:1;">
+            <div style="flex:1; min-width:0;">
               <div style="font-weight:700; font-size:14.5px;">${escapeHtml(item.name)}</div>
               ${item.quantity ? `<div style="font-size:12px; color:var(--text-soft);">${escapeHtml(item.quantity)}</div>` : ''}
             </div>
           </div>
         `;
-      }).join('')}
+      }).join('') : `
+        <div class="empty-state" style="padding:22px;">
+          Noch nichts in dieser Tour. Scanne einen Artikel oder füge etwas ohne Barcode hinzu.
+        </div>`}
+      <button class="btn mt-3" onclick="finishShoppingTrip()"><i class="ph-bold ph-check"></i> Einkauf beenden (${total - done} offen lassen)</button>
     </div>
   `;
+}
+
+function renderTripSummary(el: HTMLElement, done: number, total: number) {
+  if (!trip) return;
+  const leftOpen = Math.max(0, total - done);
+  el.innerHTML = `
+    <div class="trip-head">
+      <button class="icon-btn" onclick="closeShoppingTrip()" aria-label="Einkaufstour schließen"><i class="ph ph-x"></i></button>
+      <h2>Einkauf beendet</h2>
+      <div style="width:38px;"></div>
+    </div>
+    <div class="trip-progress-track"><div class="trip-progress-fill" style="width:${total ? (done / total) * 100 : 0}%"></div></div>
+    <div class="trip-body">
+      <div class="trip-summary">
+        <div class="ts-icon"><i class="ph-bold ph-check"></i></div>
+        <div class="ts-total">${trip.totalSpent.toFixed(2)} €</div>
+        <div style="color:var(--text-soft); font-weight:600;">Aus den abgehakten Artikeln</div>
+        <div class="form-group" style="margin-top:18px; text-align:left;">
+          <label>Gezahlt an der Kasse (€)</label>
+          <input type="number" id="tripFinalTotal" step="0.01" min="0" value="${trip.totalSpent.toFixed(2)}" placeholder="z. B. nach Rabatt">
+          <div style="font-size:12px; color:var(--text-soft); margin-top:6px;">Hier kannst du Rabatte oder Kassendifferenzen korrigieren, bevor es in die Ausgaben geht.</div>
+        </div>
+        <div style="color:var(--text-soft); font-size:13px; margin:12px 0;">${done} gekauft · ${leftOpen} bleiben offen</div>
+        <button class="btn mt-3" onclick="logTripAsExpense()"><i class="ph-bold ph-currency-eur"></i> Als Ausgabe verbuchen</button>
+        ${leftOpen ? `<button class="btn btn-secondary" onclick="continueShoppingTrip()">Zurück zur Tour</button>` : ''}
+        <button class="btn btn-secondary" onclick="closeShoppingTrip()">Ohne Ausgabe schließen</button>
+      </div>
+    </div>
+  `;
+}
+
+export function finishShoppingTrip() {
+  if (!trip) return;
+  trip.summary = true;
+  renderTripScreen();
+}
+
+export function continueShoppingTrip() {
+  if (!trip) return;
+  trip.summary = false;
+  renderTripScreen();
 }
 
 export function openTripQuickLog(shopItemId: string) {
@@ -118,7 +138,7 @@ export function openTripQuickLog(shopItemId: string) {
         <button onclick="adjustTripQty(1)">+</button>
       </div>
     </div>
-    <div class="form-group"><label>Preis (€)</label><input type="number" id="qlPrice" step="0.01" min="0" placeholder="z. B. 2.49" value="${item.price ? item.price.toFixed(2) : ''}"></div>
+    <div class="form-group"><label>Preis gezahlt (€)</label><input type="number" id="qlPrice" step="0.01" min="0" placeholder="z. B. 2.49" value="${item.price ? item.price.toFixed(2) : ''}"></div>
     <button class="btn" onclick="confirmTripQuickLog()"><i class="ph-bold ph-check"></i> Abhaken &amp; weiter</button>
   `);
 }
@@ -143,10 +163,6 @@ export async function confirmTripQuickLog() {
   if (!shopItem || !trip) return;
 
   try {
-    // Reuse the exact same "mark bought + push a batch into inventory"
-    // logic the plain shopping list already uses, rather than
-    // duplicating it -- see shopping.ts's saveBoughtDetails for the full
-    // rationale (barcode/variant carry-through etc).
     let linkedId = shopItem.linked_item_id || null;
     if (!linkedId) {
       const pItem = app.state.items.find(i => i.name.trim().toLowerCase() === shopItem.name.trim().toLowerCase());
@@ -170,8 +186,8 @@ export async function confirmTripQuickLog() {
       app.state.batches.push(batch.batch);
     }
 
+    if (!trip.checkedIds.has(shopItemId) && price) trip.totalSpent += price;
     trip.checkedIds.add(shopItemId);
-    if (price) trip.totalSpent += price;
 
     app.closeSheet('sheetQuickLog');
     renderTripScreen();
@@ -180,20 +196,92 @@ export async function confirmTripQuickLog() {
   }
 }
 
+async function addTripShoppingItem(data: { name: string; quantity?: string | null; linked_item_id?: string | null; price?: number | null }) {
+  const app = (window as any).app as App;
+  const api = (window as any).api;
+  const created = await api.shopping.create({
+    household_id: app.state.householdId,
+    name: data.name,
+    quantity: data.quantity || null,
+    linked_item_id: data.linked_item_id || null,
+    price: data.price || null,
+  });
+  app.state.shopping.push(created.item);
+  if (trip && !trip.ids.includes(created.item.id)) trip.ids.push(created.item.id);
+  renderTripScreen();
+  return created.item;
+}
+
+export function openTripManualAdd() {
+  const app = (window as any).app as App;
+  app.showSheet('sheetTripManualAdd', 'Zusatzkauf hinzufügen', `
+    <div class="form-group"><label>Artikel</label><input type="text" id="tripAddName" placeholder="z. B. Butter"></div>
+    <div class="form-group"><label>Menge (optional)</label><input type="text" id="tripAddQty" placeholder="z. B. 2 Packungen"></div>
+    <button class="btn" onclick="saveTripManualAdd()"><i class="ph-bold ph-plus"></i> Zur Tour hinzufügen</button>
+  `);
+}
+
+export async function saveTripManualAdd() {
+  const app = (window as any).app as App;
+  const name = (document.getElementById('tripAddName') as HTMLInputElement)?.value.trim();
+  const quantity = (document.getElementById('tripAddQty') as HTMLInputElement)?.value.trim() || null;
+  if (!name) return app.toast('Name erforderlich');
+  try {
+    const item = await addTripShoppingItem({ name, quantity });
+    app.closeSheet('sheetTripManualAdd');
+    app.toast('Zur Tour hinzugefügt');
+    openTripQuickLog(item.id);
+  } catch (e) {
+    app.toast('Fehler beim Hinzufügen');
+  }
+}
+
+export async function scanTripExtra() {
+  const app = (window as any).app as App;
+  const api = (window as any).api;
+  const handle = (window as any).openBarcodeScanner();
+  const code = await handle.result;
+  if (!code) return;
+
+  try {
+    const pantryItem = app.state.items.find(i => Array.isArray(i.barcodes) && i.barcodes.some((b: any) => b.code === code));
+    let itemName = pantryItem?.name || '';
+    let linkedId = pantryItem?.id || null;
+
+    if (!itemName) {
+      app.toast('Suche Produkt...');
+      const product = await api.products.lookup(code);
+      itemName = product.found && product.name ? product.name : `Barcode ${code}`;
+    }
+
+    const existingOpen = app.state.shopping.find(s => s.status === 'open' && (s.linked_item_id === linkedId || s.name.trim().toLowerCase() === itemName.trim().toLowerCase()));
+    const item = existingOpen || await addTripShoppingItem({ name: itemName, quantity: '1 Stk', linked_item_id: linkedId });
+    if (trip && !trip.ids.includes(item.id)) trip.ids.push(item.id);
+    renderTripScreen();
+    app.toast('Zur Tour hinzugefügt');
+    openTripQuickLog(item.id);
+  } catch (e) {
+    app.toast('Fehler beim Scannen');
+  }
+}
+
 export async function logTripAsExpense() {
   const app = (window as any).app as App;
   const api = (window as any).api;
-  if (!trip || trip.totalSpent <= 0) {
+  if (!trip) return;
+  const finalRaw = (document.getElementById('tripFinalTotal') as HTMLInputElement)?.value;
+  const finalTotal = finalRaw ? parseFloat(finalRaw.replace(',', '.')) : trip.totalSpent;
+  if (!Number.isFinite(finalTotal) || finalTotal <= 0) {
     app.toast('Kein Betrag zum Verbuchen');
     return;
   }
   try {
     const members = app.state.members;
-    const share = trip.totalSpent / Math.max(1, members.length);
+    const share = finalTotal / Math.max(1, members.length);
     await api.expenses.create({
       household_id: app.state.householdId,
       title: 'Einkaufstour',
-      amount: trip.totalSpent,
+      amount: finalTotal,
       paid_by: app.state.userId,
       split_type: 'equal',
       category: 'groceries',
@@ -211,8 +299,13 @@ export async function logTripAsExpense() {
 Object.assign(window as any, {
   openShoppingTrip,
   closeShoppingTrip,
+  finishShoppingTrip,
+  continueShoppingTrip,
   openTripQuickLog,
   adjustTripQty,
   confirmTripQuickLog,
+  openTripManualAdd,
+  saveTripManualAdd,
+  scanTripExtra,
   logTripAsExpense,
 });
