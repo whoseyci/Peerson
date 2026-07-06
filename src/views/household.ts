@@ -158,6 +158,17 @@ export async function createHousehold() {
     const data = await app.api.households.create(name);
     localStorage.setItem('peerson_householdId', data.household.id);
     await app.loadHousehold(data.household.id);
+    // BUG FIX: loadHousehold() only updates app.state -- it never calls
+    // render() itself (see its definition in app.ts, used elsewhere always
+    // paired with an explicit render() by its caller). Without this, the
+    // UI stayed frozen on the "Haushalt erstellen" screen even though the
+    // household was created and app.state.household was set correctly --
+    // confirmed via a Playwright script that read window.app.state right
+    // after calling createHousehold() and found the household object
+    // present while the DOM still showed the old screen. The only reason
+    // it ever appeared to work was the 8s background sync poll eventually
+    // triggering an unrelated render.
+    app.render();
     app.startSync();
   } catch (e) {
     app.toast('Fehler beim Erstellen');
@@ -172,6 +183,8 @@ export async function joinHousehold() {
     const data = await app.api.households.join(code);
     localStorage.setItem('peerson_householdId', data.household.id);
     await app.loadHousehold(data.household.id);
+    // Same missing-render bug as createHousehold() above.
+    app.render();
     app.startSync();
   } catch (e) {
     app.toast('Fehler beim Beitreten');

@@ -70,5 +70,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
   }
 
-  return Response.json({ expense: { id, ...body, category } }, { status: 201 });
+  // Re-select the freshly inserted row rather than echoing back the
+  // request body -- the body never carries server-assigned defaults like
+  // created_at (DEFAULT (unixepoch())), so the previous
+  // `{ id, ...body, category }` response silently omitted it entirely.
+  // src/views/expenses.ts renders each expense's date via
+  // `new Date(e.created_at).toLocaleDateString('de-DE')`, so a missing
+  // created_at rendered as "Invalid Date" right after creating an expense,
+  // until the next background sync poll re-fetched the real row.
+  const created = await env.DB.prepare('SELECT * FROM expenses WHERE id = ?').bind(id).first();
+  return Response.json({ expense: created }, { status: 201 });
 };

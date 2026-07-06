@@ -1,12 +1,12 @@
 import type { App } from '../app';
 import type { Expense } from '../types';
 
-const EXPENSE_CATEGORIES: Record<string, string> = {
-  groceries: '🛒 Lebensmittel / Supermarkt',
-  rent: '🏠 Miete & Wohnen',
-  household: '🧹 Haushalt & Drogerie',
-  leisure: '🎉 Freizeit & Ausgehen',
-  sonstiges: '📦 Sonstiges'
+const EXPENSE_CATEGORIES: Record<string, { icon: string; label: string }> = {
+  groceries: { icon: 'shopping-cart-simple', label: 'Lebensmittel' },
+  rent: { icon: 'house', label: 'Miete & Wohnen' },
+  household: { icon: 'broom', label: 'Haushalt & Drogerie' },
+  leisure: { icon: 'confetti', label: 'Freizeit' },
+  sonstiges: { icon: 'package', label: 'Sonstiges' },
 };
 
 export function renderExpensesView(app: App) {
@@ -56,13 +56,13 @@ export function renderExpensesView(app: App) {
       ${s.expenses.length ? s.expenses.map(e => {
         const payer = app.getMemberName(e.paid_by);
         const isSettlement = e.title.includes('Schuldenausgleich') || e.title.includes('Ausgleich');
-        const catLabel = EXPENSE_CATEGORIES[e.category || 'sonstiges'] || EXPENSE_CATEGORIES.sonstiges;
+        const cat = EXPENSE_CATEGORIES[e.category || 'sonstiges'] || EXPENSE_CATEGORIES.sonstiges;
         return `
         <div class="card ${isSettlement ? 'settlement-card' : ''}" style="${isSettlement ? 'border-left: 3px solid var(--success);' : ''}">
           <div class="card-content" onclick="openEditExpenseModal('${e.id}')">
             <div class="card-text">
               <div class="card-header"><div class="item-name">${e.title}</div><div class="expense-amount">${e.amount.toFixed(2)} €</div></div>
-              <div class="card-meta"><span>${catLabel}</span> · <span>Bezahlt von ${payer}</span> · <span>${new Date(e.created_at).toLocaleDateString('de-DE')}</span></div>
+              <div class="card-meta"><span><i class="ph ph-${cat.icon}"></i> ${cat.label}</span> · <span>Bezahlt von ${payer}</span> · <span>${new Date(e.created_at * 1000).toLocaleDateString('de-DE')}</span></div>
             </div>
           </div>
           <div class="card-actions">
@@ -178,7 +178,7 @@ function renderExpenseEditorModal(existingExpense?: Expense, existingSplits?: an
   const catVal = existingExpense?.category || 'groceries';
 
   const payerOptions = members.map((m: any) => `<option value="${m.id}" ${paidByVal === m.id ? 'selected' : ''}>${m.name}</option>`).join('');
-  const catOptions = Object.entries(EXPENSE_CATEGORIES).map(([k, v]) => `<option value="${k}" ${catVal === k ? 'selected' : ''}>${v}</option>`).join('');
+  const catOptions = Object.entries(EXPENSE_CATEGORIES).map(([k, v]) => `<option value="${k}" ${catVal === k ? 'selected' : ''}>${v.label}</option>`).join('');
 
   // Default spend split rule check (Issue #25 & #5)
   const ruleKey = `peerson_split_rule_${app.state.householdId}_${catVal}`;
