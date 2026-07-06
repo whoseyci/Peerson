@@ -44,7 +44,22 @@ body.dark-mode {
   --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+:focus-visible {
+  outline: 3px solid var(--field-focus);
+  outline-offset: 3px;
+}
+
+.icon-btn:focus-visible,
+.close-btn:focus-visible,
+.dock-btn:focus-visible,
+.action-btn:focus-visible,
+.btn:focus-visible,
+.scanner-mode-btn:focus-visible,
+.toast-undo-btn:focus-visible {
+  box-shadow: 0 0 0 3px var(--focus-ring), var(--shadow);
+}
 
 body {
   font-family: 'Inter', sans-serif;
