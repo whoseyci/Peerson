@@ -31,6 +31,13 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
       if (!e?.message?.includes('no such column: price')) throw e;
     }
   }
+  if (body.location_id !== undefined) {
+    try {
+      await env.DB.prepare('UPDATE batches SET location_id = ? WHERE id = ?').bind(body.location_id || null, id).run();
+    } catch (e: any) {
+      if (!e?.message?.includes('no such column: location_id')) throw e;
+    }
+  }
   const updated = await env.DB.prepare('SELECT * FROM batches WHERE id = ?').bind(id).first();
   return Response.json({ batch: updated });
 };

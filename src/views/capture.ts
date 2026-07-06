@@ -24,6 +24,11 @@ export function openCaptureSheet() {
         <div class="co-title">Scannen</div>
         <div class="co-sub">Barcode erfassen</div>
       </button>
+      <button class="capture-opt" onclick="window.app.closeSheet('sheetCapture'); openReceiptScanModal();">
+        <span class="co-icon"><i class="ph ph-receipt"></i></span>
+        <div class="co-title">Beleg scannen</div>
+        <div class="co-sub">Foto vom Kassenbon</div>
+      </button>
       <button class="capture-opt" onclick="window.app.closeSheet('sheetCapture'); openAddItemModal();">
         <span class="co-icon"><i class="ph ph-package"></i></span>
         <div class="co-title">Artikel</div>

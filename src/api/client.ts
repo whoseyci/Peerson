@@ -1,4 +1,4 @@
-import type { Household, Item, Batch, Task, Expense, ShoppingItem, HouseholdMember, Location, ItemPriceHistoryEntry } from '../types';
+import type { Household, Item, Batch, Task, Expense, ShoppingItem, HouseholdMember, Location, ItemPriceHistoryEntry, TaskCompletion } from '../types';
 
 const API_BASE = '';
 
@@ -76,9 +76,11 @@ export const api = {
     create: (data: any) => post('/api/batches', data) as Promise<{ batch: Batch }>,
     update: (id: string, data: any) => patch(`/api/batches/${id}`, data) as Promise<{ batch: Batch }>,
     delete: (id: string) => del(`/api/batches/${id}`),
+    move: (data: { item_id: string; from_location_id: string | null; to_location_id: string | null; quantity: number }) =>
+      post('/api/batches/move', data) as Promise<{ moved: number; requested: number; batches: Batch[] }>,
   },
   tasks: {
-    list: (householdId: string) => get(`/api/tasks?householdId=${householdId}`) as Promise<{ tasks: Task[] }>,
+    list: (householdId: string) => get(`/api/tasks?householdId=${householdId}`) as Promise<{ tasks: Task[]; completions: TaskCompletion[] }>,
     create: (data: any) => post('/api/tasks', data) as Promise<{ task: Task }>,
     update: (id: string, data: any) => patch(`/api/tasks/${id}`, data) as Promise<{ task: Task }>,
     delete: (id: string) => del(`/api/tasks/${id}`),
@@ -114,7 +116,29 @@ export const api = {
     lookup: (barcode: string) =>
       get(`/api/product-lookup?barcode=${encodeURIComponent(barcode)}`) as Promise<ProductLookupResult>,
   },
+  receipts: {
+    // A photo (data URL) of a receipt goes to a vision-LLM (see
+    // functions/api/receipt-scan.ts for the exact provider/prompt) and
+    // comes back as a draft list of line items for the user to review
+    // and edit before anything is actually added to the shopping list --
+    // see ReceiptScanResult for why this degrades gracefully when no API
+    // key is configured server-side.
+    scan: (imageDataUrl: string) => post('/api/receipt-scan', { image: imageDataUrl }) as Promise<ReceiptScanResult>,
+  },
 };
+
+export interface ReceiptScanLineItem {
+  name: string;
+  price: number | null;
+  quantity: string | null;
+}
+
+export interface ReceiptScanResult {
+  configured: boolean;
+  items: ReceiptScanLineItem[];
+  total: number | null;
+  merchant: string | null;
+}
 
 export interface ProductLookupResult {
   found: boolean;

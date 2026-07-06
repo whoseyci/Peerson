@@ -327,11 +327,39 @@ export function renderInventoryView(app: App) {
         }
         return detailBarcodeDraft.map((b, idx) =>
           '<div class="barcode-row">' +
-            '<input type="text" class="detail-barcode-code" placeholder="Barcode" value="' + escapeAttr(b.code || '') + '" oninput="detailBarcodeDraft[' + idx + '].code = this.value">' +
-            '<input type="number" class="detail-barcode-grams" placeholder="Gramm" min="0" value="' + (b.grams || 0) + '" oninput="detailBarcodeDraft[' + idx + '].grams = parseInt(this.value) || 0">' +
+            '<input type="text" class="detail-barcode-code" placeholder="Barcode" value="' + escapeAttr(b.code || '') + '" oninput="updateDetailBarcodeCode(' + idx + ', this.value)">' +
+            '<input type="number" class="detail-barcode-grams" placeholder="Gramm" min="0" value="' + (b.grams || 0) + '" oninput="updateDetailBarcodeGrams(' + idx + ', this.value)">' +
             '<button class="barcode-row-del" onclick="removeDetailBarcodeRow(' + idx + ')" title="Entfernen"><i class="ph ph-x"></i></button>' +
           '</div>'
         ).join('');
+      }
+
+      // BUGFIX: these two used to be inline `oninput="detailBarcodeDraft[idx].code = this.value"`
+      // attribute expressions. detailBarcodeDraft is a module-scoped `let`
+      // inside this ES module -- inline HTML event-handler attributes
+      // execute as plain global-scope functions (`new Function(...)`
+      // under the hood), which can only see `window.*` properties, never
+      // a module's internal bindings. Since nothing ever assigned
+      // `(window as any).detailBarcodeDraft = detailBarcodeDraft`, typing
+      // into either field threw "detailBarcodeDraft is not defined" on
+      // every keystroke (confirmed via a Playwright script that typed
+      // into the field and captured the resulting pageerror) and the
+      // edit was silently dropped -- unlike removeDetailBarcodeRow(idx)
+      // right below, which already worked correctly because it's a real
+      // function call routed through the Object.assign(window, {...})
+      // block at the bottom of this file, not a bare property write.
+      // These two new functions follow that same, already-correct
+      // pattern instead. Deliberately mutate the array in place WITHOUT
+      // re-rendering the row list (unlike add/removeDetailBarcodeRow,
+      // which do re-render) -- re-rendering on every keystroke would
+      // destroy and recreate the <input>, stealing focus and the cursor
+      // position out from under whoever's mid-word.
+      export function updateDetailBarcodeCode(idx: number, value: string) {
+        if (detailBarcodeDraft[idx]) detailBarcodeDraft[idx].code = value;
+      }
+
+      export function updateDetailBarcodeGrams(idx: number, value: string) {
+        if (detailBarcodeDraft[idx]) detailBarcodeDraft[idx].grams = parseInt(value) || 0;
       }
 
       export function addDetailBarcodeRow() {
@@ -618,8 +646,21 @@ export function renderInventoryView(app: App) {
         (document.getElementById('stockVariantChips') as any).innerHTML = renderAddStockVariantChips(itemId);
       }
 
-      export async function openAddStock(itemId: string, preselectBarcode?: string | null) {
+      // Same var-not-let reasoning as detailBarcodeDraft/addStockSelectedBarcode
+      // above (re-injected <script> tag re-execution on every render()).
+      // Holds where new stock from this Add-Stock modal should land --
+      // set by the Rooms view (via openAddStock's third argument) to
+      // whichever room/container the user was actually standing in when
+      // they tapped "+", so a batch added from inside "Kühlschrank" lands
+      // in the fridge rather than silently reverting to the item's
+      // top-level location_id. undefined means "don't touch location_id
+      // at all" (the flat Vorrat list's plain "+" button case, which has
+      // no location context to offer).
+      let addStockTargetLocationId: string | null | undefined = undefined;
+
+      export async function openAddStock(itemId: string, preselectBarcode?: string | null, targetLocationId?: string | null) {
         addStockSelectedBarcode = preselectBarcode || null;
+        addStockTargetLocationId = targetLocationId;
         // If nothing was preselected but the item has variants, default to
         // the first one so commitAddStock always has something to record.
         if (!addStockSelectedBarcode) {
@@ -648,14 +689,16 @@ export function renderInventoryView(app: App) {
           const variant = options.find((b: any) => b.code === addStockSelectedBarcode);
           const priceVal = (document.getElementById('addPrice') as any) ? (document.getElementById('addPrice') as any).value : null;
           const price = priceVal ? parseFloat(priceVal) || null : null;
-          const batch = await (window as any).api.batches.create({
+          const payload: any = {
             item_id: itemId,
             quantity: qty,
             expiry: expiry || null,
             barcode_code: variant ? variant.code : null,
             grams_per_unit: variant ? (variant.grams || 0) : 0,
             price: price,
-          });
+          };
+          if (addStockTargetLocationId !== undefined) payload.location_id = addStockTargetLocationId;
+          const batch = await (window as any).api.batches.create(payload);
           (window as any).app.state.batches.push(batch.batch);
           (window as any).app.closeModal('stockModal');
           (window as any).app.render();
@@ -686,6 +729,28 @@ export function renderInventoryView(app: App) {
         if (!batches.length) return (window as any).app.toast('Kein Bestand');
         await removeBatch(batches[0].id);
       }
+      // Location-scoped sibling of removeOne() -- used by the Rooms
+      // view's per-location "-" stepper, which must only ever consume
+      // stock that's actually physically at the room/container the user
+      // is looking at, not just any batch of the item anywhere in the
+      // household (that's what removeOne() is for, on the flat Vorrat
+      // list where "location" isn't part of the picture). Still FIFO
+      // within that location: the batch with the earliest expiry among
+      // ones effectively located here goes first, using the exact same
+      // sort as removeOne() above (see src/utils/roomStock.ts's
+      // sortBatchesFifo doc comment for why undated batches sort first).
+      export async function removeOneAt(itemId: string, locationId: string | null) {
+        const item = (window as any).app.state.items.find((i: any) => i.id === itemId);
+        const batches = (window as any).app.state.batches
+          .filter((b: any) => {
+            if (b.item_id !== itemId) return false;
+            const effective = (b.location_id !== undefined && b.location_id !== null) ? b.location_id : (item?.location_id ?? null);
+            return effective === locationId;
+          })
+          .sort((a: any, b: any) => (a.expiry || '').localeCompare(b.expiry || ''));
+        if (!batches.length) return (window as any).app.toast('Kein Bestand an diesem Ort');
+        await removeBatch(batches[0].id);
+      }
     
 // Attach all handlers to window for HTML onclick attributes
 Object.assign(window as any, {
@@ -700,6 +765,8 @@ Object.assign(window as any, {
   renderDetailBarcodeRows,
   addDetailBarcodeRow,
   removeDetailBarcodeRow,
+  updateDetailBarcodeCode,
+  updateDetailBarcodeGrams,
   scanIntoDetailBarcodeRow,
   renderNutritionSection,
   openNutritionEditor,
@@ -715,7 +782,8 @@ Object.assign(window as any, {
   openAddStock,
   commitAddStock,
   removeBatch,
-  removeOne
+  removeOne,
+  removeOneAt
 });
 
 function renderInventoryList(app: App, filter: string) {

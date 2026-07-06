@@ -222,7 +222,15 @@ export async function toggleTask(id: string) {
         nextDue = d.toISOString().split('T')[0];
       }
 
-      await api.tasks.update(id, { status: 'todo', assigned_to: nextAssignee, due_date: nextDue });
+      // completed_by is the person closing out *this* cycle (whoever is
+      // actually tapping the checkmark right now) -- not nextAssignee,
+      // who's just whoever the rotation hands the *next* cycle to. This
+      // is what powers the People view's "who's actually been doing
+      // things" fairness summary, so it must reflect the real completer
+      // even though the task's own `assigned_to` field immediately moves
+      // on to someone else in the same request.
+      await api.tasks.update(id, { status: 'todo', assigned_to: nextAssignee, due_date: nextDue, completed_by: app.state.userId });
+      app.state.taskCompletions.unshift({ id: `local-${Date.now()}`, task_id: id, household_id: app.state.householdId, completed_by: app.state.userId, completed_at: Math.floor(Date.now() / 1000) });
       t.assigned_to = nextAssignee;
       t.due_date = nextDue;
       app.toast('Wiederholende Aufgabe für nächste Runde fällig gestellt!');
@@ -231,13 +239,22 @@ export async function toggleTask(id: string) {
     }
 
     const next = t.status === 'todo' ? 'done' : 'todo';
-    await api.tasks.update(id, { status: next });
+    const payload: any = { status: next };
+    // Only a todo -> done transition is a "completion" worth logging --
+    // reopening a done task (done -> todo, e.g. to fix a misclick) isn't
+    // someone doing work, so it shouldn't count toward fairness tracking.
+    if (next === 'done') {
+      payload.completed_by = app.state.userId;
+      app.state.taskCompletions.unshift({ id: `local-${Date.now()}`, task_id: id, household_id: app.state.householdId, completed_by: app.state.userId, completed_at: Math.floor(Date.now() / 1000) });
+    }
+    await api.tasks.update(id, payload);
     t.status = next;
     app.render();
   } catch (e) {
     app.toast('Fehler beim Aktualisieren');
   }
 }
+
 
 export async function deleteTask(id: string) {
   const app = (window as any).app;

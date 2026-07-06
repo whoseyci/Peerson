@@ -1153,6 +1153,18 @@ body.dark-mode .sc-btn.act { background: var(--accent); color: var(--accent-ink)
 .person-card .pc-balance .amt { font-weight: 800; font-size: 15px; }
 .person-card .pc-balance .lbl { font-size: 10.5px; color: var(--text-soft); font-weight: 700; }
 
+/* Small pill used inside a person-card's .pc-sub row (open-task count,
+   this-week completion count) -- a lighter-weight sibling of .badge,
+   sized for sitting inline next to other chips rather than in a corner. */
+.chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10.5px; font-weight: 800; padding: 3px 8px; border-radius: 999px;
+  background: var(--bg); color: var(--text-soft); border: 1px solid var(--border);
+}
+.chip.good { background: var(--success-bg); color: var(--success); border-color: transparent; }
+.chip.warn { background: var(--warning-bg); color: var(--warning); border-color: transparent; }
+.chip.bad { background: var(--danger-bg); color: var(--danger); border-color: transparent; }
+
 /* --- Bottom sheet (distinct from the existing bottom-anchored .modal --
    used by the capture FAB + person/room quick actions where a lighter,
    more app-native feel fits better than the full modal chrome). ------- */
