@@ -439,9 +439,9 @@ export class App {
       const current = TAB_ORDER.indexOf(this.state.view);
       if (current === -1) return;
       const next = dx < 0
-        ? Math.min(TAB_ORDER.length - 1, current + 1)
-        : Math.max(0, current - 1);
-      if (next !== current) this.navigate(TAB_ORDER[next]);
+        ? (current + 1) % TAB_ORDER.length
+        : (current - 1 + TAB_ORDER.length) % TAB_ORDER.length;
+      this.navigate(TAB_ORDER[next]);
     }, { passive: true });
   }
 

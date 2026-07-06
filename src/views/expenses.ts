@@ -96,9 +96,10 @@ export function renderExpensesView(app: App) {
         return `
         <div class="card">
           <div class="card-content" onclick="openEditExpenseModal('${expenseId}')">
+            <div class="card-icon"><i class="ph ph-${icon}"></i></div>
             <div class="card-text">
               <div class="card-header">
-                <div class="item-name expense-title"><i class="ph ph-${icon}"></i> ${title}</div>
+                <div class="item-name">${title}</div>
                 <div class="expense-amount">${e.amount.toFixed(2)} €</div>
               </div>
               <div class="card-meta"><span>Bezahlt von ${payer}</span> · <span>${formatExpenseDate(e.created_at)}</span></div>

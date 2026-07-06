@@ -272,14 +272,17 @@ h1 i { color: var(--text); opacity: 0.8; }
   box-shadow: 0 4px 12px rgba(0,0,0,0.2);
 }
 .tab-label {
-  display: none;
+  display: inline-block;
+  max-width: 0;
+  overflow: hidden;
   font-size: 12px;
   line-height: 1;
   font-weight: 800;
   letter-spacing: -0.02em;
   white-space: nowrap;
+  transition: max-width 0.2s ease;
 }
-.tab-btn.active .tab-label { display: inline; }
+.tab-btn.active .tab-label { max-width: 120px; }
 .tab-btn .badge {
   position: absolute;
   top: -5px;
@@ -896,11 +899,6 @@ body.dark-mode .toast-progress-bar { background: rgba(0,0,0,0.35); }
   border: 1px solid var(--border);
   cursor: pointer;
   text-align: left;
-}
-.expense-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
 }
 .payment-history-row small {
   color: var(--text-soft);
