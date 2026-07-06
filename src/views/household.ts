@@ -81,7 +81,7 @@ export function renderHouseholdView(app: App) {
         <div class="card mt-3">
           <div class="card-content" style="flex-direction:column; align-items:stretch;">
             <label>Mit Code beitreten</label>
-            <input type="text" id="joinCode" placeholder="8-stelliger Code" inputmode="numeric" autocomplete="one-time-code">
+            <input type="text" id="joinCode" placeholder="8-stelliger Code" autocomplete="one-time-code" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="join">
             <button class="btn btn-secondary mt-2" onclick="joinHousehold()"><i class="ph-bold ph-sign-in"></i> Haushalt beitreten</button>
           </div>
         </div>
@@ -174,7 +174,10 @@ export function renderHouseholdView(app: App) {
           <div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--border); font-size:12px; color:var(--text-soft);">
             <div style="margin-bottom:4px;"><strong>Account-Wiederherstellung:</strong></div>
             <div>Falls du das Gerät wechselst, speichere deine User-ID:</div>
-            <div style="font-family:monospace; background:var(--bg); padding:4px 8px; border-radius:4px; margin-top:4px; user-select:all; border:1px solid var(--border);">${escapeHtml(s.userId)}</div>
+            <div style="display:flex; gap:8px; align-items:center; margin-top:4px;">
+              <div style="font-family:monospace; background:var(--bg); padding:7px 8px; border-radius:8px; user-select:all; border:1px solid var(--border); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(s.userId)}</div>
+              <button class="btn btn-secondary btn-small" style="width:auto; margin-top:0; flex-shrink:0;" onclick="copyUserId('${escapeJsAttr(s.userId)}')"><i class="ph ph-copy"></i> Kopieren</button>
+            </div>
           </div>
         </div>
       </div>
@@ -230,7 +233,7 @@ export async function createHousehold() {
 
 export async function joinHousehold() {
   const app = (window as any).app;
-  const code = (document.getElementById('joinCode') as HTMLInputElement)?.value.trim();
+  const code = ((document.getElementById('joinCode') as HTMLInputElement)?.value || '').replace(/[\s-]+/g, '').trim().toUpperCase();
   if (!code) return app.toast('Code erforderlich');
   try {
     const data = await app.api.households.join(code);
@@ -241,6 +244,30 @@ export async function joinHousehold() {
     app.startSync();
   } catch (e) {
     app.toast('Fehler beim Beitreten');
+  }
+}
+
+export async function copyUserId(id: string) {
+  const app = (window as any).app;
+  try {
+    await navigator.clipboard.writeText(id);
+    app.toast('User-ID kopiert');
+  } catch (e) {
+    const fallback = document.createElement('textarea');
+    fallback.value = id;
+    fallback.setAttribute('readonly', 'true');
+    fallback.style.position = 'fixed';
+    fallback.style.left = '-9999px';
+    document.body.appendChild(fallback);
+    fallback.select();
+    try {
+      document.execCommand('copy');
+      app.toast('User-ID kopiert');
+    } catch {
+      app.toast('Kopieren fehlgeschlagen — User-ID antippen und manuell kopieren');
+    } finally {
+      fallback.remove();
+    }
   }
 }
 
@@ -406,6 +433,7 @@ Object.assign(window as any, {
   createHousehold,
   joinHousehold,
   restoreAccount,
+  copyUserId,
   saveProfileName,
   regenerateInvite,
   kickMember,
