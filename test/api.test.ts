@@ -172,6 +172,25 @@ describe('Expenses API', () => {
     expect(body.expense.title).toBe('Groceries');
     expect(body.expense.amount).toBe(42.5);
   });
+
+  // Regression test: onRequestPost used to respond with `{ id, ...body }`
+  // instead of re-selecting the inserted row, so server-assigned defaults
+  // never present in the request body (created_at) came back undefined.
+  // src/views/expenses.ts renders `new Date(e.created_at).toLocaleDateString(...)`,
+  // which showed "Invalid Date" immediately after creating an expense until
+  // the next background sync poll re-fetched the real row. Caught via a
+  // Playwright UI audit, not by inspecting the code directly.
+  it('POST /api/expenses response includes a real created_at (not echoed from the request body)', async () => {
+    const { onRequestPost } = await import('../functions/api/expenses');
+    const request = makeRequest('http://test/api/expenses', {
+      method: 'POST',
+      body: JSON.stringify({ household_id: 'house-1', title: 'Rent', amount: 500, paid_by: 'test-user' }),
+    });
+    const response = await runHandler(onRequestPost, request, env);
+    const body = await response.json();
+    expect(typeof body.expense.created_at).toBe('number');
+    expect(Number.isNaN(new Date(body.expense.created_at * 1000).getTime())).toBe(false);
+  });
 });
 
 describe('Shopping API', () => {

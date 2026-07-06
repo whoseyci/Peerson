@@ -5,6 +5,27 @@ export interface MockRow {
   [key: string]: any;
 }
 
+// Mirrors the DEFAULT clauses declared in schema.sql for columns commonly
+// omitted from INSERT statements (server-assigned timestamps/statuses).
+// The mock doesn't parse SQL DEFAULT clauses at all, so without this,
+// INSERT rows silently end up with those columns `undefined` -- which
+// would never catch a real bug like "POST handler echoes the request body
+// instead of re-selecting the inserted row" (see functions/api/expenses.ts,
+// batches.ts, shopping.ts -- all fixed to re-select after a bug where their
+// created-row responses were missing created_at/date_added/status entirely,
+// discovered via a UI audit that found "Invalid Date" appearing right after
+// creating an expense/batch/shopping item).
+const TABLE_DEFAULTS: Record<string, () => MockRow> = {
+  items: () => ({ category: 'sonstiges', threshold: 0, barcodes: '[]', nutrition: '{}', created_at: Math.floor(Date.now() / 1000) }),
+  batches: () => ({ quantity: 0, grams_per_unit: 0, date_added: Math.floor(Date.now() / 1000) }),
+  tasks: () => ({ status: 'todo', created_at: Math.floor(Date.now() / 1000) }),
+  expenses: () => ({ split_type: 'equal', created_at: Math.floor(Date.now() / 1000) }),
+  shopping_items: () => ({ status: 'open', created_at: Math.floor(Date.now() / 1000) }),
+  locations: () => ({ sort_order: 0, created_at: Math.floor(Date.now() / 1000) }),
+  households: () => ({ created_at: Math.floor(Date.now() / 1000) }),
+  household_members: () => ({ role: 'member', joined_at: Math.floor(Date.now() / 1000) }),
+};
+
 export class MockD1Database {
   private tables: Map<string, MockRow[]> = new Map();
   private idCounter = 1;
@@ -53,7 +74,8 @@ export class MockD1Database {
 
         const upper = sql.toUpperCase();
         if (upper.includes('INSERT')) {
-          const row: MockRow = { id: String(db.idCounter++) };
+          const defaults = TABLE_DEFAULTS[table]?.() || {};
+          const row: MockRow = { id: String(db.idCounter++), ...defaults };
           const cols = upper.match(/\(([^)]+)\)/)?.[1].split(',').map(c => c.trim().toLowerCase());
           if (cols) {
             cols.forEach((col, i) => {

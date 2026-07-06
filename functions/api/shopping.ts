@@ -42,5 +42,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
   }
 
-  return Response.json({ item: { id, ...body, price } }, { status: 201 });
+  // Re-select the freshly inserted row rather than echoing back the
+  // request body -- the body never carries server-assigned defaults like
+  // status ('open', DB default) or created_at (DEFAULT (unixepoch())), so
+  // the previous `{ id, ...body, price }` response silently omitted both
+  // until the next background sync poll re-fetched the real row.
+  const created = await env.DB.prepare('SELECT * FROM shopping_items WHERE id = ?').bind(id).first();
+  return Response.json({ item: created }, { status: 201 });
 };

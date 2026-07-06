@@ -15,7 +15,7 @@ export function renderTasksView(app: App) {
     <div class="section">
       <div class="section-header"><div class="section-title">Offen</div><span class="badge">${todo.length}</span></div>
       ${todo.length ? todo.map(t => {
-        const recLabel = t.recurrence === 'daily' ? '🔄 Täglich' : t.recurrence === 'weekly' ? '🔄 Wöchentlich' : t.recurrence === 'monthly' ? '🔄 Monatlich' : '';
+        const recLabel = t.recurrence === 'daily' ? 'Täglich' : t.recurrence === 'weekly' ? 'Wöchentlich' : t.recurrence === 'monthly' ? 'Monatlich' : '';
         const rotLabel = (t.rotation_users && t.rotation_users.length > 1) ? ' (Rotation)' : '';
         return `
         <div class="card">
@@ -27,7 +27,7 @@ export function renderTasksView(app: App) {
               <div class="task-meta">
                 <span class="task-assignee"><i class="ph ph-user"></i> ${app.getMemberName(t.assigned_to)}${rotLabel}</span>
                 ${t.due_date ? `<span>· ${new Date(t.due_date).toLocaleDateString('de-DE')}</span>` : ''}
-                ${recLabel ? `<span style="color:var(--accent); font-weight:600;">· ${recLabel}</span>` : ''}
+                ${recLabel ? `<span style="color:var(--accent); font-weight:600;">· <i class="ph ph-arrows-clockwise"></i> ${recLabel}</span>` : ''}
               </div>
             </div>
           </div>
@@ -79,10 +79,10 @@ export async function openAddTaskModal() {
       <div class="form-group">
         <label>Wiederholung</label>
         <select id="taskRecurrence" onchange="document.getElementById('rotSection').style.display = this.value ? 'block' : 'none';">
-          <option value="">Einmalig (Keine Wiederholung)</option>
-          <option value="daily">🔄 Täglich</option>
-          <option value="weekly">🔄 Wöchentlich</option>
-          <option value="monthly">🔄 Monatlich</option>
+          <option value="">Einmalig</option>
+          <option value="daily">Täglich</option>
+          <option value="weekly">Wöchentlich</option>
+          <option value="monthly">Monatlich</option>
         </select>
       </div>
       <div id="rotSection" class="form-group" style="display:none; background:var(--field-bg); border:1px solid var(--border); padding:10px; border-radius:var(--radius-sm);">
@@ -119,10 +119,10 @@ export async function openEditTaskModal(id: string) {
       <div class="form-group">
         <label>Wiederholung</label>
         <select id="taskRecurrence" onchange="document.getElementById('rotSection').style.display = this.value ? 'block' : 'none';">
-          <option value="" ${!t.recurrence ? 'selected' : ''}>Einmalig (Keine Wiederholung)</option>
-          <option value="daily" ${t.recurrence === 'daily' ? 'selected' : ''}>🔄 Täglich</option>
-          <option value="weekly" ${t.recurrence === 'weekly' ? 'selected' : ''}>🔄 Wöchentlich</option>
-          <option value="monthly" ${t.recurrence === 'monthly' ? 'selected' : ''}>🔄 Monatlich</option>
+          <option value="" ${!t.recurrence ? 'selected' : ''}>Einmalig</option>
+          <option value="daily" ${t.recurrence === 'daily' ? 'selected' : ''}>Täglich</option>
+          <option value="weekly" ${t.recurrence === 'weekly' ? 'selected' : ''}>Wöchentlich</option>
+          <option value="monthly" ${t.recurrence === 'monthly' ? 'selected' : ''}>Monatlich</option>
         </select>
       </div>
       <div id="rotSection" class="form-group" style="display:${t.recurrence ? 'block' : 'none'}; background:var(--field-bg); border:1px solid var(--border); padding:10px; border-radius:var(--radius-sm);">

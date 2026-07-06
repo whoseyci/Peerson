@@ -400,6 +400,17 @@ input, select, textarea {
   appearance: none;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
+/* A closed <select> can't wrap or scroll its selected-option text -- if a
+   label is longer than the control (e.g. inside a narrow 2-column grid,
+   as in the expense modal's Betrag/Kategorie row), the browser just clips
+   it with no ellipsis by default, which reads as a rendering glitch rather
+   than "this text is longer than shown". Force an explicit ellipsis so a
+   long label at least communicates that it's truncated. */
+select {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 input::placeholder, textarea::placeholder { color: var(--placeholder); opacity: 1; }
 input:focus, select:focus, textarea:focus {
   border-color: var(--field-focus);

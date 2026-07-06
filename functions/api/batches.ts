@@ -34,5 +34,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
   }
 
-  return Response.json({ batch: { id, ...body, price } }, { status: 201 });
+  // Re-select the freshly inserted row rather than echoing back the
+  // request body -- the body never carries server-assigned defaults like
+  // date_added (DEFAULT (unixepoch())), so the previous `{ id, ...body }`
+  // response silently returned date_added: undefined. src/views/inventory.ts
+  // sorts batches by date_added (`.sort((a,b) => b.date_added - a.date_added)`)
+  // to find the most recent price -- an undefined value there breaks that
+  // comparison (NaN) until the next background sync poll re-fetched the
+  // real row and fixed it up.
+  const created = await env.DB.prepare('SELECT * FROM batches WHERE id = ?').bind(id).first();
+  return Response.json({ batch: created }, { status: 201 });
 };
