@@ -45,6 +45,28 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (!body.household_id) return new Response(JSON.stringify({ error: 'household_id required' }), { status: 400 });
   await requireMember(env.DB, userId, body.household_id);
 
+  if (body.action === 'mark_settled') {
+    try {
+      await env.DB.prepare(`
+        UPDATE expense_splits
+        SET settled = 1
+        WHERE expense_id IN (
+          SELECT id FROM expenses
+          WHERE household_id = ? AND COALESCE(category, '') != 'settlement'
+        )
+      `).bind(body.household_id).run();
+    } catch (e: any) {
+      if (e?.message?.includes('no such column')) {
+        await env.DB.prepare(`
+          UPDATE expense_splits
+          SET settled = 1
+          WHERE expense_id IN (SELECT id FROM expenses WHERE household_id = ?)
+        `).bind(body.household_id).run();
+      } else { throw e; }
+    }
+    return Response.json({ success: true });
+  }
+
   const id = crypto.randomUUID();
   const category = body.category || 'sonstiges';
   try {
