@@ -1,6 +1,7 @@
 import type { App } from '../app';
 import type { Expense } from '../types';
 import { escapeAttr, escapeHtml, escapeJsAttr } from '../utils/html';
+import { personalBalanceLines } from '../utils/finance';
 
 const EXPENSE_CATEGORIES: Record<string, { icon: string; label: string }> = {
   groceries: { icon: 'shopping-cart-simple', label: 'Lebensmittel' },
@@ -44,13 +45,8 @@ export function renderExpensesView(app: App) {
   const settlementExpenses = s.expenses.filter(isSettlementExpense);
   const settledRegularExpenses = s.expenses.filter(e => !isSettlementExpense(e) && isExpenseSettled(e, s.splits));
   const regularExpenses = s.expenses.filter(e => !isSettlementExpense(e) && !isExpenseSettled(e, s.splits));
-  const balances = s.members.map(m => {
-    const paid = s.expenses.filter(e => e.paid_by === m.id).reduce((a, e) => a + e.amount, 0);
-    const owed = s.splits.filter(sp => sp.user_id === m.id).reduce((a, sp) => a + sp.amount, 0);
-    return { ...m, balance: paid - owed };
-  });
-
-  const hasImbalance = balances.some(b => Math.abs(b.balance) > 0.05);
+  const personalBalances = personalBalanceLines(s.userId, s.members, s.expenses, s.splits);
+  const hasImbalance = personalBalances.length > 0;
 
   return `
     <div class="header">
@@ -67,22 +63,22 @@ export function renderExpensesView(app: App) {
         <div class="section-title">Bilanz</div>
         ${hasImbalance ? `<button class="btn-mini" onclick="openSettleModal()" style="font-size: 0.75rem; padding: 4px 8px;"><i class="ph ph-scales"></i> Ausgleichen</button>` : ''}
       </div>
-      ${balances.map(b => `
+      ${personalBalances.length ? personalBalances.map(line => `
         <div class="card">
           <div class="card-content">
-            <div class="card-icon"><i class="ph ph-user"></i></div>
+            <div class="card-icon"><i class="ph ph-${line.direction === 'you_owe' ? 'arrow-up-right' : 'arrow-down-left'}"></i></div>
             <div class="card-text">
               <div class="card-header">
-                <div class="item-name">${escapeHtml(b.name)}</div>
-                <div class="item-qty ${b.balance >= 0 ? 'balance-positive' : 'balance-negative'}">
-                  ${b.balance >= 0 ? '+' : ''}${b.balance.toFixed(2)} €
+                <div class="item-name">${line.direction === 'you_owe' ? 'Du schuldest ' + escapeHtml(line.memberName) : escapeHtml(line.memberName) + ' schuldet dir'}</div>
+                <div class="item-qty ${line.direction === 'owes_you' ? 'balance-positive' : 'balance-negative'}">
+                  ${line.amount.toFixed(2)} €
                 </div>
               </div>
-              <div class="card-meta">${b.balance >= 0 ? 'Bekommt Geld' : 'Schuldet Geld'}</div>
+              <div class="card-meta">${line.direction === 'you_owe' ? 'Von dir zu zahlen' : 'Dir wird Geld geschuldet'}</div>
             </div>
           </div>
         </div>
-      `).join('')}
+      `).join('') : `<div class="empty-state">Du bist mit allen ausgeglichen</div>`}
     </div>
 
     <div class="section">
