@@ -81,7 +81,10 @@ export function renderHouseholdView(app: App) {
         <div class="card mt-3">
           <div class="card-content" style="flex-direction:column; align-items:stretch;">
             <label>Mit Code beitreten</label>
-            <input type="text" id="joinCode" placeholder="8-stelliger Code" autocomplete="one-time-code" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="join">
+            <div style="display:flex; gap:8px; align-items:center;">
+              <input type="text" id="joinCode" placeholder="8-stelliger Code" inputmode="text" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="join" style="flex:1; min-width:0;">
+              <button class="btn btn-secondary btn-small" style="width:auto; margin-top:0; flex-shrink:0;" onclick="pasteIntoField('joinCode', 'code')"><i class="ph ph-clipboard-text"></i> Einfügen</button>
+            </div>
             <button class="btn btn-secondary mt-2" onclick="joinHousehold()"><i class="ph-bold ph-sign-in"></i> Haushalt beitreten</button>
           </div>
         </div>
@@ -90,7 +93,10 @@ export function renderHouseholdView(app: App) {
           <div class="card mt-2">
             <div class="card-content" style="flex-direction:column; align-items:stretch;">
               <label>User-ID</label>
-              <input type="text" id="restoreUserId" placeholder="User-ID einfügen" autocomplete="off">
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input type="text" id="restoreUserId" placeholder="User-ID einfügen" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="flex:1; min-width:0;">
+                <button class="btn btn-secondary btn-small" style="width:auto; margin-top:0; flex-shrink:0;" onclick="pasteIntoField('restoreUserId', 'uuid')"><i class="ph ph-clipboard-text"></i> Einfügen</button>
+              </div>
               <button class="btn btn-secondary mt-2" onclick="restoreAccount()"><i class="ph ph-device-mobile"></i> Gerät verbinden</button>
               <div style="font-size: 12px; color: var(--text-soft); margin-top: 6px;">Deine User-ID findest du im Haushalt-Menü unter „Account“.</div>
             </div>
@@ -231,9 +237,40 @@ export async function createHousehold() {
   }
 }
 
+function normalizeJoinCode(raw: string) {
+  return raw.replace(/[\s-]+/g, '').trim().toUpperCase();
+}
+
+function normalizeUuid(raw: string) {
+  return raw.trim();
+}
+
+export async function pasteIntoField(fieldId: string, mode: 'code' | 'uuid' = 'uuid') {
+  const app = (window as any).app;
+  const input = document.getElementById(fieldId) as HTMLInputElement | null;
+  if (!input) return;
+
+  try {
+    const text = await navigator.clipboard.readText();
+    const value = mode === 'code' ? normalizeJoinCode(text) : normalizeUuid(text);
+    if (!value) {
+      app.toast('Zwischenablage ist leer');
+      input.focus();
+      return;
+    }
+    input.value = value;
+    input.focus();
+    app.toast('Eingefügt');
+  } catch (e) {
+    input.focus();
+    input.select();
+    app.toast('Einfügen nicht erlaubt — bitte Feld lange antippen und einfügen');
+  }
+}
+
 export async function joinHousehold() {
   const app = (window as any).app;
-  const code = ((document.getElementById('joinCode') as HTMLInputElement)?.value || '').replace(/[\s-]+/g, '').trim().toUpperCase();
+  const code = normalizeJoinCode((document.getElementById('joinCode') as HTMLInputElement)?.value || '');
   if (!code) return app.toast('Code erforderlich');
   try {
     const data = await app.api.households.join(code);
@@ -273,7 +310,7 @@ export async function copyUserId(id: string) {
 
 export async function restoreAccount() {
   const app = (window as any).app;
-  const id = (document.getElementById('restoreUserId') as HTMLInputElement)?.value.trim();
+  const id = normalizeUuid((document.getElementById('restoreUserId') as HTMLInputElement)?.value || '');
   if (!id) return app.toast('Bitte User-ID eingeben');
   app.setUserId(id);
   try {
@@ -433,6 +470,7 @@ Object.assign(window as any, {
   createHousehold,
   joinHousehold,
   restoreAccount,
+  pasteIntoField,
   copyUserId,
   saveProfileName,
   regenerateInvite,

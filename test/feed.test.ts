@@ -72,6 +72,29 @@ describe('computeFeed', () => {
     expect(feed.map(f => f.key)).toEqual(['lowstock:i2', 'lowstock:i1']);
   });
 
+
+
+  it('does not resurface low-stock items that are already on the open shopping list', () => {
+    const items: Item[] = [
+      { id: 'i1', household_id: 'h1', name: 'Kaffee', category: 'sonstiges', threshold: 5, barcodes: [], nutrition: {} },
+    ];
+    const batches: Batch[] = [{ id: 'b1', item_id: 'i1', quantity: 0, grams_per_unit: 0, date_added: 0 }];
+    const feed = computeFeed(
+      {
+        items,
+        batches,
+        tasks: [],
+        expenses: [],
+        splits: [],
+        members,
+        userId: 'u1',
+        shopping: [{ id: 'sh1', household_id: 'h1', name: 'Kaffee', status: 'open', linked_item_id: 'i1' }],
+      },
+      new Set()
+    );
+    expect(feed).toEqual([]);
+  });
+
   it('surfaces tasks due within 2 days but not tasks already done', () => {
     const tasks: Task[] = [
       { id: 't1', household_id: 'h1', title: 'Müll rausbringen', status: 'todo', due_date: iso(1) },
