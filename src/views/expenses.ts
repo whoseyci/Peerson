@@ -20,6 +20,12 @@ function isSettlementExpense(expense: Expense) {
   return expense.category === 'settlement' || title.includes('schuldenausgleich') || title.includes('ausgleich');
 }
 
+function isExpenseSettled(expense: Expense, splits: Array<{ expense_id: string; settled?: number }>) {
+  if (isSettlementExpense(expense)) return true;
+  const expenseSplits = splits.filter(sp => sp.expense_id === expense.id);
+  return expenseSplits.length > 0 && expenseSplits.every(sp => Number(sp.settled) === 1);
+}
+
 function expenseMeta(expense: Expense) {
   return isSettlementExpense(expense)
     ? EXPENSE_CATEGORIES.settlement
@@ -36,7 +42,8 @@ function formatExpenseDate(createdAt: unknown) {
 export function renderExpensesView(app: App) {
   const s = app.state;
   const settlementExpenses = s.expenses.filter(isSettlementExpense);
-  const regularExpenses = s.expenses.filter(e => !isSettlementExpense(e));
+  const settledRegularExpenses = s.expenses.filter(e => !isSettlementExpense(e) && isExpenseSettled(e, s.splits));
+  const regularExpenses = s.expenses.filter(e => !isSettlementExpense(e) && !isExpenseSettled(e, s.splits));
   const balances = s.members.map(m => {
     const paid = s.expenses.filter(e => e.paid_by === m.id).reduce((a, e) => a + e.amount, 0);
     const owed = s.splits.filter(sp => sp.user_id === m.id).reduce((a, sp) => a + sp.amount, 0);
@@ -110,7 +117,9 @@ export function renderExpensesView(app: App) {
 export function openPaymentHistoryModal() {
   const app = (window as any).app;
   const settlementExpenses = app.state.expenses.filter(isSettlementExpense);
-  const rows = settlementExpenses.length ? settlementExpenses.map((e: Expense) => {
+  const settledRegularExpenses = app.state.expenses.filter((e: Expense) => !isSettlementExpense(e) && isExpenseSettled(e, app.state.splits));
+
+  const settlementRows = settlementExpenses.length ? settlementExpenses.map((e: Expense) => {
     const payer = escapeHtml(app.getMemberName(e.paid_by));
     return `
       <div class="price-history-row payment-history-row">
@@ -120,10 +129,24 @@ export function openPaymentHistoryModal() {
     `;
   }).join('') : '<div class="empty-state" style="padding:16px;">Noch keine Schuldenausgleiche verbucht</div>';
 
+  const settledRows = settledRegularExpenses.length ? settledRegularExpenses.map((e: Expense) => {
+    const payer = escapeHtml(app.getMemberName(e.paid_by));
+    const cat = expenseMeta(e);
+    return `
+      <div class="price-history-row payment-history-row">
+        <span><i class="ph ph-${escapeAttr(cat.icon)}"></i> ${escapeHtml(cleanExpenseTitle(e.title))}<br><small>${payer} · ${formatExpenseDate(e.created_at)}</small></span>
+        <span>${Number(e.amount || 0).toFixed(2)} €</span>
+      </div>
+    `;
+  }).join('') : '<div class="empty-state" style="padding:16px;">Noch keine Ausgaben durch Ausgleich erledigt</div>';
+
   app.showModal('paymentHistoryModal', `
     <div class="modal-header"><div class="modal-title"><i class="ph ph-clock-counter-clockwise"></i> Zahlungshistorie</div><button class="close-btn" onclick="window.app.closeModal('paymentHistoryModal')"><i class="ph ph-x"></i></button></div>
     <div class="modal-body">
-      <div class="price-history-list">${rows}</div>
+      <div class="section-header"><div class="section-title">Ausgleichszahlungen</div><span class="badge">${settlementExpenses.length}</span></div>
+      <div class="price-history-list">${settlementRows}</div>
+      <div class="section-header" style="margin-top:18px;"><div class="section-title">Beglichene Ausgaben</div><span class="badge">${settledRegularExpenses.length}</span></div>
+      <div class="price-history-list">${settledRows}</div>
     </div>
   `);
 }
@@ -199,6 +222,7 @@ export async function executeSettlement() {
         splits: [{ user_id: t.toId, amount: t.amount }]
       });
     }
+    await api.expenses.markSettled(app.state.householdId);
     app.closeModal('settleModal');
     await app.loadData();
     app.render();
