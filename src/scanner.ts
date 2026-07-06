@@ -5,6 +5,8 @@
 // decoded barcode string once one is found, and cleans itself up either
 // way. Callers don't need to know anything about Html5Qrcode's lifecycle.
 
+import { loadExternalScript } from './utils/loadExternalScript';
+
 // Minimal shape of the global the html5-qrcode UMD bundle exposes -- we
 // only declare the bits we actually use rather than pulling in the full
 // (unpublished-as-npm-types) library surface.
@@ -36,31 +38,6 @@ const MODAL_ID = 'barcodeScannerModal';
 const READER_ID = 'barcodeScannerReader';
 const MODE_STORAGE_KEY = 'peerson_scanMode';
 const HTML5_QRCODE_SRC = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
-
-function loadExternalScript(src: string): Promise<void> {
-  const existing = document.querySelector<HTMLScriptElement>(`script[src="${src}"]`);
-  if (existing?.dataset.loaded === 'true') return Promise.resolve();
-  if (existing?.dataset.loading === 'true') {
-    return new Promise((resolve, reject) => {
-      existing.addEventListener('load', () => resolve(), { once: true });
-      existing.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)), { once: true });
-    });
-  }
-
-  return new Promise((resolve, reject) => {
-    const script = existing || document.createElement('script');
-    script.src = src;
-    script.async = true;
-    script.dataset.loading = 'true';
-    script.addEventListener('load', () => {
-      script.dataset.loaded = 'true';
-      script.dataset.loading = 'false';
-      resolve();
-    }, { once: true });
-    script.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)), { once: true });
-    if (!existing) document.head.appendChild(script);
-  });
-}
 
 // Grocery barcodes in Germany (and most of the world) are still
 // overwhelmingly 1D (EAN-13/EAN-8/UPC), so that's the default mode. QR is
@@ -227,6 +204,7 @@ export function openBarcodeScanner(): ScannerHandle {
   let mode: ScanMode = (localStorage.getItem(MODE_STORAGE_KEY) as ScanMode) || '1d';
   let enhanceTimer: ReturnType<typeof setInterval> | null = null;
   let enhanceInFlight = false;
+  let startSeq = 0;
 
   let resolveResult: (value: string | null) => void;
   const result = new Promise<string | null>((resolve) => {
@@ -241,6 +219,7 @@ export function openBarcodeScanner(): ScannerHandle {
   }
 
   async function stopScanner() {
+    startSeq++;
     stopEnhanceLoop();
     if (scanner) {
       try {
@@ -312,6 +291,8 @@ export function openBarcodeScanner(): ScannerHandle {
   }
 
   async function startCamera() {
+    const seq = ++startSeq;
+
     if (!window.Html5Qrcode) {
       const reader = document.getElementById(READER_ID);
       if (reader) {
@@ -320,14 +301,14 @@ export function openBarcodeScanner(): ScannerHandle {
       try {
         await loadExternalScript(HTML5_QRCODE_SRC);
       } catch {
-        if (reader) {
+        if (seq === startSeq && reader) {
           reader.innerHTML = `<div class="scanner-error"><i class="ph ph-warning"></i> Kamera-Scanner konnte nicht geladen werden. Bitte Barcode manuell eingeben.</div>`;
         }
         return;
       }
     }
 
-    if (settled || !window.Html5Qrcode) return;
+    if (seq !== startSeq || settled || !window.Html5Qrcode) return;
 
     scanner = new window.Html5Qrcode(READER_ID, {
       formatsToSupport: getFormatsForMode(mode),
@@ -376,6 +357,7 @@ export function openBarcodeScanner(): ScannerHandle {
         }
       )
       .then(() => {
+        if (seq !== startSeq || settled) return;
         // Primary live decode is running -- kick off the parallel
         // low-contrast rescue loop described above. Only relevant for 1D
         // barcodes; QR/2D codes have built-in error correction and didn't
@@ -396,6 +378,7 @@ export function openBarcodeScanner(): ScannerHandle {
         }, ENHANCE_ATTEMPT_INTERVAL_MS);
       })
       .catch(() => {
+        if (seq !== startSeq || settled) return;
         const reader = document.getElementById(READER_ID);
         if (reader) {
           reader.innerHTML = `<div class="scanner-error"><i class="ph ph-camera-slash"></i> Kein Kamerazugriff. Bitte Berechtigung erteilen oder Barcode manuell eingeben.</div>`;

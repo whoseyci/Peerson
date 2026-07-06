@@ -5,6 +5,7 @@ import { renderInventoryView } from './views/inventory';
 import { renderShoppingView } from './views/shopping';
 import { renderTasksView } from './views/tasks';
 import { renderExpensesView } from './views/expenses';
+import { loadExternalScript } from './utils/loadExternalScript';
 
 interface ActionLog {
   action: string;
@@ -17,31 +18,6 @@ interface ActionLog {
 // also triggers an immediate refresh so switching back to the tab always
 // feels current even between polls.
 const SYNC_INTERVAL_MS = 3000;
-
-function loadExternalScript(src: string): Promise<void> {
-  const existing = document.querySelector<HTMLScriptElement>(`script[src="${src}"]`);
-  if (existing?.dataset.loaded === 'true') return Promise.resolve();
-  if (existing?.dataset.loading === 'true') {
-    return new Promise((resolve, reject) => {
-      existing.addEventListener('load', () => resolve(), { once: true });
-      existing.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)), { once: true });
-    });
-  }
-
-  return new Promise((resolve, reject) => {
-    const script = existing || document.createElement('script');
-    script.src = src;
-    script.async = true;
-    script.dataset.loading = 'true';
-    script.addEventListener('load', () => {
-      script.dataset.loaded = 'true';
-      script.dataset.loading = 'false';
-      resolve();
-    }, { once: true });
-    script.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)), { once: true });
-    if (!existing) document.head.appendChild(script);
-  });
-}
 
 type DeletableType = 'item' | 'task' | 'shopping' | 'expense';
 
