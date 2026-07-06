@@ -5,6 +5,7 @@ import { renderInventoryView } from './views/inventory';
 import { renderShoppingView } from './views/shopping';
 import { renderTasksView } from './views/tasks';
 import { renderExpensesView } from './views/expenses';
+import { loadExternalScript } from './utils/loadExternalScript';
 
 interface ActionLog {
   action: string;
@@ -13,9 +14,9 @@ interface ActionLog {
 }
 
 // How often we poll for changes made by other household members. Kept
-// fairly conservative (8s) to avoid hammering the API; a visibilitychange
-// + window-focus listener also triggers an immediate refresh so switching
-// back to the tab always feels current even between polls.
+// fairly responsive (3s) while a visibilitychange + window-focus listener
+// also triggers an immediate refresh so switching back to the tab always
+// feels current even between polls.
 const SYNC_INTERVAL_MS = 3000;
 
 type DeletableType = 'item' | 'task' | 'shopping' | 'expense';
@@ -119,6 +120,7 @@ export class App {
     btn.id = 'bugReportBtn';
     btn.className = 'bug-report-btn';
     btn.title = 'Bug melden';
+    btn.setAttribute('aria-label', 'Bug melden');
     btn.innerHTML = '<i class="ph ph-bug"></i>';
     btn.onclick = () => this.openBugReport();
     document.body.appendChild(btn);
@@ -231,15 +233,18 @@ export class App {
     }
 
     let screenshotData = '';
-    if (includeScreenshot && (window as any).html2canvas) {
+    if (includeScreenshot) {
       try {
-        const canvas = await (window as any).html2canvas(document.body, {
-          backgroundColor: null,
-          scale: 1,
-          logging: false,
-          ignoreElements: (el: HTMLElement) => el.id === 'bugModal',
-        });
-        screenshotData = canvas.toDataURL('image/png');
+        await loadExternalScript('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js');
+        if ((window as any).html2canvas) {
+          const canvas = await (window as any).html2canvas(document.body, {
+            backgroundColor: null,
+            scale: 1,
+            logging: false,
+            ignoreElements: (el: HTMLElement) => el.id === 'bugModal',
+          });
+          screenshotData = canvas.toDataURL('image/png');
+        }
       } catch (e) {
         console.error('Screenshot failed', e);
       }
@@ -453,21 +458,21 @@ export class App {
     this.setHtml(appEl, `
       ${viewHtml}
       <nav class="bottom-dock">
-        <button class="dock-btn ${this.state.view === 'inventory' ? 'active' : ''}" onclick="app.navigate('inventory')" title="Vorrat">
+        <button class="dock-btn ${this.state.view === 'inventory' ? 'active' : ''}" onclick="app.navigate('inventory')" title="Vorrat" aria-label="Vorrat öffnen">
           <i class="ph ph-package"></i>
           ${lowStock > 0 ? `<span class="badge">${lowStock}</span>` : ''}
         </button>
-        <button class="dock-btn ${this.state.view === 'shopping' ? 'active' : ''}" onclick="app.navigate('shopping')" title="Einkaufen">
+        <button class="dock-btn ${this.state.view === 'shopping' ? 'active' : ''}" onclick="app.navigate('shopping')" title="Einkaufen" aria-label="Einkaufen öffnen">
           <i class="ph ph-shopping-cart"></i>
         </button>
-        <button class="dock-btn ${this.state.view === 'tasks' ? 'active' : ''}" onclick="app.navigate('tasks')" title="Aufgaben">
+        <button class="dock-btn ${this.state.view === 'tasks' ? 'active' : ''}" onclick="app.navigate('tasks')" title="Aufgaben" aria-label="Aufgaben öffnen">
           <i class="ph ph-check-circle"></i>
           ${unreadTasks > 0 ? `<span class="badge">${unreadTasks}</span>` : ''}
         </button>
-        <button class="dock-btn ${this.state.view === 'expenses' ? 'active' : ''}" onclick="app.navigate('expenses')" title="Finanzen">
+        <button class="dock-btn ${this.state.view === 'expenses' ? 'active' : ''}" onclick="app.navigate('expenses')" title="Finanzen" aria-label="Finanzen öffnen">
           <i class="ph ph-currency-eur"></i>
         </button>
-        <button class="dock-btn ${this.state.view === 'household' ? 'active' : ''}" onclick="app.navigate('household')" title="Haushalt">
+        <button class="dock-btn ${this.state.view === 'household' ? 'active' : ''}" onclick="app.navigate('household')" title="Haushalt" aria-label="Haushalt öffnen">
           <i class="ph ph-users"></i>
         </button>
       </nav>
@@ -501,7 +506,7 @@ export class App {
   toast(msg: string) {
     const t = document.createElement('div');
     t.className = 'toast';
-    t.innerHTML = msg;
+    t.textContent = msg;
     document.body.appendChild(t);
     requestAnimationFrame(() => t.classList.add('visible'));
     setTimeout(() => { t.classList.remove('visible'); setTimeout(() => t.remove(), 300); }, 2500);
@@ -513,15 +518,26 @@ export class App {
   private undoToast(msg: string, durationMs: number, onUndo: () => void, onExpire: () => void) {
     const t = document.createElement('div');
     t.className = 'toast toast-undo';
-    t.innerHTML = `
-      <span>${msg}</span>
-      <button class="toast-undo-btn">Rückgängig</button>
-      <div class="toast-progress"><div class="toast-progress-bar"></div></div>
-    `;
+
+    const message = document.createElement('span');
+    message.textContent = msg;
+
+    const undoBtn = document.createElement('button');
+    undoBtn.className = 'toast-undo-btn';
+    undoBtn.type = 'button';
+    undoBtn.textContent = 'Rückgängig';
+
+    const progress = document.createElement('div');
+    progress.className = 'toast-progress';
+    const barEl = document.createElement('div');
+    barEl.className = 'toast-progress-bar';
+    progress.appendChild(barEl);
+
+    t.append(message, undoBtn, progress);
     document.body.appendChild(t);
     requestAnimationFrame(() => t.classList.add('visible'));
 
-    const bar = t.querySelector('.toast-progress-bar') as HTMLElement;
+    const bar = barEl;
     if (bar) {
       bar.style.transitionDuration = `${durationMs}ms`;
       requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.transform = 'scaleX(0)'; }));
@@ -535,7 +551,7 @@ export class App {
       setTimeout(() => t.remove(), 300);
     };
 
-    t.querySelector('.toast-undo-btn')?.addEventListener('click', () => {
+    undoBtn.addEventListener('click', () => {
       if (settled) return;
       onUndo();
       dismiss();
