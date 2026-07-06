@@ -7,11 +7,36 @@ const EXPENSE_CATEGORIES: Record<string, { icon: string; label: string }> = {
   rent: { icon: 'house', label: 'Miete & Wohnen' },
   household: { icon: 'broom', label: 'Haushalt & Drogerie' },
   leisure: { icon: 'confetti', label: 'Freizeit' },
+  settlement: { icon: 'hand-coins', label: 'Schuldenausgleich' },
   sonstiges: { icon: 'package', label: 'Sonstiges' },
 };
 
+function cleanExpenseTitle(title: string) {
+  return title.replace(/^\s*\u{1F4B8}\s*/u, '').trim();
+}
+
+function isSettlementExpense(expense: Expense) {
+  const title = cleanExpenseTitle(expense.title || '').toLowerCase();
+  return expense.category === 'settlement' || title.includes('schuldenausgleich') || title.includes('ausgleich');
+}
+
+function expenseMeta(expense: Expense) {
+  return isSettlementExpense(expense)
+    ? EXPENSE_CATEGORIES.settlement
+    : (EXPENSE_CATEGORIES[expense.category || 'sonstiges'] || EXPENSE_CATEGORIES.sonstiges);
+}
+
+function formatExpenseDate(createdAt: unknown) {
+  const seconds = typeof createdAt === 'number' ? createdAt : Number(createdAt);
+  if (!Number.isFinite(seconds) || seconds <= 0) return 'Datum unbekannt';
+  const date = new Date(seconds * 1000);
+  return Number.isNaN(date.getTime()) ? 'Datum unbekannt' : date.toLocaleDateString('de-DE');
+}
+
 export function renderExpensesView(app: App) {
   const s = app.state;
+  const settlementExpenses = s.expenses.filter(isSettlementExpense);
+  const regularExpenses = s.expenses.filter(e => !isSettlementExpense(e));
   const balances = s.members.map(m => {
     const paid = s.expenses.filter(e => e.paid_by === m.id).reduce((a, e) => a + e.amount, 0);
     const owed = s.splits.filter(sp => sp.user_id === m.id).reduce((a, sp) => a + sp.amount, 0);
@@ -24,8 +49,9 @@ export function renderExpensesView(app: App) {
     <div class="header">
       <h1><i class="ph ph-currency-eur"></i> Finanzen</h1>
       <div style="display:flex; gap:8px;">
-        ${hasImbalance ? `<button class="icon-btn" onclick="openSettleModal()" title="Schulden ausgleichen"><i class="ph ph-scales"></i></button>` : ''}
-        <button class="icon-btn" onclick="openAddExpenseModal()" title="Ausgabe hinzufügen"><i class="ph ph-plus"></i></button>
+        <button class="icon-btn" onclick="openPaymentHistoryModal()" title="Zahlungshistorie" aria-label="Zahlungshistorie öffnen"><i class="ph ph-clock-counter-clockwise"></i></button>
+        ${hasImbalance ? `<button class="icon-btn" onclick="openSettleModal()" title="Schulden ausgleichen" aria-label="Schulden ausgleichen"><i class="ph ph-scales"></i></button>` : ''}
+        <button class="icon-btn" onclick="openAddExpenseModal()" title="Ausgabe hinzufügen" aria-label="Ausgabe hinzufügen"><i class="ph ph-plus"></i></button>
       </div>
     </div>
 
@@ -54,29 +80,52 @@ export function renderExpensesView(app: App) {
 
     <div class="section">
       <div class="section-header"><div class="section-title">Ausgaben</div></div>
-      ${s.expenses.length ? s.expenses.map(e => {
+      ${regularExpenses.length ? regularExpenses.map(e => {
         const payer = escapeHtml(app.getMemberName(e.paid_by));
         const expenseId = escapeJsAttr(e.id);
-        const title = escapeHtml(e.title);
-        const isSettlement = e.title.includes('Schuldenausgleich') || e.title.includes('Ausgleich');
-        const cat = EXPENSE_CATEGORIES[e.category || 'sonstiges'] || EXPENSE_CATEGORIES.sonstiges;
+        const title = escapeHtml(cleanExpenseTitle(e.title));
+        const cat = expenseMeta(e);
+        const icon = escapeAttr(cat.icon);
         return `
-        <div class="card ${isSettlement ? 'settlement-card' : ''}" style="${isSettlement ? 'border-left: 3px solid var(--success);' : ''}">
+        <div class="card">
           <div class="card-content" onclick="openEditExpenseModal('${expenseId}')">
             <div class="card-text">
-              <div class="card-header"><div class="item-name">${title}</div><div class="expense-amount">${e.amount.toFixed(2)} €</div></div>
-              <div class="card-meta"><span><i class="ph ph-${cat.icon}"></i> ${cat.label}</span> · <span>Bezahlt von ${payer}</span> · <span>${new Date(e.created_at * 1000).toLocaleDateString('de-DE')}</span></div>
+              <div class="card-header">
+                <div class="item-name expense-title"><i class="ph ph-${icon}"></i> ${title}</div>
+                <div class="expense-amount">${e.amount.toFixed(2)} €</div>
+              </div>
+              <div class="card-meta"><span>Bezahlt von ${payer}</span> · <span>${formatExpenseDate(e.created_at)}</span></div>
             </div>
           </div>
           <div class="card-actions">
-            <button class="action-btn" onclick="event.stopPropagation(); openEditExpenseModal('${expenseId}')" title="Bearbeiten"><i class="ph ph-pencil-simple"></i></button>
-            <button class="action-btn remove" onclick="event.stopPropagation(); deleteExpense('${expenseId}')" title="Löschen"><i class="ph ph-trash"></i></button>
+            <button class="action-btn remove" onclick="event.stopPropagation(); deleteExpense('${expenseId}')" title="Löschen" aria-label="${title} löschen"><i class="ph ph-trash"></i></button>
           </div>
         </div>
         `;
       }).join('') : `<div class="empty-state">Noch keine Ausgaben</div>`}
     </div>
   `;
+}
+
+export function openPaymentHistoryModal() {
+  const app = (window as any).app;
+  const settlementExpenses = app.state.expenses.filter(isSettlementExpense);
+  const rows = settlementExpenses.length ? settlementExpenses.map((e: Expense) => {
+    const payer = escapeHtml(app.getMemberName(e.paid_by));
+    return `
+      <div class="price-history-row payment-history-row">
+        <span><i class="ph ph-${EXPENSE_CATEGORIES.settlement.icon}"></i> ${escapeHtml(cleanExpenseTitle(e.title))}<br><small>${payer} · ${formatExpenseDate(e.created_at)}</small></span>
+        <span>${Number(e.amount || 0).toFixed(2)} €</span>
+      </div>
+    `;
+  }).join('') : '<div class="empty-state" style="padding:16px;">Noch keine Schuldenausgleiche verbucht</div>';
+
+  app.showModal('paymentHistoryModal', `
+    <div class="modal-header"><div class="modal-title"><i class="ph ph-clock-counter-clockwise"></i> Zahlungshistorie</div><button class="close-btn" onclick="window.app.closeModal('paymentHistoryModal')"><i class="ph ph-x"></i></button></div>
+    <div class="modal-body">
+      <div class="price-history-list">${rows}</div>
+    </div>
+  `);
 }
 
 export function openSettleModal() {
@@ -142,11 +191,11 @@ export async function executeSettlement() {
     for (const t of transfers) {
       await api.expenses.create({
         household_id: app.state.householdId,
-        title: 'Schuldenausgleich (' + t.fromName + ' an ' + t.toName + ')',
+        title: 'Schuldenausgleich: ' + t.fromName + ' → ' + t.toName,
         amount: t.amount,
         paid_by: t.fromId,
         split_type: 'custom',
-        category: 'sonstiges',
+        category: 'settlement',
         splits: [{ user_id: t.toId, amount: t.amount }]
       });
     }
@@ -181,7 +230,9 @@ function renderExpenseEditorModal(existingExpense?: Expense, existingSplits?: an
   const catVal = existingExpense?.category || 'groceries';
 
   const payerOptions = members.map((m: any) => `<option value="${escapeAttr(m.id)}" ${paidByVal === m.id ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('');
-  const catOptions = Object.entries(EXPENSE_CATEGORIES).map(([k, v]) => `<option value="${k}" ${catVal === k ? 'selected' : ''}>${v.label}</option>`).join('');
+  const catOptions = Object.entries(EXPENSE_CATEGORIES)
+    .filter(([k]) => k !== 'settlement')
+    .map(([k, v]) => `<option value="${k}" ${catVal === k ? 'selected' : ''}>${v.label}</option>`).join('');
 
   // Default spend split rule check (Issue #25 & #5)
   const ruleKey = `peerson_split_rule_${app.state.householdId}_${catVal}`;
@@ -402,6 +453,7 @@ export async function deleteExpense(id: string) {
 // Bind to window for HTML onclick handlers
 Object.assign(window as any, {
   openSettleModal,
+  openPaymentHistoryModal,
   executeSettlement,
   openAddExpenseModal,
   openEditExpenseModal,

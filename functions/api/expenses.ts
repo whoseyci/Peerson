@@ -21,7 +21,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     WHERE e.household_id = ?
   `).bind(householdId).all();
   const members = await env.DB.prepare(`
-    SELECT u.id, u.name FROM household_members hm
+    SELECT u.id, u.name, hm.role, hm.joined_at FROM household_members hm
     JOIN users u ON hm.user_id = u.id
     WHERE hm.household_id = ?
   `).bind(householdId).all();

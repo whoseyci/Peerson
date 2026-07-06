@@ -19,6 +19,7 @@ interface ActionLog {
 // also triggers an immediate refresh so switching back to the tab always
 // feels current even between polls.
 const SYNC_INTERVAL_MS = 3000;
+const TAB_ORDER = ['inventory', 'shopping', 'tasks', 'expenses', 'household'];
 
 function redactSensitive(value: string) {
   return value
@@ -82,6 +83,7 @@ export class App {
   // their ids happened to match. Only one pending deletion per key at a
   // time (re-deleting mid-countdown just restarts the timer).
   private pendingDeletions = new Map<string, PendingDeletion>();
+  private swipeStart: { x: number; y: number; target: EventTarget | null } | null = null;
 
   private logAction(action: string, details?: string) {
     this.actionLog.unshift({ action, timestamp: Date.now(), details });
@@ -129,6 +131,7 @@ export class App {
       if (document.visibilityState === 'visible') this.syncNow();
     });
     window.addEventListener('focus', () => this.syncNow());
+    this.installSwipeNavigation();
   }
 
   injectBugButton() {
@@ -412,7 +415,36 @@ export class App {
     this.render();
   }
 
+  private installSwipeNavigation() {
+    document.addEventListener('pointerdown', (event) => {
+      if (event.pointerType !== 'touch') return;
+      if (!this.state.householdId) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('input, textarea, select, button, a, .modal')) return;
+      this.swipeStart = { x: event.clientX, y: event.clientY, target: event.target };
+    }, { passive: true });
+
+    document.addEventListener('pointerup', (event) => {
+      if (event.pointerType !== 'touch' || !this.swipeStart) return;
+      const start = this.swipeStart;
+      this.swipeStart = null;
+      if (!this.state.householdId || document.querySelector('.modal.active')) return;
+
+      const dx = event.clientX - start.x;
+      const dy = event.clientY - start.y;
+      if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.4 || Math.abs(dy) > 90) return;
+
+      const current = TAB_ORDER.indexOf(this.state.view);
+      if (current === -1) return;
+      const next = dx < 0
+        ? Math.min(TAB_ORDER.length - 1, current + 1)
+        : Math.max(0, current - 1);
+      if (next !== current) this.navigate(TAB_ORDER[next]);
+    }, { passive: true });
+  }
+
   navigate(view: string) {
+    if (!TAB_ORDER.includes(view) && view !== 'household') return;
     this.logAction('Navigation', `→ ${view}`);
     this.state.view = view;
     localStorage.setItem('peerson_view', view);
@@ -468,23 +500,23 @@ export class App {
 
     this.setHtml(appEl, `
       ${viewHtml}
-      <nav class="bottom-dock">
-        <button class="dock-btn ${this.state.view === 'inventory' ? 'active' : ''}" onclick="app.navigate('inventory')" title="Vorrat" aria-label="Vorrat öffnen">
-          <i class="ph ph-package"></i><span class="dock-label">Vorrat</span>
+      <nav class="top-tabs" aria-label="Hauptnavigation">
+        <button class="tab-btn ${this.state.view === 'inventory' ? 'active' : ''}" onclick="app.navigate('inventory')" title="Vorrat" aria-label="Vorrat öffnen">
+          <i class="ph ph-package"></i><span class="tab-label">Vorrat</span>
           ${lowStock > 0 ? `<span class="badge">${lowStock}</span>` : ''}
         </button>
-        <button class="dock-btn ${this.state.view === 'shopping' ? 'active' : ''}" onclick="app.navigate('shopping')" title="Einkaufen" aria-label="Einkaufen öffnen">
-          <i class="ph ph-shopping-cart"></i><span class="dock-label">Einkauf</span>
+        <button class="tab-btn ${this.state.view === 'shopping' ? 'active' : ''}" onclick="app.navigate('shopping')" title="Einkaufen" aria-label="Einkaufen öffnen">
+          <i class="ph ph-shopping-cart"></i><span class="tab-label">Einkauf</span>
         </button>
-        <button class="dock-btn ${this.state.view === 'tasks' ? 'active' : ''}" onclick="app.navigate('tasks')" title="Aufgaben" aria-label="Aufgaben öffnen">
-          <i class="ph ph-check-circle"></i><span class="dock-label">Aufgaben</span>
+        <button class="tab-btn ${this.state.view === 'tasks' ? 'active' : ''}" onclick="app.navigate('tasks')" title="Aufgaben" aria-label="Aufgaben öffnen">
+          <i class="ph ph-check-circle"></i><span class="tab-label">Aufgaben</span>
           ${unreadTasks > 0 ? `<span class="badge">${unreadTasks}</span>` : ''}
         </button>
-        <button class="dock-btn ${this.state.view === 'expenses' ? 'active' : ''}" onclick="app.navigate('expenses')" title="Finanzen" aria-label="Finanzen öffnen">
-          <i class="ph ph-currency-eur"></i><span class="dock-label">Finanzen</span>
+        <button class="tab-btn ${this.state.view === 'expenses' ? 'active' : ''}" onclick="app.navigate('expenses')" title="Finanzen" aria-label="Finanzen öffnen">
+          <i class="ph ph-currency-eur"></i><span class="tab-label">Finanzen</span>
         </button>
-        <button class="dock-btn ${this.state.view === 'household' ? 'active' : ''}" onclick="app.navigate('household')" title="Haushalt" aria-label="Haushalt öffnen">
-          <i class="ph ph-users"></i><span class="dock-label">Haushalt</span>
+        <button class="tab-btn ${this.state.view === 'household' ? 'active' : ''}" onclick="app.navigate('household')" title="Haushalt" aria-label="Haushalt öffnen">
+          <i class="ph ph-users"></i><span class="tab-label">Haushalt</span>
         </button>
       </nav>
     `);
