@@ -89,6 +89,7 @@ export const api = {
     }>,
     create: (data: any) => post('/api/expenses', data) as Promise<{ expense: Expense }>,
     update: (id: string, data: any) => patch(`/api/expenses/${id}`, data) as Promise<{ expense: Expense }>,
+    markSettled: (householdId: string) => post('/api/expenses', { action: 'mark_settled', household_id: householdId }) as Promise<{ success: boolean }>,
     delete: (id: string) => del(`/api/expenses/${id}`),
   },
   shopping: {

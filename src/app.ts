@@ -5,6 +5,7 @@ import { renderInventoryView } from './views/inventory';
 import { renderShoppingView } from './views/shopping';
 import { renderTasksView } from './views/tasks';
 import { renderExpensesView } from './views/expenses';
+import { renderBriefView } from './views/brief';
 import { escapeHtml } from './utils/html';
 import { loadExternalScript } from './utils/loadExternalScript';
 
@@ -19,7 +20,7 @@ interface ActionLog {
 // also triggers an immediate refresh so switching back to the tab always
 // feels current even between polls.
 const SYNC_INTERVAL_MS = 3000;
-const TAB_ORDER = ['inventory', 'shopping', 'tasks', 'expenses', 'household'];
+const TAB_ORDER = ['brief', 'inventory', 'shopping', 'tasks', 'expenses', 'household'];
 
 function redactSensitive(value: string) {
   return value
@@ -100,7 +101,8 @@ export class App {
     this.state.darkMode = localStorage.getItem('peerson_darkMode') === 'true';
     if (this.state.darkMode) document.body.classList.add('dark-mode');
 
-    if (savedView) this.state.view = savedView;
+    if (savedView && TAB_ORDER.includes(savedView)) this.state.view = savedView;
+    else if (savedHousehold) this.state.view = 'brief';
 
     const url = new URL(location.href);
     const inviteCode = url.searchParams.get('join');
@@ -437,9 +439,9 @@ export class App {
       const current = TAB_ORDER.indexOf(this.state.view);
       if (current === -1) return;
       const next = dx < 0
-        ? Math.min(TAB_ORDER.length - 1, current + 1)
-        : Math.max(0, current - 1);
-      if (next !== current) this.navigate(TAB_ORDER[next]);
+        ? (current + 1) % TAB_ORDER.length
+        : (current - 1 + TAB_ORDER.length) % TAB_ORDER.length;
+      this.navigate(TAB_ORDER[next]);
     }, { passive: true });
   }
 
@@ -484,12 +486,13 @@ export class App {
 
     let viewHtml = '';
     switch (this.state.view) {
+      case 'brief': viewHtml = renderBriefView(this); break;
       case 'inventory': viewHtml = renderInventoryView(this); break;
       case 'shopping': viewHtml = renderShoppingView(this); break;
       case 'tasks': viewHtml = renderTasksView(this); break;
       case 'expenses': viewHtml = renderExpensesView(this); break;
       case 'household': viewHtml = renderHouseholdView(this); break;
-      default: viewHtml = renderInventoryView(this);
+      default: viewHtml = renderBriefView(this);
     }
 
     const unreadTasks = this.state.tasks.filter(t => t.status === 'todo').length;
@@ -497,10 +500,30 @@ export class App {
       const total = this.state.batches.filter(b => b.item_id === i.id).reduce((a, b) => a + b.quantity, 0);
       return total < i.threshold;
     }).length;
+    const daysUntil = (dateString?: string) => {
+      if (!dateString) return 9999;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const target = new Date(dateString);
+      target.setHours(0, 0, 0, 0);
+      return Math.ceil((target.getTime() - today.getTime()) / 86400000);
+    };
+    const briefExpiring = this.state.batches.filter(b => b.expiry && daysUntil(b.expiry) <= 7).length;
+    const briefDueTasks = this.state.tasks.filter(t => t.status === 'todo' && t.due_date && daysUntil(t.due_date) <= 2).length;
+    const briefBalances = this.state.members.filter(m => {
+      const paid = this.state.expenses.filter(e => e.paid_by === m.id).reduce((a, e) => a + e.amount, 0);
+      const owed = this.state.splits.filter(sp => sp.user_id === m.id).reduce((a, sp) => a + sp.amount, 0);
+      return Math.abs(paid - owed) > 0.05;
+    }).length;
+    const dailyAlerts = briefExpiring + lowStock + briefDueTasks + briefBalances;
 
     this.setHtml(appEl, `
       ${viewHtml}
       <nav class="top-tabs" aria-label="Hauptnavigation">
+        <button class="tab-btn ${this.state.view === 'brief' ? 'active' : ''}" onclick="app.navigate('brief')" title="Heute" aria-label="Heute öffnen">
+          <i class="ph ph-sparkle"></i><span class="tab-label">Heute</span>
+          ${dailyAlerts > 0 ? `<span class="badge">${dailyAlerts}</span>` : ''}
+        </button>
         <button class="tab-btn ${this.state.view === 'inventory' ? 'active' : ''}" onclick="app.navigate('inventory')" title="Vorrat" aria-label="Vorrat öffnen">
           <i class="ph ph-package"></i><span class="tab-label">Vorrat</span>
           ${lowStock > 0 ? `<span class="badge">${lowStock}</span>` : ''}
@@ -688,7 +711,7 @@ export class App {
       this.state.household = data.household;
       localStorage.setItem('peerson_householdId', data.household.id);
       this.toast('Haushalt erstellt');
-      this.navigate('inventory');
+      this.navigate('brief');
       await this.loadData();
       this.render();
     } catch (e: any) {
@@ -704,7 +727,7 @@ export class App {
       this.state.household = data.household;
       localStorage.setItem('peerson_householdId', data.household.id);
       this.toast('Haushalt beigetreten');
-      this.navigate('inventory');
+      this.navigate('brief');
       await this.loadData();
       this.render();
     } catch (e: any) {

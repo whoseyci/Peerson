@@ -175,6 +175,15 @@ describe('Expenses API', () => {
     expect(body.expense.amount).toBe(42.5);
   });
 
+
+  it('GET /api/expenses selects role and joined_at for members', async () => {
+    const source = await (await import('node:fs/promises')).readFile('functions/api/expenses.ts', 'utf-8');
+    const membersQueryMatch = source.match(/const members[\s\S]*?all\(\);/);
+    expect(membersQueryMatch).toBeTruthy();
+    expect(membersQueryMatch![0]).toMatch(/hm\.role/);
+    expect(membersQueryMatch![0]).toMatch(/hm\.joined_at/);
+  });
+
   // Regression test: onRequestPost used to respond with `{ id, ...body }`
   // instead of re-selecting the inserted row, so server-assigned defaults
   // never present in the request body (created_at) came back undefined.
