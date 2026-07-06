@@ -1,5 +1,6 @@
 import type { App } from '../app';
 import { escapeHtml, escapeJsAttr } from '../utils/html';
+import { personalBalanceLines } from '../utils/finance';
 
 function daysUntil(dateString?: string | null) {
   if (!dateString) return 9999;
@@ -48,11 +49,7 @@ export function renderBriefView(app: App) {
     .sort((a, b) => a.days - b.days)
     .slice(0, 5);
 
-  const balances = s.members.map(m => {
-    const paid = s.expenses.filter(e => e.paid_by === m.id).reduce((a, e) => a + e.amount, 0);
-    const owed = s.splits.filter(sp => sp.user_id === m.id).reduce((a, sp) => a + sp.amount, 0);
-    return { ...m, balance: paid - owed };
-  }).filter(b => Math.abs(b.balance) > 0.05).sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance)).slice(0, 4);
+  const balances = personalBalanceLines(s.userId, s.members, s.expenses, s.splits).slice(0, 4);
 
   const alertCount = expiring.length + lowStock.length + dueTasks.length + balances.length;
 
@@ -131,13 +128,13 @@ export function renderBriefView(app: App) {
       ${balances.length ? balances.map(b => `
         <div class="card">
           <div class="card-content" onclick="app.navigate('expenses')">
-            <div class="card-icon"><i class="ph ph-user"></i></div>
+            <div class="card-icon"><i class="ph ph-${b.direction === 'you_owe' ? 'arrow-up-right' : 'arrow-down-left'}"></i></div>
             <div class="card-text">
-              <div class="card-header"><div class="item-name">${escapeHtml(b.name)}</div><div class="item-qty ${b.balance >= 0 ? 'balance-positive' : 'balance-negative'}">${b.balance >= 0 ? '+' : ''}${b.balance.toFixed(2)} €</div></div>
-              <div class="card-meta">${b.balance >= 0 ? 'bekommt Geld' : 'schuldet Geld'}</div>
+              <div class="card-header"><div class="item-name">${b.direction === 'you_owe' ? 'Du schuldest ' + escapeHtml(b.memberName) : escapeHtml(b.memberName) + ' schuldet dir'}</div><div class="item-qty ${b.direction === 'owes_you' ? 'balance-positive' : 'balance-negative'}">${b.amount.toFixed(2)} €</div></div>
+              <div class="card-meta">${b.direction === 'you_owe' ? 'Von dir zu zahlen' : 'Dir wird Geld geschuldet'}</div>
             </div>
           </div>
-        </div>`).join('') : '<div class="empty-state">Alle Konten ausgeglichen</div>'}
+        </div>`).join('') : '<div class="empty-state">Du bist mit allen ausgeglichen</div>'}
     </div>
   `;
 }

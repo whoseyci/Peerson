@@ -8,6 +8,7 @@ import { renderExpensesView } from './views/expenses';
 import { renderBriefView } from './views/brief';
 import { escapeHtml } from './utils/html';
 import { loadExternalScript } from './utils/loadExternalScript';
+import { personalBalanceLines } from './utils/finance';
 
 interface ActionLog {
   action: string;
@@ -20,7 +21,7 @@ interface ActionLog {
 // also triggers an immediate refresh so switching back to the tab always
 // feels current even between polls.
 const SYNC_INTERVAL_MS = 3000;
-const TAB_ORDER = ['brief', 'inventory', 'shopping', 'tasks', 'expenses', 'household'];
+const TAB_ORDER = ['inventory', 'shopping', 'brief', 'tasks', 'expenses'];
 
 function redactSensitive(value: string) {
   return value
@@ -85,6 +86,7 @@ export class App {
   // time (re-deleting mid-countdown just restarts the timer).
   private pendingDeletions = new Map<string, PendingDeletion>();
   private swipeStart: { x: number; y: number; target: EventTarget | null } | null = null;
+  private viewTransitionClass = '';
 
   private logAction(action: string, details?: string) {
     this.actionLog.unshift({ action, timestamp: Date.now(), details });
@@ -101,7 +103,7 @@ export class App {
     this.state.darkMode = localStorage.getItem('peerson_darkMode') === 'true';
     if (this.state.darkMode) document.body.classList.add('dark-mode');
 
-    if (savedView && TAB_ORDER.includes(savedView)) this.state.view = savedView;
+    if (savedView && (TAB_ORDER.includes(savedView) || savedView === 'household')) this.state.view = savedView;
     else if (savedHousehold) this.state.view = 'brief';
 
     const url = new URL(location.href);
@@ -434,7 +436,7 @@ export class App {
 
       const dx = event.clientX - start.x;
       const dy = event.clientY - start.y;
-      if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.4 || Math.abs(dy) > 90) return;
+      if (Math.abs(dx) < 38 || Math.abs(dx) < Math.abs(dy) * 0.55 || Math.abs(dy) > 160) return;
 
       const current = TAB_ORDER.indexOf(this.state.view);
       if (current === -1) return;
@@ -447,6 +449,16 @@ export class App {
 
   navigate(view: string) {
     if (!TAB_ORDER.includes(view) && view !== 'household') return;
+    if (view === this.state.view) return;
+    const current = TAB_ORDER.indexOf(this.state.view);
+    const next = TAB_ORDER.indexOf(view);
+    if (current !== -1 && next !== -1) {
+      const forward = (next - current + TAB_ORDER.length) % TAB_ORDER.length;
+      const backward = (current - next + TAB_ORDER.length) % TAB_ORDER.length;
+      this.viewTransitionClass = forward <= backward ? 'slide-from-right' : 'slide-from-left';
+    } else {
+      this.viewTransitionClass = 'fade-in';
+    }
     this.logAction('Navigation', `→ ${view}`);
     this.state.view = view;
     localStorage.setItem('peerson_view', view);
@@ -510,26 +522,24 @@ export class App {
     };
     const briefExpiring = this.state.batches.filter(b => b.expiry && daysUntil(b.expiry) <= 7).length;
     const briefDueTasks = this.state.tasks.filter(t => t.status === 'todo' && t.due_date && daysUntil(t.due_date) <= 2).length;
-    const briefBalances = this.state.members.filter(m => {
-      const paid = this.state.expenses.filter(e => e.paid_by === m.id).reduce((a, e) => a + e.amount, 0);
-      const owed = this.state.splits.filter(sp => sp.user_id === m.id).reduce((a, sp) => a + sp.amount, 0);
-      return Math.abs(paid - owed) > 0.05;
-    }).length;
+    const briefBalances = personalBalanceLines(this.state.userId, this.state.members, this.state.expenses, this.state.splits).length;
     const dailyAlerts = briefExpiring + lowStock + briefDueTasks + briefBalances;
+    const transitionClass = this.viewTransitionClass;
+    this.viewTransitionClass = '';
 
     this.setHtml(appEl, `
-      ${viewHtml}
+      <div class="view-content ${transitionClass}">${viewHtml}</div>
       <nav class="top-tabs" aria-label="Hauptnavigation">
-        <button class="tab-btn ${this.state.view === 'brief' ? 'active' : ''}" onclick="app.navigate('brief')" title="Heute" aria-label="Heute öffnen">
-          <i class="ph ph-sparkle"></i><span class="tab-label">Heute</span>
-          ${dailyAlerts > 0 ? `<span class="badge">${dailyAlerts}</span>` : ''}
-        </button>
         <button class="tab-btn ${this.state.view === 'inventory' ? 'active' : ''}" onclick="app.navigate('inventory')" title="Vorrat" aria-label="Vorrat öffnen">
           <i class="ph ph-package"></i><span class="tab-label">Vorrat</span>
           ${lowStock > 0 ? `<span class="badge">${lowStock}</span>` : ''}
         </button>
         <button class="tab-btn ${this.state.view === 'shopping' ? 'active' : ''}" onclick="app.navigate('shopping')" title="Einkaufen" aria-label="Einkaufen öffnen">
           <i class="ph ph-shopping-cart"></i><span class="tab-label">Einkauf</span>
+        </button>
+        <button class="tab-btn ${this.state.view === 'brief' ? 'active' : ''}" onclick="app.navigate('brief')" title="Heute" aria-label="Heute öffnen">
+          <i class="ph ph-sparkle"></i><span class="tab-label">Heute</span>
+          ${dailyAlerts > 0 ? `<span class="badge">${dailyAlerts}</span>` : ''}
         </button>
         <button class="tab-btn ${this.state.view === 'tasks' ? 'active' : ''}" onclick="app.navigate('tasks')" title="Aufgaben" aria-label="Aufgaben öffnen">
           <i class="ph ph-check-circle"></i><span class="tab-label">Aufgaben</span>
@@ -538,10 +548,8 @@ export class App {
         <button class="tab-btn ${this.state.view === 'expenses' ? 'active' : ''}" onclick="app.navigate('expenses')" title="Finanzen" aria-label="Finanzen öffnen">
           <i class="ph ph-currency-eur"></i><span class="tab-label">Finanzen</span>
         </button>
-        <button class="tab-btn ${this.state.view === 'household' ? 'active' : ''}" onclick="app.navigate('household')" title="Haushalt" aria-label="Haushalt öffnen">
-          <i class="ph ph-users"></i><span class="tab-label">Haushalt</span>
-        </button>
       </nav>
+      <button class="household-top-btn ${this.state.view === 'household' ? 'active' : ''}" onclick="app.navigate('household')" title="Haushalt" aria-label="Haushalt öffnen"><i class="ph ph-users"></i></button>
     `);
     this.injectBugButton();
     this.injectSyncIndicator();
