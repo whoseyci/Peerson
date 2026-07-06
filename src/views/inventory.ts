@@ -120,17 +120,21 @@ export function renderInventoryView(app: App) {
         <div class="section-title"><i class="ph ph-clock"></i> Check MHD</div>
         <span class="badge">${expiring.length}</span>
       </div>
-      ${expiring.map(b => `
+      ${expiring.map(b => {
+        const itemId = escapeJsAttr(b.item!.id);
+        const itemName = escapeHtml(b.item!.name);
+        const icon = escapeAttr(getItemIcon(b.item!));
+        return `
         <div class="card ${b.days < 0 ? 'danger' : b.days < 14 ? 'warning' : ''}">
-          <div class="card-content" onclick="openItemDetail('${b.item!.id}')">
-            <div class="card-icon"><i class="ph ph-${getItemIcon(b.item!)}"></i></div>
+          <div class="card-content" onclick="openItemDetail('${itemId}')">
+            <div class="card-icon"><i class="ph ph-${icon}"></i></div>
             <div class="card-text">
-              <div class="card-header"><div class="item-name">${b.item!.name}</div><div class="item-qty">${b.quantity}</div></div>
-              <div class="card-meta">${b.days < 0 ? 'Abgelaufen' : b.days + ' Tage'} · ${formatDate(b.expiry)}</div>
+              <div class="card-header"><div class="item-name">${itemName}</div><div class="item-qty">${escapeHtml(b.quantity)}</div></div>
+              <div class="card-meta">${b.days < 0 ? 'Abgelaufen' : escapeHtml(b.days) + ' Tage'} · ${formatDate(b.expiry)}</div>
             </div>
           </div>
         </div>
-      `).join('')}
+      `}).join('')}
     </div>` : ''}
 
     <div class="section">
@@ -139,14 +143,18 @@ export function renderInventoryView(app: App) {
         <span class="badge" style="${lowStock.length ? '' : 'display:none'}">${lowStock.length}</span>
       </div>
       ${lowStock.length ? lowStock.map(i => {
-        const needed = i.threshold - getTotal(i.id, s.batches);
+        const total = getTotal(i.id, s.batches);
+        const needed = i.threshold - total;
+        const itemId = escapeJsAttr(i.id);
+        const itemName = escapeHtml(i.name);
+        const icon = escapeAttr(getItemIcon(i));
         return `
         <div class="card danger">
-          <div class="card-content" onclick="openAddStock('${i.id}')">
-            <div class="card-icon"><i class="ph ph-${getItemIcon(i)}"></i></div>
+          <div class="card-content" onclick="openAddStock('${itemId}')">
+            <div class="card-icon"><i class="ph ph-${icon}"></i></div>
             <div class="card-text">
-              <div class="card-header"><div class="item-name">${i.name}</div><div class="item-qty">+${needed}</div></div>
-              <div class="card-meta">${getTotal(i.id, s.batches)} vorrätig · Min. ${i.threshold}</div>
+              <div class="card-header"><div class="item-name">${itemName}</div><div class="item-qty">+${escapeHtml(needed)}</div></div>
+              <div class="card-meta">${escapeHtml(total)} vorrätig · Min. ${escapeHtml(i.threshold)}</div>
             </div>
           </div>
         </div>`;
