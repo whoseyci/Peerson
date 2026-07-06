@@ -204,7 +204,7 @@ export async function createHousehold() {
     // present while the DOM still showed the old screen. The only reason
     // it ever appeared to work was the 8s background sync poll eventually
     // triggering an unrelated render.
-    app.render();
+    app.navigate('brief');
     app.startSync();
   } catch (e) {
     app.toast('Fehler beim Erstellen');
@@ -220,7 +220,7 @@ export async function joinHousehold() {
     localStorage.setItem('peerson_householdId', data.household.id);
     await app.loadHousehold(data.household.id);
     // Same missing-render bug as createHousehold() above.
-    app.render();
+    app.navigate('brief');
     app.startSync();
   } catch (e) {
     app.toast('Fehler beim Beitreten');
