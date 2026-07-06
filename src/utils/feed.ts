@@ -1,35 +1,17 @@
 import type { AppState } from '../types';
 import { personalBalanceLines } from './finance';
+import { computeCategoryBudgets } from './budgets';
 
-// The Home view's "things that need your attention today" feed --
-// deliberately a *pure* function of state (no DOM, no window) so it can be
-// unit-tested directly and so app.ts's tab-badge count and home.ts's
-// card-stack rendering can never drift out of sync (both call this exact
-// function rather than each re-deriving their own notion of "what's
-// urgent").
 export interface FeedItem {
-  // Stable, content-derived key (not a random id) so a snooze recorded
-  // against e.g. "expiring:<batchId>" survives a background sync
-  // re-render as long as the same batch is still the one that's expiring.
   key: string;
-  kind: 'expiring' | 'lowstock' | 'task' | 'balance';
+  kind: 'expiring' | 'lowstock' | 'task' | 'balance' | 'budget';
   icon: string;
   title: string;
   sub: string;
-  // Lower sorts first (more urgent). Not shown in the UI, purely for
-  // ordering the stack + overflow list.
   urgency: number;
-  // The id of the underlying record (item id / task id / member id) that
-  // an action handler needs to actually do something about this entry.
   refId: string;
 }
 
-// Calendar-day difference (midnight-to-midnight), matching the same
-// "due today counts as due, not overdue" semantics app.ts's own inline
-// daysUntil() already uses for tab badges -- a raw ms/86400000 diff
-// without normalizing hours would flip from "1 day left" to "0 days left"
-// depending on what time of day it currently is, which is confusing for
-// a due-date/expiry feed a household checks at random times.
 function daysUntil(dateString?: string | null): number {
   if (!dateString) return 9999;
   const today = new Date();
@@ -40,12 +22,11 @@ function daysUntil(dateString?: string | null): number {
 }
 
 export function computeFeed(
-  state: Pick<AppState, 'items' | 'batches' | 'tasks' | 'expenses' | 'splits' | 'members' | 'userId'> & Pick<Partial<AppState>, 'shopping'>,
+  state: Pick<AppState, 'items' | 'batches' | 'tasks' | 'expenses' | 'splits' | 'members' | 'userId'> & Pick<Partial<AppState>, 'shopping' | 'budgets'>,
   snoozed: Set<string>
 ): FeedItem[] {
   const items: FeedItem[] = [];
 
-  // Expiring / already-expired batches, within 3 days either side of today.
   state.batches.forEach(b => {
     if (!b.expiry) return;
     const days = daysUntil(b.expiry);
@@ -69,7 +50,6 @@ export function computeFeed(
     });
   });
 
-  // Low-stock items that are not already on the open shopping list.
   const openShopping = state.shopping || [];
   state.items.forEach(item => {
     const total = state.batches.filter(b => b.item_id === item.id).reduce((a, b) => a + b.quantity, 0);
@@ -88,16 +68,11 @@ export function computeFeed(
       icon: item.icon || 'package',
       title: item.name,
       sub: `Nur noch ${total} von ${item.threshold} vorrätig`,
-      // Bigger deficits are more urgent, so they need a *lower* number to
-      // sort first alongside expiring items' day-counts (which can go
-      // negative for already-expired stock) -- flip the deficit's sign
-      // rather than just offsetting it.
       urgency: 10 - Math.max(0, item.threshold - total),
       refId: item.id,
     });
   });
 
-  // Tasks due within 2 days (or overdue), still open.
   state.tasks.forEach(t => {
     if (t.status !== 'todo' || !t.due_date) return;
     const days = daysUntil(t.due_date);
@@ -115,7 +90,6 @@ export function computeFeed(
     });
   });
 
-  // Unsettled personal balances.
   const balances = personalBalanceLines(state.userId, state.members, state.expenses, state.splits);
   balances.forEach(line => {
     const key = `balance:${line.memberId}`;
@@ -131,19 +105,45 @@ export function computeFeed(
     });
   });
 
+  // Projected budget overruns (stretch scope Issue #52)
+  if (state.budgets && state.budgets.length > 0 && state.expenses) {
+    const now = new Date();
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const dayOfMonth = now.getDate();
+    const summaries = computeCategoryBudgets(state.expenses, state.budgets, now);
+
+    for (const sum of summaries) {
+      if (!sum.budgetAmount || sum.spent <= 0) continue;
+      const key = `budget:${sum.category}`;
+      if (snoozed.has(key)) continue;
+
+      const projected = (sum.spent / Math.max(1, dayOfMonth)) * daysInMonth;
+      if (projected > sum.budgetAmount || sum.spent >= sum.budgetAmount) {
+        const catLabel = sum.category.charAt(0).toUpperCase() + sum.category.slice(1);
+        const isExceeded = sum.spent >= sum.budgetAmount;
+        items.push({
+          key,
+          kind: 'budget',
+          icon: 'chart-pie-slice',
+          title: `Budget-Warnung: ${catLabel}`,
+          sub: isExceeded
+            ? `Budget überschritten (${sum.spent.toFixed(2)} € von ${sum.budgetAmount.toFixed(2)} €)`
+            : `Hochgerechnet ca. ${projected.toFixed(2)} € (Budget: ${sum.budgetAmount.toFixed(2)} €)`,
+          urgency: isExceeded ? 15 : 25,
+          refId: sum.category,
+        });
+      }
+    }
+  }
+
   return items.sort((a, b) => a.urgency - b.urgency);
 }
 
-// Per-household, per-day snooze bookkeeping shared by home.ts (to filter
-// the feed it renders) and app.ts (so the Home tab's badge count matches
-// exactly what the feed will show, never a stale pre-snooze number).
-// Keyed by household so switching households on the same device never
-// leaks one household's snoozed items into another's feed.
 export function getSnoozedKeys(householdId: string | null): Set<string> {
   if (!householdId) return new Set();
   const storageKey = `peerson_home_snoozed_${householdId}`;
   let raw: Record<string, string> = {};
-  try { raw = JSON.parse(localStorage.getItem(storageKey) || '{}'); } catch (e) { /* corrupt value, ignore */ }
+  try { raw = JSON.parse(localStorage.getItem(storageKey) || '{}'); } catch (e) { }
   const today = new Date().toISOString().slice(0, 10);
   const active = new Set<string>();
   Object.entries(raw).forEach(([key, snoozedOnDate]) => {
@@ -156,7 +156,7 @@ export function snoozeKey(householdId: string | null, key: string) {
   if (!householdId) return;
   const storageKey = `peerson_home_snoozed_${householdId}`;
   let raw: Record<string, string> = {};
-  try { raw = JSON.parse(localStorage.getItem(storageKey) || '{}'); } catch (e) { /* corrupt value, ignore */ }
+  try { raw = JSON.parse(localStorage.getItem(storageKey) || '{}'); } catch (e) { }
   raw[key] = new Date().toISOString().slice(0, 10);
   localStorage.setItem(storageKey, JSON.stringify(raw));
 }

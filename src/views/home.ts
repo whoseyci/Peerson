@@ -21,6 +21,7 @@ function actionLabel(f: FeedItem): string {
     case 'lowstock': return 'Einkaufen';
     case 'task': return 'Erledigt';
     case 'balance': return 'Ausgleichen';
+    case 'budget': return 'Ansehen';
   }
 }
 
@@ -153,6 +154,9 @@ export async function actOnFeedItem(key: string) {
         break;
       case 'balance':
         (window as any).openSettleModal();
+        break;
+      case 'budget':
+        app.navigate('expenses');
         break;
     }
     app.render();

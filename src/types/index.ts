@@ -146,6 +146,7 @@ export interface AppState {
   expenses: Expense[];
   splits: ExpenseSplit[];
   shopping: ShoppingItem[];
+  budgets: CategoryBudget[];
   locations: Location[];
   // Task-completion log for the whole household, loaded alongside tasks --
   // powers the People view's fairness summary. Kept as a flat list (not
@@ -161,4 +162,12 @@ export interface AppState {
   // re-render must never silently reset which room/container the user was
   // looking at).
   roomsNav: { roomId: string | null; containerId: string | null };
+}
+
+export interface CategoryBudget {
+  id: string;
+  household_id: string;
+  category: string;
+  monthly_amount: number;
+  created_at: number;
 }

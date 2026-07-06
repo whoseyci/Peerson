@@ -22,6 +22,7 @@ const TABLE_DEFAULTS: Record<string, () => MockRow> = {
   expenses: () => ({ split_type: 'equal', created_at: Math.floor(Date.now() / 1000) }),
   shopping_items: () => ({ status: 'open', created_at: Math.floor(Date.now() / 1000) }),
   locations: () => ({ sort_order: 0, created_at: Math.floor(Date.now() / 1000) }),
+  category_budgets: () => ({ created_at: Math.floor(Date.now() / 1000) }),
   households: () => ({ created_at: Math.floor(Date.now() / 1000) }),
   household_members: () => ({ role: 'member', joined_at: Math.floor(Date.now() / 1000) }),
 };

@@ -152,6 +152,20 @@ describe('computeFeed', () => {
     // low-stock entry for the same item (urgency 10+).
     expect(feed[0].key).toBe('expiring:b1');
   });
+
+  it('surfaces a budget warning when a category exceeds its monthly budget', () => {
+    const expenses: any[] = [
+      { id: 'e1', household_id: 'h1', title: 'Supermarkt', amount: 350, paid_by: 'u1', split_type: 'equal', category: 'groceries', created_at: Math.floor(Date.now() / 1000) },
+    ];
+    const budgets = [
+      { id: 'bg1', household_id: 'h1', category: 'groceries', monthly_amount: 300, created_at: 0 },
+    ];
+    const feed = computeFeed(
+      { items: [], batches: [], tasks: [], expenses, splits: [], members, userId: 'u1', budgets },
+      new Set()
+    );
+    expect(feed.some(f => f.kind === 'budget' && f.key === 'budget:groceries')).toBe(true);
+  });
 });
 
 describe('snooze persistence', () => {

@@ -2,6 +2,7 @@ import type { App } from '../app';
 import type { Expense } from '../types';
 import { escapeAttr, escapeHtml, escapeJsAttr } from '../utils/html';
 import { personalBalanceLines } from '../utils/finance';
+import { computeCategoryBudgets } from '../utils/budgets';
 
 const EXPENSE_CATEGORIES: Record<string, { icon: string; label: string }> = {
   groceries: { icon: 'shopping-cart-simple', label: 'Lebensmittel' },
@@ -47,6 +48,7 @@ export function renderExpensesView(app: App) {
   const regularExpenses = s.expenses.filter(e => !isSettlementExpense(e) && !isExpenseSettled(e, s.splits));
   const personalBalances = personalBalanceLines(s.userId, s.members, s.expenses, s.splits);
   const hasImbalance = personalBalances.length > 0;
+  const summaries = computeCategoryBudgets(s.expenses, s.budgets || []);
 
   return `
     <div class="header">
@@ -56,6 +58,44 @@ export function renderExpensesView(app: App) {
         ${hasImbalance ? `<button class="icon-btn" onclick="openSettleModal()" title="Schulden ausgleichen" aria-label="Schulden ausgleichen"><i class="ph ph-scales"></i></button>` : ''}
         <button class="icon-btn" onclick="openAddExpenseModal()" title="Ausgabe hinzufügen" aria-label="Ausgabe hinzufügen"><i class="ph ph-plus"></i></button>
       </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title"><i class="ph ph-chart-pie-slice"></i> Monatsbudgets</div>
+        <button class="icon-btn btn-mini" onclick="openAddBudgetModal()" title="Budget festlegen"><i class="ph ph-plus"></i></button>
+      </div>
+      ${summaries.length ? summaries.map(sum => {
+        const catMeta = EXPENSE_CATEGORIES[sum.category] || EXPENSE_CATEGORIES.sonstiges;
+        const catLabel = catMeta.label;
+        const hasBudget = sum.budgetAmount !== null;
+        const pct = sum.percentageUsed ?? 0;
+        let barColorVar = '--success';
+        let barBgVar = '--success-bg';
+        if (hasBudget) {
+          if (pct >= 100) { barColorVar = '--danger'; barBgVar = '--danger-bg'; }
+          else if (pct >= 80) { barColorVar = '--warning'; barBgVar = '--warning-bg'; }
+        }
+        const widthPct = hasBudget ? Math.min(100, Math.max(2, pct)) : 0;
+        return `
+          <div class="card" style="margin-bottom: 8px; cursor: pointer;" onclick="openEditBudgetModal('${escapeJsAttr(sum.category)}')">
+            <div class="card-content" style="padding: 12px 16px; flex-direction: column; align-items: stretch; gap: 8px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-weight: 700; font-size: 15px; color: var(--text); display: flex; align-items: center; gap: 6px;">
+                  <i class="ph ph-${catMeta.icon}"></i> ${escapeHtml(catLabel)}
+                </span>
+                <span style="font-size: 14px; font-weight: 700; color: var(${barColorVar});">
+                  ${sum.spent.toFixed(2)} € ${hasBudget ? `/ ${sum.budgetAmount!.toFixed(2)} € (${pct}%)` : '(Kein Budget)'}
+                </span>
+              </div>
+              ${hasBudget ? `
+              <div style="width: 100%; height: 8px; background: var(${barBgVar}); border-radius: 4px; overflow: hidden;">
+                <div style="width: ${widthPct}%; height: 100%; background: var(${barColorVar}); transition: width 0.3s;"></div>
+              </div>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('') : `<div class="empty-state" style="padding: 16px;">Noch keine Ausgaben oder Budgets im aktuellen Monat</div>`}
     </div>
 
     <div class="section">
@@ -472,7 +512,7 @@ export async function deleteExpense(id: string) {
 }
 
 // Bind to window for HTML onclick handlers
-Object.assign(window as any, {
+Object.assign(typeof window !== 'undefined' ? window : (globalThis as any), {
   openSettleModal,
   openPaymentHistoryModal,
   executeSettlement,

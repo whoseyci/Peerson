@@ -1,4 +1,4 @@
-import type { Household, Item, Batch, Task, Expense, ShoppingItem, HouseholdMember, Location, ItemPriceHistoryEntry, TaskCompletion } from '../types';
+import type { Household, Item, Batch, Task, Expense, ShoppingItem, HouseholdMember, Location, ItemPriceHistoryEntry, CategoryBudget, TaskCompletion } from '../types';
 
 const API_BASE = '';
 
@@ -55,6 +55,11 @@ export const api = {
     leave: (householdId: string, targetUserId: string) => post('/api/households', { action: 'leave', household_id: householdId, target_user_id: targetUserId }),
     kick: (householdId: string, targetUserId: string) => post('/api/households', { action: 'kick', household_id: householdId, target_user_id: targetUserId }),
     regenerateInvite: (id: string) => patch(`/api/households/${id}`, { invite_code: 'regenerate' }) as Promise<{ invite_code: string }>,
+    categoryBudgets: {
+      list: (householdId: string) => get(`/api/category-budgets?householdId=${householdId}`) as Promise<{ budgets: CategoryBudget[] }>,
+      set: (data: { household_id: string; category: string; monthly_amount: number | null }) => post('/api/category-budgets', data) as Promise<{ budget: CategoryBudget | null; deleted?: boolean }>,
+      delete: (idOrCategory: string, householdId?: string) => del(`/api/category-budgets/${encodeURIComponent(idOrCategory)}${householdId ? `?householdId=${householdId}` : ''}`),
+    },
     syncCheck: (householdId: string) => get(`/api/sync-check?householdId=${householdId}`) as Promise<{ lastModified: number }>,
   },
   items: {

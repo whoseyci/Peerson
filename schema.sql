@@ -179,3 +179,14 @@ CREATE TABLE IF NOT EXISTS task_completions (
 );
 CREATE INDEX IF NOT EXISTS idx_task_completions_household ON task_completions(household_id);
 CREATE INDEX IF NOT EXISTS idx_task_completions_user ON task_completions(completed_by);
+
+-- Category Budgets
+CREATE TABLE IF NOT EXISTS category_budgets (
+  id TEXT PRIMARY KEY,
+  household_id TEXT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  category TEXT NOT NULL,
+  monthly_amount REAL NOT NULL,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_category_budgets_household_category
+  ON category_budgets(household_id, category);
