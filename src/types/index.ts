@@ -104,6 +104,14 @@ export interface TaskCompletion {
   completed_at: number;
 }
 
+export interface CategoryBudget {
+  id: string;
+  household_id: string;
+  category: string;
+  monthly_amount: number;
+  created_at: number;
+}
+
 export interface Expense {
   id: string;
   household_id: string;
@@ -145,6 +153,7 @@ export interface AppState {
   tasks: Task[];
   expenses: Expense[];
   splits: ExpenseSplit[];
+  categoryBudgets: CategoryBudget[];
   shopping: ShoppingItem[];
   locations: Location[];
   // Task-completion log for the whole household, loaded alongside tasks --

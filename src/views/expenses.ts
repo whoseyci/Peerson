@@ -2,6 +2,7 @@ import type { App } from '../app';
 import type { Expense } from '../types';
 import { escapeAttr, escapeHtml, escapeJsAttr } from '../utils/html';
 import { personalBalanceLines } from '../utils/finance';
+import { BUDGETABLE_CATEGORIES, budgetProgressLines } from '../utils/budgets';
 
 const EXPENSE_CATEGORIES: Record<string, { icon: string; label: string }> = {
   groceries: { icon: 'shopping-cart-simple', label: 'Lebensmittel' },
@@ -81,6 +82,8 @@ export function renderExpensesView(app: App) {
       `).join('') : `<div class="empty-state">Du bist mit allen ausgeglichen</div>`}
     </div>
 
+    ${renderBudgetsSection(app)}
+
     <div class="section">
       <div class="section-header"><div class="section-title">Ausgaben</div></div>
       ${regularExpenses.length ? regularExpenses.map(e => {
@@ -109,6 +112,94 @@ export function renderExpensesView(app: App) {
       }).join('') : `<div class="empty-state">Noch keine Ausgaben</div>`}
     </div>
   `;
+}
+
+
+function categoryLabel(category: string) {
+  return EXPENSE_CATEGORIES[category]?.label || category;
+}
+
+function renderBudgetsSection(app: App) {
+  const lines = budgetProgressLines(app.state.categoryBudgets, app.state.expenses);
+  const budgeted = new Set(app.state.categoryBudgets.map(b => b.category));
+  const available = BUDGETABLE_CATEGORIES.filter(c => !budgeted.has(c));
+  return `
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title"><i class="ph ph-chart-pie-slice"></i> Budgets diesen Monat</div>
+        <button class="btn btn-small" onclick="openBudgetModal()"><i class="ph ph-plus"></i> Budget</button>
+      </div>
+      ${lines.length ? lines.map(line => {
+        const pct = Math.min(100, Math.round(line.ratio * 100));
+        const remaining = line.monthlyAmount - line.spent;
+        return `
+        <div class="budget-card ${line.status}">
+          <div class="budget-row">
+            <div>
+              <div class="budget-title"><i class="ph ph-${escapeAttr(EXPENSE_CATEGORIES[line.category]?.icon || 'package')}"></i> ${escapeHtml(categoryLabel(line.category))}</div>
+              <div class="budget-meta">${line.spent.toFixed(2)} € von ${line.monthlyAmount.toFixed(2)} €${remaining >= 0 ? ` · ${remaining.toFixed(2)} € übrig` : ` · ${Math.abs(remaining).toFixed(2)} € drüber`}</div>
+            </div>
+            <button class="icon-btn-sm" onclick="openBudgetModal('${escapeJsAttr(line.category)}')" title="Budget bearbeiten" aria-label="Budget bearbeiten"><i class="ph ph-pencil-simple"></i></button>
+          </div>
+          <div class="budget-progress"><div class="budget-progress-fill" style="width:${pct}%"></div></div>
+        </div>`;
+      }).join('') : `<div class="empty-state" style="padding:18px;">Noch keine Monatsbudgets gesetzt</div>`}
+      ${available.length ? `<button class="add-row-dashed" onclick="openBudgetModal()"><i class="ph ph-plus"></i> Budget hinzufügen</button>` : ''}
+    </div>`;
+}
+
+export function openBudgetModal(category?: string) {
+  const app = (window as any).app as App;
+  const existing = category ? app.state.categoryBudgets.find(b => b.category === category) : null;
+  const budgeted = new Set(app.state.categoryBudgets.map(b => b.category));
+  const options = BUDGETABLE_CATEGORIES
+    .filter(c => c === category || !budgeted.has(c))
+    .map(c => `<option value="${escapeAttr(c)}" ${c === category ? 'selected' : ''}>${escapeHtml(categoryLabel(c))}</option>`)
+    .join('');
+
+  app.showModal('budgetModal', `
+    <div class="modal-header"><div class="modal-title">${existing ? 'Budget bearbeiten' : 'Budget hinzufügen'}</div><button class="close-btn" onclick="window.app.closeModal('budgetModal')"><i class="ph ph-x"></i></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Kategorie</label><select id="budgetCategory" ${existing ? 'disabled' : ''}>${options}</select></div>
+      <div class="form-group"><label>Monatsbudget (€)</label><input type="number" id="budgetAmount" step="0.01" min="0" value="${existing ? Number(existing.monthly_amount).toFixed(2) : ''}" placeholder="z. B. 300"></div>
+      <button class="btn" onclick="saveBudgetModal()"><i class="ph-bold ph-check"></i> Speichern</button>
+      ${existing ? `<button class="btn btn-secondary" onclick="deleteBudget('${escapeJsAttr(existing.category)}')"><i class="ph ph-trash"></i> Budget entfernen</button>` : ''}
+    </div>
+  `);
+}
+
+export async function saveBudgetModal() {
+  const app = (window as any).app as App;
+  const api = (window as any).api;
+  const category = (document.getElementById('budgetCategory') as HTMLSelectElement)?.value;
+  const raw = (document.getElementById('budgetAmount') as HTMLInputElement)?.value;
+  const amount = raw ? parseFloat(raw.replace(',', '.')) : NaN;
+  if (!category || !Number.isFinite(amount) || amount <= 0) return app.toast('Bitte gültiges Budget eingeben');
+  try {
+    const res = await api.categoryBudgets.upsert({ household_id: app.state.householdId, category, monthly_amount: amount });
+    const idx = app.state.categoryBudgets.findIndex(b => b.category === category);
+    if (idx >= 0) app.state.categoryBudgets[idx] = res.budget;
+    else app.state.categoryBudgets.push(res.budget);
+    app.closeModal('budgetModal');
+    app.render();
+    app.toast('Budget gespeichert');
+  } catch (e) {
+    app.toast('Fehler beim Speichern');
+  }
+}
+
+export async function deleteBudget(category: string) {
+  const app = (window as any).app as App;
+  const api = (window as any).api;
+  try {
+    await api.categoryBudgets.delete(app.state.householdId, category);
+    app.state.categoryBudgets = app.state.categoryBudgets.filter(b => b.category !== category);
+    app.closeModal('budgetModal');
+    app.render();
+    app.toast('Budget entfernt');
+  } catch (e) {
+    app.toast('Fehler beim Entfernen');
+  }
 }
 
 export function openPaymentHistoryModal() {
@@ -475,6 +566,9 @@ export async function deleteExpense(id: string) {
 Object.assign(window as any, {
   openSettleModal,
   openPaymentHistoryModal,
+  openBudgetModal,
+  saveBudgetModal,
+  deleteBudget,
   executeSettlement,
   openAddExpenseModal,
   openEditExpenseModal,

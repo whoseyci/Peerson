@@ -1,4 +1,4 @@
-import type { Household, Item, Batch, Task, Expense, ShoppingItem, HouseholdMember, Location, ItemPriceHistoryEntry, TaskCompletion } from '../types';
+import type { Household, Item, Batch, Task, Expense, ShoppingItem, HouseholdMember, Location, ItemPriceHistoryEntry, TaskCompletion, CategoryBudget } from '../types';
 
 const API_BASE = '';
 
@@ -84,6 +84,13 @@ export const api = {
     create: (data: any) => post('/api/tasks', data) as Promise<{ task: Task }>,
     update: (id: string, data: any) => patch(`/api/tasks/${id}`, data) as Promise<{ task: Task }>,
     delete: (id: string) => del(`/api/tasks/${id}`),
+  },
+  categoryBudgets: {
+    list: (householdId: string) => get(`/api/category-budgets?householdId=${householdId}`) as Promise<{ budgets: CategoryBudget[] }>,
+    upsert: (data: { household_id: string; category: string; monthly_amount: number }) =>
+      post('/api/category-budgets', data) as Promise<{ budget: CategoryBudget }>,
+    delete: (householdId: string, category: string) =>
+      del(`/api/category-budgets?householdId=${encodeURIComponent(householdId)}&category=${encodeURIComponent(category)}`),
   },
   expenses: {
     list: (householdId: string) => get(`/api/expenses?householdId=${householdId}`) as Promise<{
