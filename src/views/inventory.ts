@@ -1,5 +1,6 @@
 import type { App } from '../app';
 import type { Item, Batch, Location } from '../types';
+import { escapeAttr, escapeHtml, escapeJsAttr } from '../utils/html';
 
 // Matches the shape functions/api/product-lookup.ts already fetches from
 // Open Food Facts (per-100g values) -- Item.nutrition just needs to store
@@ -87,7 +88,7 @@ function locationSelectOptions(locations: Location[], selectedId: string | null 
     (byParent.get(parentId) || []).forEach(node => {
       const indent = '\u00A0\u00A0\u00A0\u00A0'.repeat(depth);
       const selected = node.id === selectedId ? ' selected' : '';
-      options.push(`<option value="${node.id}"${selected}>${indent}${node.name}</option>`);
+      options.push(`<option value="${escapeAttr(node.id)}"${selected}>${indent}${escapeHtml(node.name)}</option>`);
       walk(node.id, depth + 1);
     });
   };
@@ -191,11 +192,11 @@ export function renderInventoryView(app: App) {
         const preview = prefill.imageUrl || prefill.quantity ? (
           '<div class="product-preview">' +
             (prefill.imageUrl
-              ? '<img src="' + prefill.imageUrl + '" alt="">'
+              ? '<img src="' + escapeAttr(prefill.imageUrl) + '" alt="">'
               : '<div class="product-preview-icon"><i class="ph ph-package"></i></div>') +
             '<div class="product-preview-text">' +
-              '<div class="product-preview-name">' + (prefill.name || 'Unbekanntes Produkt') + '</div>' +
-              '<div class="product-preview-meta">' + (prefill.quantity || 'Über Barcode gefunden') + '</div>' +
+              '<div class="product-preview-name">' + escapeHtml(prefill.name || 'Unbekanntes Produkt') + '</div>' +
+              '<div class="product-preview-meta">' + escapeHtml(prefill.quantity || 'Über Barcode gefunden') + '</div>' +
             '</div>' +
           '</div>'
         ) : '';
@@ -203,14 +204,14 @@ export function renderInventoryView(app: App) {
           '<div class="modal-header"><div class="modal-title">Neuer Artikel</div><button class="close-btn" onclick="(window as any).app.closeModal(\'itemModal\')"><i class="ph ph-x"></i></button></div>' +
           '<div class="modal-body">' +
             preview +
-            '<div class="form-group"><label>Name</label><input type="text" id="newItemName" placeholder="z. B. Hafermilch" value="' + (prefill.name ? prefill.name.replace(/"/g, '&quot;') : '') + '"></div>' +
+            '<div class="form-group"><label>Name</label><input type="text" id="newItemName" placeholder="z. B. Hafermilch" value="' + (escapeAttr(prefill.name || '')) + '"></div>' +
             '<div class="form-group"><label>Kategorie</label><select id="newItemCategory">' + categories.map((c: any) => '<option value="' + c.value + '"' + (c.value === prefill.category ? ' selected' : '') + '>' + c.label + '</option>').join('') + '</select></div>' +
             '<div class="form-group"><label>Mindestmenge</label><input type="number" id="newItemThreshold" value="2" min="0"></div>' +
             ((window as any).app.state.locations.length ? '<div class="form-group"><label>Ort</label><select id="newItemLocation">' + (window as any).locationSelectOptions((window as any).app.state.locations, null) + '</select></div>' : '') +
             '<div class="form-group"><label>Preis (optional)</label><input type="text" inputmode="decimal" id="newItemPrice" placeholder="z. B. 2,49"></div>' +
             '<div class="form-group"><label>Barcode</label>' +
               '<div style="display:flex; gap:8px;">' +
-                '<input type="text" id="newItemBarcode" placeholder="Optional" value="' + (prefill.barcode || '') + '" style="flex:1;">' +
+                '<input type="text" id="newItemBarcode" placeholder="Optional" value="' + escapeAttr(prefill.barcode || '') + '" style="flex:1;">' +
                 '<button class="btn btn-secondary btn-small" style="width:auto; padding:0 14px;" onclick="scanIntoBarcodeField()"><i class="ph ph-barcode"></i></button>' +
               '</div>' +
             '</div>' +
@@ -337,7 +338,7 @@ export function renderInventoryView(app: App) {
         }
         return detailBarcodeDraft.map((b, idx) =>
           '<div class="barcode-row">' +
-            '<input type="text" class="detail-barcode-code" placeholder="Barcode" value="' + (b.code || '').replace(/"/g, '&quot;') + '" oninput="detailBarcodeDraft[' + idx + '].code = this.value">' +
+            '<input type="text" class="detail-barcode-code" placeholder="Barcode" value="' + escapeAttr(b.code || '') + '" oninput="detailBarcodeDraft[' + idx + '].code = this.value">' +
             '<input type="number" class="detail-barcode-grams" placeholder="Gramm" min="0" value="' + (b.grams || 0) + '" oninput="detailBarcodeDraft[' + idx + '].grams = parseInt(this.value) || 0">' +
             '<button class="barcode-row-del" onclick="removeDetailBarcodeRow(' + idx + ')" title="Entfernen"><i class="ph ph-x"></i></button>' +
           '</div>'
@@ -485,7 +486,7 @@ export function renderInventoryView(app: App) {
           const priceEuros = (item.price_cents !== null && item.price_cents !== undefined) ? (item.price_cents / 100).toFixed(2).replace('.', ',') : '';
           (window as any).app.showModal('itemModal',
             '<div class="modal-header"><div class="modal-title">' +
-              '<input type="text" id="editName" value="' + item.name.replace(/"/g, '&quot;') + '" style="font-size:18px; font-weight:700; border:none; background:transparent; padding:0; width:100%;">' +
+              '<input type="text" id="editName" value="' + escapeAttr(item.name) + '" style="font-size:18px; font-weight:700; border:none; background:transparent; padding:0; width:100%;">' +
             '</div><button class="close-btn" onclick="(window as any).app.closeModal(\'itemModal\')"><i class="ph ph-x"></i></button></div>' +
             '<div class="modal-body">' +
               '<div class="form-group"><label>Kategorie</label><select id="editCategory">' + catOptions.map((c: any) => '<option value="' + c.value + '"' + (c.value === item.category ? ' selected' : '') + '>' + c.label + '</option>').join('') + '</select></div>' +
@@ -611,7 +612,7 @@ export function renderInventoryView(app: App) {
           '<div class="barcode-variant-row">' +
             options.map((b: any, idx: number) =>
               '<div class="barcode-variant-chip' + (addStockSelectedBarcode === b.code ? ' active' : '') + '" onclick="setAddStockVariant(\'' + itemId + '\', ' + idx + ')">' +
-                b.code + (b.grams ? ' · ' + b.grams + 'g' : '') +
+                escapeHtml(b.code) + (b.grams ? ' · ' + escapeHtml(b.grams) + 'g' : '') +
               '</div>'
             ).join('') +
           '</div>' +
@@ -741,20 +742,24 @@ function renderInventoryList(app: App, filter: string) {
     const nutriScore = i.nutrition?.nutriscore_grade ? String(i.nutrition.nutriscore_grade).toUpperCase() : null;
     const latestBatch = app.state.batches.filter((b: any) => b.item_id === i.id && typeof b.price === 'number' && b.price > 0).sort((a,b) => b.date_added - a.date_added)[0];
     const priceStr = latestBatch ? ` · ca. ${latestBatch.price!.toFixed(2)} €` : '';
-    const nutriStr = (nutriScore || kcal) ? ` <span style="font-size:0.75rem; background:var(--border); padding:2px 6px; border-radius:4px; margin-left:6px; font-weight:600; display:inline-block; margin-top:2px;">${nutriScore ? `Nutri-Score ${nutriScore} ` : ''}${kcal ? `<i class="ph ph-fire"></i> ${kcal} kcal` : ''}</span>` : '';
+    const itemId = escapeJsAttr(i.id);
+    const itemName = escapeHtml(i.name);
+    const categoryLabel = escapeHtml(CATEGORY_META[i.category]?.label || i.category);
+    const icon = escapeAttr(getItemIcon(i));
+    const nutriStr = (nutriScore || kcal) ? ` <span style="font-size:0.75rem; background:var(--border); padding:2px 6px; border-radius:4px; margin-left:6px; font-weight:600; display:inline-block; margin-top:2px;">${nutriScore ? `Nutri-Score ${escapeHtml(nutriScore)} ` : ''}${kcal ? `<i class="ph ph-fire"></i> ${escapeHtml(kcal)} kcal` : ''}</span>` : '';
     return `
       <div class="card">
-        <div class="card-content" onclick="openItemDetail('${i.id}')">
-          <div class="card-icon"><i class="ph ph-${getItemIcon(i)}"></i></div>
+        <div class="card-content" onclick="openItemDetail('${itemId}')">
+          <div class="card-icon"><i class="ph ph-${icon}"></i></div>
           <div class="card-text">
-            <div class="card-header"><div class="item-name">${i.name}</div><div class="item-qty">${total}</div></div>
-            <div class="card-meta">${CATEGORY_META[i.category]?.label || i.category} · Min. ${i.threshold}${priceStr}</div>
+            <div class="card-header"><div class="item-name">${itemName}</div><div class="item-qty">${total}</div></div>
+            <div class="card-meta">${categoryLabel} · Min. ${escapeHtml(i.threshold)}${priceStr}</div>
             ${nutriStr}
           </div>
         </div>
         <div class="card-actions">
-          <button class="action-btn add" onclick="openAddStock('${i.id}')"><i class="ph ph-plus"></i></button>
-          <button class="action-btn remove" onclick="removeOne('${i.id}')"><i class="ph ph-minus"></i></button>
+          <button class="action-btn add" onclick="openAddStock('${itemId}')" aria-label="Bestand für ${itemName} hinzufügen"><i class="ph ph-plus"></i></button>
+          <button class="action-btn remove" onclick="removeOne('${itemId}')" aria-label="Eine Einheit ${itemName} entnehmen"><i class="ph ph-minus"></i></button>
         </div>
       </div>
     `;

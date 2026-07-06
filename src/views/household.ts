@@ -1,5 +1,6 @@
 import type { App } from '../app';
 import type { Location } from '../types';
+import { escapeAttr, escapeHtml, escapeJsAttr } from '../utils/html';
 
 interface LocationNode extends Location {
   children: LocationNode[];
@@ -25,13 +26,16 @@ function renderLocationTree(nodes: LocationNode[], depth: number): string {
     .sort((a, b) => (a.sort_order - b.sort_order) || a.name.localeCompare(b.name))
     .map(node => {
       const indent = depth * 16;
+      const id = escapeJsAttr(node.id);
+      const name = escapeHtml(node.name);
+      const jsName = escapeJsAttr(node.name);
       return `
         <div class="location-tree-row" style="padding-left: ${indent}px;">
-          <span class="location-name"><i class="ph ph-folder"></i> ${node.name}</span>
+          <span class="location-name"><i class="ph ph-folder"></i> ${name}</span>
           <span class="location-actions">
-            <button class="icon-btn btn-mini" onclick="addChildLocation('${node.id}')" title="Unterort hinzufügen"><i class="ph ph-plus"></i></button>
-            <button class="icon-btn btn-mini" onclick="renameLocation('${node.id}', '${node.name.replace(/'/g, "\\'")}')" title="Umbenennen"><i class="ph ph-pencil-simple"></i></button>
-            <button class="icon-btn btn-mini" onclick="deleteLocation('${node.id}', '${node.name.replace(/'/g, "\\'")}')" title="Löschen"><i class="ph ph-trash"></i></button>
+            <button class="icon-btn btn-mini" onclick="addChildLocation('${id}')" title="Unterort hinzufügen" aria-label="Unterort hinzufügen"><i class="ph ph-plus"></i></button>
+            <button class="icon-btn btn-mini" onclick="renameLocation('${id}', '${jsName}')" title="Umbenennen" aria-label="${name} umbenennen"><i class="ph ph-pencil-simple"></i></button>
+            <button class="icon-btn btn-mini" onclick="deleteLocation('${id}', '${jsName}')" title="Löschen" aria-label="${name} löschen"><i class="ph ph-trash"></i></button>
           </span>
         </div>
         ${renderLocationTree(node.children, depth + 1)}
@@ -44,38 +48,59 @@ export function renderHouseholdView(app: App) {
 
   if (!s.householdId || !s.household) {
     return `
-      <div class="header"><h1><i class="ph ph-users"></i> Haushalt</h1></div>
+      <div class="welcome-hero">
+        <div class="welcome-mark"><i class="ph ph-house-heart"></i></div>
+        <h1>Peerson</h1>
+        <p>Dein Haushalt, endlich synchron: Vorrat, Einkauf, Aufgaben und Finanzen an einem Ort.</p>
+      </div>
+
+      <div class="section">
+        <div class="quick-grid">
+          <div class="quick-card"><i class="ph ph-package"></i><span>Vorrat tracken</span></div>
+          <div class="quick-card"><i class="ph ph-shopping-cart-simple"></i><span>Einkäufe planen</span></div>
+          <div class="quick-card"><i class="ph ph-check-circle"></i><span>Aufgaben teilen</span></div>
+          <div class="quick-card"><i class="ph ph-currency-eur"></i><span>Kosten splitten</span></div>
+        </div>
+      </div>
+
       <div class="section">
         <div class="card">
           <div class="card-content" style="flex-direction:column; align-items:stretch;">
             <label>Haushalt erstellen</label>
-            <input type="text" id="newHouseholdName" placeholder="Name (z. B. WG Mitte)">
-            <button class="btn mt-2" onclick="createHousehold()"><i class="ph-bold ph-plus"></i> Erstellen</button>
+            <input type="text" id="newHouseholdName" placeholder="Name (z. B. WG Mitte)" autocomplete="organization">
+            <button class="btn mt-2" onclick="createHousehold()"><i class="ph-bold ph-plus"></i> Neuen Haushalt starten</button>
           </div>
         </div>
         <div class="card mt-3">
           <div class="card-content" style="flex-direction:column; align-items:stretch;">
-            <label>Oder mit Code beitreten</label>
-            <input type="text" id="joinCode" placeholder="8-stelliger Code">
-            <button class="btn btn-secondary mt-2" onclick="joinHousehold()"><i class="ph-bold ph-sign-in"></i> Beitreten</button>
+            <label>Mit Code beitreten</label>
+            <input type="text" id="joinCode" placeholder="8-stelliger Code" inputmode="numeric" autocomplete="one-time-code">
+            <button class="btn btn-secondary mt-2" onclick="joinHousehold()"><i class="ph-bold ph-sign-in"></i> Haushalt beitreten</button>
           </div>
         </div>
-        <div class="card mt-3">
-          <div class="card-content" style="flex-direction:column; align-items:stretch;">
-            <label>Account wiederherstellen</label>
-            <input type="text" id="restoreUserId" placeholder="User-ID einfügen">
-            <button class="btn btn-secondary mt-2" onclick="restoreAccount()"><i class="ph ph-device-mobile"></i> Gerät verbinden</button>
-            <div style="font-size: 12px; color: var(--text-soft); margin-top: 6px;">Deine User-ID findest du im Haushalt-Menü unter "Account"</div>
+        <details class="restore-details mt-3">
+          <summary>Account von anderem Gerät wiederherstellen</summary>
+          <div class="card mt-2">
+            <div class="card-content" style="flex-direction:column; align-items:stretch;">
+              <label>User-ID</label>
+              <input type="text" id="restoreUserId" placeholder="User-ID einfügen" autocomplete="off">
+              <button class="btn btn-secondary mt-2" onclick="restoreAccount()"><i class="ph ph-device-mobile"></i> Gerät verbinden</button>
+              <div style="font-size: 12px; color: var(--text-soft); margin-top: 6px;">Deine User-ID findest du im Haushalt-Menü unter „Account“.</div>
+            </div>
           </div>
-        </div>
+        </details>
       </div>
     `;
   }
 
   const inviteUrl = `${location.origin}?join=${s.household.invite_code}`;
+  const householdName = escapeHtml(s.household.name);
+  const inviteCode = escapeHtml(s.household.invite_code);
+  const inviteCodeJs = escapeJsAttr(s.household.invite_code);
+  const inviteUrlJs = escapeJsAttr(inviteUrl);
   return `
     <div class="header">
-      <h1><i class="ph ph-users"></i> ${s.household.name}</h1>
+      <h1><i class="ph ph-users"></i> ${householdName}</h1>
     </div>
 
     <div class="section">
@@ -84,11 +109,11 @@ export function renderHouseholdView(app: App) {
         <div class="card-content" style="flex-direction:column; align-items:stretch;">
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <span style="font-size:13px; color:var(--text-soft);">Code für Mitbewohner:</span>
-            <span style="font-family:monospace; font-weight:800; font-size:18px; letter-spacing:2px; background:var(--bg); padding:4px 10px; border-radius:8px; border:1px solid var(--border);">${s.household.invite_code}</span>
+            <span style="font-family:monospace; font-weight:800; font-size:18px; letter-spacing:2px; background:var(--bg); padding:4px 10px; border-radius:8px; border:1px solid var(--border);">${inviteCode}</span>
           </div>
           <div style="display:flex; gap:8px; margin-top:12px;">
-            <button class="btn btn-secondary" style="flex:1;" onclick="navigator.clipboard.writeText('${s.household.invite_code}').then(() => app.toast('Code kopiert'))"><i class="ph ph-copy"></i> Code kopieren</button>
-            <button class="btn btn-secondary" style="flex:1;" onclick="navigator.clipboard.writeText('${inviteUrl}').then(() => app.toast('Link kopiert'))"><i class="ph ph-link"></i> Link kopieren</button>
+            <button class="btn btn-secondary" style="flex:1;" onclick="navigator.clipboard.writeText('${inviteCodeJs}').then(() => app.toast('Code kopiert'))"><i class="ph ph-copy"></i> Code kopieren</button>
+            <button class="btn btn-secondary" style="flex:1;" onclick="navigator.clipboard.writeText('${inviteUrlJs}').then(() => app.toast('Link kopiert'))"><i class="ph ph-link"></i> Link kopieren</button>
             <button class="icon-btn" onclick="regenerateInvite()" title="Neuen Code generiert"><i class="ph ph-arrows-clockwise"></i></button>
           </div>
         </div>
@@ -109,21 +134,25 @@ export function renderHouseholdView(app: App) {
 
     <div class="section">
       <div class="section-header"><div class="section-title">Mitglieder</div><span class="badge">${s.members.length}</span></div>
-      ${s.members.map(m => `
+      ${s.members.map(m => {
+        const memberName = escapeHtml(m.name);
+        const memberNameJs = escapeJsAttr(m.name);
+        const memberId = escapeJsAttr(m.id);
+        return `
         <div class="card">
           <div class="card-content">
             <div class="card-icon"><i class="ph ph-user"></i></div>
             <div class="card-text">
-              <div class="card-header"><div class="item-name">${m.name} ${m.id === s.userId ? '(Du)' : ''}</div></div>
+              <div class="card-header"><div class="item-name">${memberName} ${m.id === s.userId ? '(Du)' : ''}</div></div>
               <div class="card-meta">Dabei seit ${new Date(m.joined_at * 1000).toLocaleDateString('de-DE')}</div>
             </div>
           </div>
           ${(m.id !== s.userId) ? `
           <div class="card-actions">
-            <button class="action-btn remove" onclick="kickMember('${m.id}', '${m.name.replace(/'/g, "\\'")}')" title="Entfernen"><i class="ph ph-sign-out"></i></button>
+            <button class="action-btn remove" onclick="kickMember('${memberId}', '${memberNameJs}')" title="Entfernen" aria-label="${memberName} entfernen"><i class="ph ph-sign-out"></i></button>
           </div>` : ''}
         </div>
-      `).join('')}
+      `}).join('')}
     </div>
 
     <div class="section">
@@ -132,13 +161,13 @@ export function renderHouseholdView(app: App) {
         <div class="card-content" style="flex-direction:column; align-items:stretch;">
           <label>Dein Name im Haushalt</label>
           <div style="display:flex; gap:8px; align-items:center;">
-            <input type="text" id="profileName" value="${s.userName}" style="flex:1; height:44px; padding:0 12px; font-size:16px; border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--field-bg); color:var(--text);">
+            <input type="text" id="profileName" value="${escapeAttr(s.userName)}" style="flex:1; height:44px; padding:0 12px; font-size:16px; border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--field-bg); color:var(--text);">
             <button class="btn" onclick="saveProfileName()" style="width:44px; height:44px; padding:0; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><i class="ph-bold ph-check" style="font-size:18px;"></i></button>
           </div>
           <div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--border); font-size:12px; color:var(--text-soft);">
             <div style="margin-bottom:4px;"><strong>Account-Wiederherstellung:</strong></div>
             <div>Falls du das Gerät wechselst, speichere deine User-ID:</div>
-            <div style="font-family:monospace; background:var(--bg); padding:4px 8px; border-radius:4px; margin-top:4px; user-select:all; border:1px solid var(--border);">${s.userId}</div>
+            <div style="font-family:monospace; background:var(--bg); padding:4px 8px; border-radius:4px; margin-top:4px; user-select:all; border:1px solid var(--border);">${escapeHtml(s.userId)}</div>
           </div>
         </div>
       </div>
@@ -260,9 +289,9 @@ export function openLocationNameModal(title: string, initialValue: string, onSav
   const app = (window as any).app;
   (window as any)._locationModalOnSave = onSave;
   app.showModal('locationNameModal', `
-    <div class="modal-header"><div class="modal-title">${title}</div><button class="close-btn" onclick="window.app.closeModal('locationNameModal')"><i class="ph ph-x"></i></button></div>
+    <div class="modal-header"><div class="modal-title">${escapeHtml(title)}</div><button class="close-btn" onclick="window.app.closeModal('locationNameModal')"><i class="ph ph-x"></i></button></div>
     <div class="modal-body">
-      <div class="form-group"><label>Name</label><input type="text" id="locationNameInput" value="${(initialValue || '').replace(/"/g, '&quot;')}" placeholder="z. B. Küche"></div>
+      <div class="form-group"><label>Name</label><input type="text" id="locationNameInput" value="${escapeAttr(initialValue || '')}" placeholder="z. B. Küche"></div>
       <button class="btn" onclick="submitLocationNameModal()"><i class="ph-bold ph-check"></i> Speichern</button>
     </div>
   `);

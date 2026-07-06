@@ -12,12 +12,12 @@
   --field-border: #94A3B8;
   --field-focus: #111827;
   --focus-ring: rgba(17, 24, 39, 0.2);
-  --danger: #111827;
-  --danger-bg: #E5E7EB;
-  --warning: #374151;
-  --warning-bg: #E5E7EB;
-  --success: #4B5563;
-  --success-bg: #E5E7EB;
+  --danger: #DC2626;
+  --danger-bg: #FEE2E2;
+  --warning: #B45309;
+  --warning-bg: #FEF3C7;
+  --success: #047857;
+  --success-bg: #D1FAE5;
   --radius: 16px;
   --radius-sm: 12px;
   --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08);
@@ -35,16 +35,30 @@ body.dark-mode {
   --field-border: #4b5563;
   --field-focus: #F3F4F6;
   --focus-ring: rgba(243, 244, 246, 0.2);
-  --danger: #F3F4F6;
-  --danger-bg: #374151;
-  --warning: #e5e7eb;
-  --warning-bg: #374151;
-  --success: #d1d5db;
-  --success-bg: #374151;
+  --danger: #F87171;
+  --danger-bg: #451A1A;
+  --warning: #FBBF24;
+  --warning-bg: #3F2F10;
+  --success: #34D399;
+  --success-bg: #123C2A;
   --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+:focus-visible {
+  outline: 3px solid var(--field-focus);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
 
 body {
   font-family: 'Inter', sans-serif;
@@ -209,26 +223,29 @@ h1 i { color: var(--text); opacity: 0.8; }
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   z-index: 100;
   background: var(--surface);
-  padding: 8px 16px;
+  padding: 8px 12px;
   border-radius: 40px;
   box-shadow: 0 10px 40px rgba(0,0,0,0.15);
   border: 1px solid var(--border);
 }
 
 .dock-btn {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
+  width: auto;
+  min-width: 58px;
+  height: 52px;
+  border-radius: 28px;
   border: none;
   background: transparent;
   color: var(--text-soft);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
+  gap: 2px;
+  font-size: 21px;
   cursor: pointer;
   transition: all 0.2s;
   position: relative;
@@ -238,10 +255,16 @@ h1 i { color: var(--text); opacity: 0.8; }
   color: var(--bg);
   box-shadow: 0 4px 12px rgba(0,0,0,0.2);
 }
+.dock-label {
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
 .dock-btn .badge {
   position: absolute;
-  top: -2px;
-  right: -2px;
+  top: -4px;
+  right: 2px;
   min-width: 18px;
   height: 18px;
   font-size: 11px;
@@ -754,3 +777,63 @@ body.dark-mode .toast-progress-bar { background: rgba(0,0,0,0.35); }
   color: var(--text-soft); cursor: pointer; padding: 0; font-size: 16px;
 }
 .location-actions .icon-btn:hover { background: var(--bg); color: var(--text); border-color: var(--text-soft); }
+
+/* First-run onboarding */
+.welcome-hero {
+  background: linear-gradient(135deg, var(--text), var(--text-soft));
+  color: var(--bg);
+  border-radius: 28px;
+  padding: 28px 22px;
+  margin-bottom: 22px;
+  box-shadow: 0 18px 45px rgba(0,0,0,0.16);
+}
+.welcome-mark {
+  width: 54px;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.18);
+  border: 1px solid rgba(255,255,255,0.22);
+  font-size: 28px;
+  margin-bottom: 18px;
+}
+.welcome-hero h1 {
+  font-size: 38px;
+  margin-bottom: 8px;
+}
+.welcome-hero p {
+  max-width: 28rem;
+  color: var(--bg);
+  opacity: 0.82;
+  font-size: 16px;
+  line-height: 1.45;
+  font-weight: 600;
+}
+.quick-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.quick-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  box-shadow: var(--shadow);
+  color: var(--text-soft);
+  font-weight: 700;
+  font-size: 13px;
+}
+.quick-card i { font-size: 20px; color: var(--text); }
+.restore-details summary {
+  cursor: pointer;
+  color: var(--text-soft);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 2px;
+}
