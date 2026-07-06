@@ -54,6 +54,16 @@ function renderTripScreen() {
       <h2>Einkaufstour · ${done}/${total}</h2>
       <button class="btn btn-small btn-secondary" style="width:auto; margin-top:0;" onclick="finishShoppingTrip()">Beenden</button>
     </div>
+    ${(() => {
+      const others = (app.onlineUsers || []).filter((u: any) => u.userId !== app.state.userId);
+      if (others.length > 0) {
+        const names = others.map((u: any) => escapeHtml(u.userName)).join(', ');
+        return `<div style="background:var(--surface); border-bottom:1px solid var(--border); padding:8px 16px; font-size:13px; font-weight:600; color:var(--success); display:flex; align-items:center; gap:8px;">
+          <i class="ph ph-broadcast"></i> ${names} ${others.length === 1 ? 'ist' : 'sind'} auch gerade online — Einkaufsliste live synchronisiert!
+        </div>`;
+      }
+      return '';
+    })()}
     <div class="trip-progress-track"><div class="trip-progress-fill" style="width:${total ? (done / total) * 100 : 0}%"></div></div>
     <div class="trip-body">
       <div class="trip-actions">

@@ -1,3 +1,4 @@
+import { notifyHouseholdSync } from '../../durable/notifyHub';
 import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../../_middleware';
 
@@ -39,6 +40,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
     }
   }
   const updated = await env.DB.prepare('SELECT * FROM batches WHERE id = ?').bind(id).first();
+  await notifyHouseholdSync(env, batch.household_id as string, { type: 'batch.updated', householdId: batch.household_id as string, payload: { id } });
   return Response.json({ batch: updated });
 };
 
@@ -50,5 +52,6 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env, params
   if (!batch) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404 });
   await requireMember(env.DB, userId, batch.household_id as string);
   await env.DB.prepare('DELETE FROM batches WHERE id = ?').bind(id).run();
+  await notifyHouseholdSync(env, batch.household_id as string, { type: 'batch.deleted', householdId: batch.household_id as string, payload: { id } });
   return Response.json({ success: true });
 };

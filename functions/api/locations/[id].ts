@@ -1,3 +1,4 @@
+import { notifyHouseholdSync } from '../../durable/notifyHub';
 import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../../_middleware';
 
@@ -72,6 +73,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
   values.push(id);
   await env.DB.prepare(`UPDATE locations SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
   const location = await env.DB.prepare('SELECT * FROM locations WHERE id = ?').bind(id).first();
+  await notifyHouseholdSync(env, existing.household_id as string, { type: 'location.updated', householdId: existing.household_id as string, payload: { id } });
   return Response.json({ location });
 };
 
@@ -87,5 +89,6 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env, params
   if (!existing) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404 });
   await requireMember(env.DB, userId, existing.household_id as string);
   await env.DB.prepare('DELETE FROM locations WHERE id = ?').bind(id).run();
+  await notifyHouseholdSync(env, existing.household_id as string, { type: 'location.deleted', householdId: existing.household_id as string, payload: { id } });
   return Response.json({ success: true });
 };

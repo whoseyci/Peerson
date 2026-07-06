@@ -9,3 +9,11 @@ database_id = "ca553dfb-0217-4db4-8b54-9ad2eee13195"
 
 [vars]
 APP_NAME = "Peerson"
+
+[[durable_objects.bindings]]
+name = "HOUSEHOLD_SYNC"
+class_name = "HouseholdSyncHub"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["HouseholdSyncHub"]

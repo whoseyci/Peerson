@@ -1,3 +1,4 @@
+import { notifyHouseholdSync } from '../durable/notifyHub';
 import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../_middleware';
 

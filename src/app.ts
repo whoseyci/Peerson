@@ -98,6 +98,10 @@ export class App {
   private syncInFlight = false;
   isSyncing = false;
   private lastSyncTimestamp = 0;
+  onlineUsers: Array<{ userId: string; userName: string }> = [];
+  private syncWs: any = null;
+  private wsReconnectTimer: any = null;
+  private wsReconnectDelay = 2000;
 
   // --- Soft-delete / undo state ---
   // Keyed by "type:id" so an item and a task can never collide even if
@@ -399,8 +403,10 @@ export class App {
   // render (whenever that naturally happens) will reflect it.
 
   startSync() {
-    if (this.syncTimer) return;
-    this.syncTimer = setInterval(() => this.syncNow(), SYNC_INTERVAL_MS);
+    if (!this.syncTimer) {
+      this.syncTimer = setInterval(() => this.syncNow(), SYNC_INTERVAL_MS);
+    }
+    this.connectSyncWebSocket();
   }
 
   stopSync() {
@@ -408,6 +414,62 @@ export class App {
       clearInterval(this.syncTimer);
       this.syncTimer = null;
     }
+    if (this.wsReconnectTimer) {
+      clearTimeout(this.wsReconnectTimer);
+      this.wsReconnectTimer = null;
+    }
+    if (this.syncWs) {
+      try { this.syncWs.close(); } catch (e) {}
+      this.syncWs = null;
+    }
+    this.onlineUsers = [];
+  }
+
+  connectSyncWebSocket() {
+    if (!this.state.householdId || typeof window === 'undefined' || !(window as any).WebSocket) return;
+    if (this.syncWs && (this.syncWs.readyState === 0 || this.syncWs.readyState === 1)) return;
+
+    try {
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${location.host}/api/sync/ws?householdId=${this.state.householdId}&userId=${this.state.userId}&userName=${encodeURIComponent(this.state.userName)}`;
+      this.syncWs = new (window as any).WebSocket(wsUrl);
+
+      this.syncWs.onopen = () => {
+        this.wsReconnectDelay = 2000;
+      };
+
+      this.syncWs.onmessage = (event: any) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'presence.updated' && data.payload?.onlineUsers) {
+            this.onlineUsers = data.payload.onlineUsers;
+            this.render();
+          } else if (data.type) {
+            this.logAction('Live push sync', data.type);
+            this.syncNow();
+          }
+        } catch (e) { }
+      };
+
+      this.syncWs.onclose = () => {
+        this.syncWs = null;
+        this.scheduleWsReconnect();
+      };
+      this.syncWs.onerror = () => {
+        try { this.syncWs?.close(); } catch (e) {}
+      };
+    } catch (e) {
+      this.scheduleWsReconnect();
+    }
+  }
+
+  private scheduleWsReconnect() {
+    if (!this.state.householdId || this.wsReconnectTimer) return;
+    this.wsReconnectTimer = setTimeout(() => {
+      this.wsReconnectTimer = null;
+      this.connectSyncWebSocket();
+    }, this.wsReconnectDelay);
+    this.wsReconnectDelay = Math.min(30000, this.wsReconnectDelay * 1.5);
   }
 
   async syncNow() {

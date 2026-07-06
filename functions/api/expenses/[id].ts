@@ -1,3 +1,4 @@
+import { notifyHouseholdSync } from '../../durable/notifyHub';
 import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../../_middleware';
 
@@ -51,6 +52,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
   }
 
   const updated = await env.DB.prepare('SELECT * FROM expenses WHERE id = ?').bind(id).first();
+  await notifyHouseholdSync(env, existing.household_id as string, { type: 'expense.updated', householdId: existing.household_id as string, payload: { id } });
   return Response.json({ expense: updated });
 };
 
@@ -63,5 +65,6 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env, params
   await requireMember(env.DB, userId, existing.household_id as string);
   await env.DB.prepare('DELETE FROM expense_splits WHERE expense_id = ?').bind(id).run();
   await env.DB.prepare('DELETE FROM expenses WHERE id = ?').bind(id).run();
+  await notifyHouseholdSync(env, existing.household_id as string, { type: 'expense.deleted', householdId: existing.household_id as string, payload: { id } });
   return Response.json({ success: true });
 };

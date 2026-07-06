@@ -1,3 +1,4 @@
+import { notifyHouseholdSync } from '../durable/notifyHub';
 import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../_middleware';
 
@@ -64,6 +65,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   ).bind(id, body.household_id, parentId, name, siblingCount).run();
 
   const location = await env.DB.prepare('SELECT * FROM locations WHERE id = ?').bind(id).first();
+  await notifyHouseholdSync(env, body.household_id, { type: 'location.created', householdId: body.household_id, payload: { id } });
   return Response.json({ location }, { status: 201 });
 };
 
