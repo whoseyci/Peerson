@@ -51,6 +51,16 @@ body.dark-mode {
   outline-offset: 3px;
 }
 
+.icon-btn:focus-visible,
+.close-btn:focus-visible,
+.dock-btn:focus-visible,
+.action-btn:focus-visible,
+.btn:focus-visible,
+.scanner-mode-btn:focus-visible,
+.toast-undo-btn:focus-visible {
+  box-shadow: 0 0 0 3px var(--focus-ring), var(--shadow);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

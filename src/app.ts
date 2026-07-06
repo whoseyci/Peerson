@@ -6,6 +6,7 @@ import { renderShoppingView } from './views/shopping';
 import { renderTasksView } from './views/tasks';
 import { renderExpensesView } from './views/expenses';
 import { escapeHtml } from './utils/html';
+import { loadExternalScript } from './utils/loadExternalScript';
 
 interface ActionLog {
   action: string;
@@ -14,9 +15,9 @@ interface ActionLog {
 }
 
 // How often we poll for changes made by other household members. Kept
-// fairly conservative (8s) to avoid hammering the API; a visibilitychange
-// + window-focus listener also triggers an immediate refresh so switching
-// back to the tab always feels current even between polls.
+// fairly responsive (3s) while a visibilitychange + window-focus listener
+// also triggers an immediate refresh so switching back to the tab always
+// feels current even between polls.
 const SYNC_INTERVAL_MS = 3000;
 
 function redactSensitive(value: string) {
@@ -243,15 +244,18 @@ export class App {
     }
 
     let screenshotData = '';
-    if (includeScreenshot && (window as any).html2canvas) {
+    if (includeScreenshot) {
       try {
-        const canvas = await (window as any).html2canvas(document.body, {
-          backgroundColor: null,
-          scale: 1,
-          logging: false,
-          ignoreElements: (el: HTMLElement) => el.id === 'bugModal',
-        });
-        screenshotData = canvas.toDataURL('image/png');
+        await loadExternalScript('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js');
+        if ((window as any).html2canvas) {
+          const canvas = await (window as any).html2canvas(document.body, {
+            backgroundColor: null,
+            scale: 1,
+            logging: false,
+            ignoreElements: (el: HTMLElement) => el.id === 'bugModal',
+          });
+          screenshotData = canvas.toDataURL('image/png');
+        }
       } catch (e) {
         console.error('Screenshot failed', e);
       }
@@ -465,21 +469,21 @@ export class App {
     this.setHtml(appEl, `
       ${viewHtml}
       <nav class="bottom-dock">
-        <button class="dock-btn ${this.state.view === 'inventory' ? 'active' : ''}" onclick="app.navigate('inventory')" title="Vorrat" aria-label="Vorrat">
+        <button class="dock-btn ${this.state.view === 'inventory' ? 'active' : ''}" onclick="app.navigate('inventory')" title="Vorrat" aria-label="Vorrat öffnen">
           <i class="ph ph-package"></i><span class="dock-label">Vorrat</span>
           ${lowStock > 0 ? `<span class="badge">${lowStock}</span>` : ''}
         </button>
-        <button class="dock-btn ${this.state.view === 'shopping' ? 'active' : ''}" onclick="app.navigate('shopping')" title="Einkaufen" aria-label="Einkaufen">
+        <button class="dock-btn ${this.state.view === 'shopping' ? 'active' : ''}" onclick="app.navigate('shopping')" title="Einkaufen" aria-label="Einkaufen öffnen">
           <i class="ph ph-shopping-cart"></i><span class="dock-label">Einkauf</span>
         </button>
-        <button class="dock-btn ${this.state.view === 'tasks' ? 'active' : ''}" onclick="app.navigate('tasks')" title="Aufgaben" aria-label="Aufgaben">
+        <button class="dock-btn ${this.state.view === 'tasks' ? 'active' : ''}" onclick="app.navigate('tasks')" title="Aufgaben" aria-label="Aufgaben öffnen">
           <i class="ph ph-check-circle"></i><span class="dock-label">Aufgaben</span>
           ${unreadTasks > 0 ? `<span class="badge">${unreadTasks}</span>` : ''}
         </button>
-        <button class="dock-btn ${this.state.view === 'expenses' ? 'active' : ''}" onclick="app.navigate('expenses')" title="Finanzen" aria-label="Finanzen">
+        <button class="dock-btn ${this.state.view === 'expenses' ? 'active' : ''}" onclick="app.navigate('expenses')" title="Finanzen" aria-label="Finanzen öffnen">
           <i class="ph ph-currency-eur"></i><span class="dock-label">Finanzen</span>
         </button>
-        <button class="dock-btn ${this.state.view === 'household' ? 'active' : ''}" onclick="app.navigate('household')" title="Haushalt" aria-label="Haushalt">
+        <button class="dock-btn ${this.state.view === 'household' ? 'active' : ''}" onclick="app.navigate('household')" title="Haushalt" aria-label="Haushalt öffnen">
           <i class="ph ph-users"></i><span class="dock-label">Haushalt</span>
         </button>
       </nav>
@@ -530,19 +534,21 @@ export class App {
     t.setAttribute('role', 'status');
     t.setAttribute('aria-live', 'polite');
 
-    const text = document.createElement('span');
-    text.textContent = msg;
+    const message = document.createElement('span');
+    message.textContent = msg;
+
     const undoBtn = document.createElement('button');
     undoBtn.className = 'toast-undo-btn';
     undoBtn.type = 'button';
     undoBtn.textContent = 'Rückgängig';
+
     const progress = document.createElement('div');
     progress.className = 'toast-progress';
     const bar = document.createElement('div');
     bar.className = 'toast-progress-bar';
     progress.appendChild(bar);
-    t.append(text, undoBtn, progress);
 
+    t.append(message, undoBtn, progress);
     document.body.appendChild(t);
     requestAnimationFrame(() => t.classList.add('visible'));
 
