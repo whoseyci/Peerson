@@ -137,29 +137,6 @@ export function renderInventoryView(app: App) {
       `}).join('')}
     </div>` : ''}
 
-    <div class="section">
-      <div class="section-header">
-        <div class="section-title"><i class="ph ph-shopping-cart-simple"></i> Nachkaufen</div>
-        <span class="badge" style="${lowStock.length ? '' : 'display:none'}">${lowStock.length}</span>
-      </div>
-      ${lowStock.length ? lowStock.map(i => {
-        const total = getTotal(i.id, s.batches);
-        const needed = i.threshold - total;
-        const itemId = escapeJsAttr(i.id);
-        const itemName = escapeHtml(i.name);
-        const icon = escapeAttr(getItemIcon(i));
-        return `
-        <div class="card danger">
-          <div class="card-content" onclick="openAddStock('${itemId}')">
-            <div class="card-icon"><i class="ph ph-${icon}"></i></div>
-            <div class="card-text">
-              <div class="card-header"><div class="item-name">${itemName}</div><div class="item-qty">+${escapeHtml(needed)}</div></div>
-              <div class="card-meta">${escapeHtml(total)} vorrätig · Min. ${escapeHtml(i.threshold)}</div>
-            </div>
-          </div>
-        </div>`;
-      }).join('') : `<div class="empty-state">Alles ausreichend vorhanden</div>`}
-    </div>
 
     <div class="section">
       <div class="section-header">

@@ -88,6 +88,7 @@ export const api = {
       expenses: Expense[]; splits: any[]; members: HouseholdMember[]; balances: Record<string, number>
     }>,
     create: (data: any) => post('/api/expenses', data) as Promise<{ expense: Expense }>,
+    update: (id: string, data: any) => patch(`/api/expenses/${id}`, data) as Promise<{ expense: Expense }>,
     delete: (id: string) => del(`/api/expenses/${id}`),
   },
   shopping: {
