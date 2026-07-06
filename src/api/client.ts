@@ -88,6 +88,14 @@ export const api = {
       expenses: Expense[]; splits: any[]; members: HouseholdMember[]; balances: Record<string, number>
     }>,
     create: (data: any) => post('/api/expenses', data) as Promise<{ expense: Expense }>,
+    // NOTE: this was missing entirely -- src/views/expenses.ts's
+    // saveEditedExpense() called api.expenses.update(...), which was
+    // `undefined`, so every "Änderungen speichern" click threw a
+    // TypeError caught by the surrounding try/catch and surfaced as a
+    // generic "Fehler beim Aktualisieren" toast. The backend endpoint
+    // (functions/api/expenses/[id].ts onRequestPatch) already existed and
+    // worked correctly -- only this client wrapper was missing.
+    update: (id: string, data: any) => patch(`/api/expenses/${id}`, data) as Promise<{ expense: Expense }>,
     delete: (id: string) => del(`/api/expenses/${id}`),
   },
   shopping: {

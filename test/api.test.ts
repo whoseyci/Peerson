@@ -173,6 +173,40 @@ describe('Expenses API', () => {
     expect(body.expense.amount).toBe(42.5);
   });
 
+  // Regression guard: GET /api/expenses's members query used to select only
+  // `u.id, u.name`, dropping `role` and `joined_at`. The app's loadData()
+  // (src/app.ts) uses this exact response to *overwrite* app.state.members
+  // right after loadHousehold() had set it correctly (with role/joined_at)
+  // moments earlier -- so both fields silently went missing from every
+  // member in state after the very first data load. Two real, user-visible
+  // consequences: (1) src/views/household.ts's "Dabei seit
+  // ${new Date(m.joined_at * 1000)...}" rendered "Invalid Date" for every
+  // member, and (2) App.isAdmin() (`m?.role === 'admin'`) always returned
+  // false, hiding admin-only UI (kick member, regenerate invite) for the
+  // household's actual admin. Discovered via a full UI audit, not by
+  // reading the code -- confirmed live with Playwright (see PR description)
+  // by walking the exact loadHousehold() -> loadData() sequence and reading
+  // window.app.state.members before/after.
+  //
+  // NOTE: this asserts on the literal SQL text rather than executing the
+  // query, because the project's MockD1Database (test/mocks/d1.ts) doesn't
+  // implement real column projection or JOINs -- it always returns whatever
+  // full row object is stored regardless of the SELECT list, so it can
+  // never actually catch "a column silently went missing from a SELECT"
+  // (verified this directly: running this exact scenario against the
+  // pre-fix handler still passed under the mock). A literal string check is
+  // a deliberately blunt tool, but an honest one -- it will catch someone
+  // re-deleting `hm.role, hm.joined_at` from this specific query, which is
+  // exactly the regression that happened. Real behavioral verification for
+  // this bug lives in the Playwright audit script instead.
+  it('GET /api/expenses selects role and joined_at for members (not just id/name)', async () => {
+    const source = await (await import('node:fs/promises')).readFile('functions/api/expenses.ts', 'utf-8');
+    const membersQueryMatch = source.match(/const members[\s\S]*?all\(\);/);
+    expect(membersQueryMatch).toBeTruthy();
+    expect(membersQueryMatch![0]).toMatch(/hm\.role/);
+    expect(membersQueryMatch![0]).toMatch(/hm\.joined_at/);
+  });
+
   // Regression test: onRequestPost used to respond with `{ id, ...body }`
   // instead of re-selecting the inserted row, so server-assigned defaults
   // never present in the request body (created_at) came back undefined.

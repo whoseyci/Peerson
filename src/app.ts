@@ -18,6 +18,12 @@ interface ActionLog {
 // back to the tab always feels current even between polls.
 const SYNC_INTERVAL_MS = 3000;
 
+// Fixed tab/swipe order -- also drives which tab labels appear in the top
+// tab bar and which one left/right swipes cycle to next. Kept as a single
+// source of truth so render() and the swipe handler can never disagree
+// about ordering.
+const TAB_ORDER = ['inventory', 'shopping', 'tasks', 'expenses', 'household'];
+
 type DeletableType = 'item' | 'task' | 'shopping' | 'expense';
 
 interface PendingDeletion {
@@ -103,6 +109,7 @@ export class App {
 
     this.injectBugButton();
     this.injectSyncIndicator();
+    this.setupSwipeNavigation();
 
     // Refresh immediately whenever the tab regains focus/visibility --
     // covers the common case of switching away and back without waiting
@@ -450,30 +457,90 @@ export class App {
       return total < i.threshold;
     }).length;
 
+    // Tabs, in TAB_ORDER (left <-> right swipe cycles through this same
+    // order). Moved from a floating bottom dock to a top tab bar,
+    // browser-tab style: only the active tab shows its label next to the
+    // icon, every other tab collapses down to icon-only -- keeps all 5
+    // tabs visible and reachable in one row without crowding on narrow
+    // screens, while still making it obvious which one is current.
+    const tabMeta: Record<string, { icon: string; label: string; badge: number }> = {
+      inventory: { icon: 'package', label: 'Vorrat', badge: lowStock },
+      shopping: { icon: 'shopping-cart', label: 'Einkaufen', badge: 0 },
+      tasks: { icon: 'check-circle', label: 'Aufgaben', badge: unreadTasks },
+      expenses: { icon: 'currency-eur', label: 'Finanzen', badge: 0 },
+      household: { icon: 'users', label: 'Haushalt', badge: 0 },
+    };
+
     this.setHtml(appEl, `
-      ${viewHtml}
-      <nav class="bottom-dock">
-        <button class="dock-btn ${this.state.view === 'inventory' ? 'active' : ''}" onclick="app.navigate('inventory')" title="Vorrat">
-          <i class="ph ph-package"></i>
-          ${lowStock > 0 ? `<span class="badge">${lowStock}</span>` : ''}
-        </button>
-        <button class="dock-btn ${this.state.view === 'shopping' ? 'active' : ''}" onclick="app.navigate('shopping')" title="Einkaufen">
-          <i class="ph ph-shopping-cart"></i>
-        </button>
-        <button class="dock-btn ${this.state.view === 'tasks' ? 'active' : ''}" onclick="app.navigate('tasks')" title="Aufgaben">
-          <i class="ph ph-check-circle"></i>
-          ${unreadTasks > 0 ? `<span class="badge">${unreadTasks}</span>` : ''}
-        </button>
-        <button class="dock-btn ${this.state.view === 'expenses' ? 'active' : ''}" onclick="app.navigate('expenses')" title="Finanzen">
-          <i class="ph ph-currency-eur"></i>
-        </button>
-        <button class="dock-btn ${this.state.view === 'household' ? 'active' : ''}" onclick="app.navigate('household')" title="Haushalt">
-          <i class="ph ph-users"></i>
-        </button>
+      <nav class="top-tabs">
+        ${TAB_ORDER.map(view => {
+          const t = tabMeta[view];
+          return `
+          <button class="tab-btn ${this.state.view === view ? 'active' : ''}" onclick="app.navigate('${view}')" title="${t.label}">
+            <i class="ph ph-${t.icon}"></i>
+            <span class="tab-label">${t.label}</span>
+            ${t.badge > 0 ? `<span class="badge">${t.badge}</span>` : ''}
+          </button>
+        `;
+        }).join('')}
       </nav>
+      <div class="view-content">${viewHtml}</div>
     `);
     this.injectBugButton();
     this.injectSyncIndicator();
+  }
+
+  // Left/right swipe anywhere in the app moves to the previous/next tab in
+  // TAB_ORDER (same order as the top tab bar). Bound exactly ONCE from
+  // init() on the persistent #app element -- NOT re-bound on every
+  // render(). render() only replaces #app's innerHTML via setHtml(), the
+  // #app element itself is never recreated, so re-attaching a listener
+  // here on every render would silently accumulate duplicate listeners
+  // (one per render since page load), and a single swipe gesture would
+  // fire navigate() multiple times in a row, skipping past the intended
+  // target tab. Caught this exact bug via a Playwright touch-event test:
+  // a single swipe-left from "shopping" landed on "expenses" (2 tabs
+  // forward) instead of "tasks" (1 tab forward), because two listeners
+  // had already accumulated by that point in the test.
+  //
+  // Deliberately NOT gated to a specific "content area only" -- it should
+  // feel like swiping between browser tabs from anywhere on screen, per
+  // how it was asked for. It IS gated on: no modal open (a swipe inside
+  // an open modal, e.g. dragging a date picker or scrolling a long form,
+  // should never accidentally navigate away and lose unsaved input), and
+  // a minimum horizontal distance + horizontal dominance over vertical
+  // movement (so vertical list-scrolling never gets misread as a swipe).
+  private setupSwipeNavigation() {
+    const appEl = document.getElementById('app')!;
+    let startX = 0, startY = 0, tracking = false;
+
+    appEl.addEventListener('touchstart', (e: TouchEvent) => {
+      if (document.querySelector('.modal.active')) { tracking = false; return; }
+      const t = e.touches[0];
+      startX = t.clientX;
+      startY = t.clientY;
+      tracking = true;
+    }, { passive: true });
+
+    appEl.addEventListener('touchend', (e: TouchEvent) => {
+      if (!tracking) return;
+      tracking = false;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - startX;
+      const dy = t.clientY - startY;
+      const SWIPE_THRESHOLD = 60;
+      if (Math.abs(dx) < SWIPE_THRESHOLD || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+
+      const currentIndex = TAB_ORDER.indexOf(this.state.view);
+      if (currentIndex === -1) return;
+      // Swipe left (finger moves right-to-left, dx < 0) -> next tab,
+      // matching how swiping left on a page/carousel reveals the next
+      // item. Swipe right -> previous tab. Wraps around at the ends.
+      const nextIndex = dx < 0
+        ? (currentIndex + 1) % TAB_ORDER.length
+        : (currentIndex - 1 + TAB_ORDER.length) % TAB_ORDER.length;
+      this.navigate(TAB_ORDER[nextIndex]);
+    }, { passive: true });
   }
 
   showModal(id: string, content: string) {

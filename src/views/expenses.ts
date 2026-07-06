@@ -23,6 +23,7 @@ export function renderExpensesView(app: App) {
     <div class="header">
       <h1><i class="ph ph-currency-eur"></i> Finanzen</h1>
       <div style="display:flex; gap:8px;">
+        <button class="icon-btn" onclick="openPaymentHistoryModal()" title="Zahlungsverlauf"><i class="ph ph-clock-counter-clockwise"></i></button>
         ${hasImbalance ? `<button class="icon-btn" onclick="openSettleModal()" title="Schulden ausgleichen"><i class="ph ph-scales"></i></button>` : ''}
         <button class="icon-btn" onclick="openAddExpenseModal()" title="Ausgabe hinzufügen"><i class="ph ph-plus"></i></button>
       </div>
@@ -56,17 +57,22 @@ export function renderExpensesView(app: App) {
       ${s.expenses.length ? s.expenses.map(e => {
         const payer = app.getMemberName(e.paid_by);
         const isSettlement = e.title.includes('Schuldenausgleich') || e.title.includes('Ausgleich');
-        const cat = EXPENSE_CATEGORIES[e.category || 'sonstiges'] || EXPENSE_CATEGORIES.sonstiges;
+        // A settlement gets its own distinct icon (a handshake -- money
+        // changing hands between roommates to close out a debt) rather
+        // than sharing whatever expense category it happened to be filed
+        // under, so it's visually obvious at a glance which cards are
+        // "real" spending vs. internal balance-clearing.
+        const iconName = isSettlement ? 'handshake' : (EXPENSE_CATEGORIES[e.category || 'sonstiges'] || EXPENSE_CATEGORIES.sonstiges).icon;
         return `
         <div class="card ${isSettlement ? 'settlement-card' : ''}" style="${isSettlement ? 'border-left: 3px solid var(--success);' : ''}">
           <div class="card-content" onclick="openEditExpenseModal('${e.id}')">
+            <div class="card-icon"><i class="ph ph-${iconName}"></i></div>
             <div class="card-text">
               <div class="card-header"><div class="item-name">${e.title}</div><div class="expense-amount">${e.amount.toFixed(2)} €</div></div>
-              <div class="card-meta"><span><i class="ph ph-${cat.icon}"></i> ${cat.label}</span> · <span>Bezahlt von ${payer}</span> · <span>${new Date(e.created_at * 1000).toLocaleDateString('de-DE')}</span></div>
+              <div class="card-meta"><span>Bezahlt von ${payer}</span> · <span>${new Date(e.created_at * 1000).toLocaleDateString('de-DE')}</span></div>
             </div>
           </div>
           <div class="card-actions">
-            <button class="action-btn" onclick="event.stopPropagation(); openEditExpenseModal('${e.id}')" title="Bearbeiten"><i class="ph ph-pencil-simple"></i></button>
             <button class="action-btn remove" onclick="event.stopPropagation(); deleteExpense('${e.id}')" title="Löschen"><i class="ph ph-trash"></i></button>
           </div>
         </div>
@@ -127,6 +133,40 @@ export function openSettleModal() {
   `);
 
   (window as any)._pendingTransfers = transfers;
+}
+
+// A dedicated view of every past settlement (debt-clearing transfer),
+// separate from the regular expense list -- these are internal
+// balance-clearing transactions between roommates, not real household
+// spending, so mixing them into "Ausgaben" makes it harder to see either
+// list clearly. Settlements are identified the same way the expense list
+// already flags them (title contains "Schuldenausgleich"/"Ausgleich" --
+// see executeSettlement() below, which is the only code path that creates
+// them and always sets that title format).
+export function openPaymentHistoryModal() {
+  const app = (window as any).app;
+  const settlements = app.state.expenses
+    .filter((e: any) => e.title.includes('Schuldenausgleich') || e.title.includes('Ausgleich'))
+    .sort((a: any, b: any) => b.created_at - a.created_at);
+
+  const rowsHtml = settlements.length ? settlements.map((e: any) => `
+    <div class="card">
+      <div class="card-content">
+        <div class="card-icon"><i class="ph ph-handshake"></i></div>
+        <div class="card-text">
+          <div class="card-header"><div class="item-name">${e.title}</div><div class="expense-amount">${e.amount.toFixed(2)} €</div></div>
+          <div class="card-meta">${new Date(e.created_at * 1000).toLocaleDateString('de-DE')}</div>
+        </div>
+      </div>
+    </div>
+  `).join('') : '<div class="empty-state">Noch keine ausgeglichenen Zahlungen</div>';
+
+  app.showModal('paymentHistoryModal', `
+    <div class="modal-header"><div class="modal-title"><i class="ph ph-clock-counter-clockwise"></i> Zahlungsverlauf</div><button class="close-btn" onclick="window.app.closeModal('paymentHistoryModal')"><i class="ph ph-x"></i></button></div>
+    <div class="modal-body">
+      ${rowsHtml}
+    </div>
+  `);
 }
 
 export async function executeSettlement() {
@@ -399,6 +439,7 @@ export async function deleteExpense(id: string) {
 // Bind to window for HTML onclick handlers
 Object.assign(window as any, {
   openSettleModal,
+  openPaymentHistoryModal,
   executeSettlement,
   openAddExpenseModal,
   openEditExpenseModal,

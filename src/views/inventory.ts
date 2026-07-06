@@ -97,7 +97,6 @@ function locationSelectOptions(locations: Location[], selectedId: string | null 
 
 export function renderInventoryView(app: App) {
   const s = app.state;
-  const lowStock = s.items.filter(i => getTotal(i.id, s.batches) < i.threshold);
   const expiring = s.batches
     .filter((b: any) => b.expiry && getDays(b.expiry) <= 30)
     .map(b => ({ ...b, item: s.items.find((i: any) => i.id === b.item_id), days: getDays(b.expiry) }))
@@ -131,26 +130,6 @@ export function renderInventoryView(app: App) {
         </div>
       `).join('')}
     </div>` : ''}
-
-    <div class="section">
-      <div class="section-header">
-        <div class="section-title"><i class="ph ph-shopping-cart-simple"></i> Nachkaufen</div>
-        <span class="badge" style="${lowStock.length ? '' : 'display:none'}">${lowStock.length}</span>
-      </div>
-      ${lowStock.length ? lowStock.map(i => {
-        const needed = i.threshold - getTotal(i.id, s.batches);
-        return `
-        <div class="card danger">
-          <div class="card-content" onclick="openAddStock('${i.id}')">
-            <div class="card-icon"><i class="ph ph-${getItemIcon(i)}"></i></div>
-            <div class="card-text">
-              <div class="card-header"><div class="item-name">${i.name}</div><div class="item-qty">+${needed}</div></div>
-              <div class="card-meta">${getTotal(i.id, s.batches)} vorrätig · Min. ${i.threshold}</div>
-            </div>
-          </div>
-        </div>`;
-      }).join('') : `<div class="empty-state">Alles ausreichend vorhanden</div>`}
-    </div>
 
     <div class="section">
       <div class="section-header">

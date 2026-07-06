@@ -115,7 +115,7 @@ export class MockD1Database {
 
   seedMembership(householdId: string, userId: string, role = 'member') {
     const members = this.tables.get('household_members') || [];
-    members.push({ household_id: householdId, user_id: userId, role });
+    members.push({ household_id: householdId, user_id: userId, role, joined_at: Math.floor(Date.now() / 1000) });
     this.tables.set('household_members', members);
   }
 
