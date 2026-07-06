@@ -17,7 +17,11 @@ const NUTRITION_FIELDS: Array<{ key: string; label: string; unit: string }> = [
   { key: 'salt_100g', label: 'Salz', unit: 'g' },
 ];
 
-const CATEGORY_META: Record<string, { icon: string; label: string }> = {
+// Exported (not just module-local) so src/views/rooms.ts -- the new
+// spatial location browser -- can render the exact same category icon
+// each item already shows in the flat Vorrat list, rather than
+// duplicating this map or inventing a second, possibly-inconsistent one.
+export const CATEGORY_META: Record<string, { icon: string; label: string }> = {
   sonstiges: { icon: 'package', label: 'Sonstiges' },
   getraenke: { icon: 'bottle', label: 'Getränke' },
   getreide: { icon: 'bread', label: 'Getreide' },
@@ -29,20 +33,20 @@ const CATEGORY_META: Record<string, { icon: string; label: string }> = {
   fertig: { icon: 'can', label: 'Fertig' },
 };
 
-function getItemIcon(item: Item) {
+export function getItemIcon(item: Item) {
   return item.icon || CATEGORY_META[item.category]?.icon || 'package';
 }
 
-function getTotal(itemId: string, batches: Batch[]) {
+export function getTotal(itemId: string, batches: Batch[]) {
   return batches.filter((b: any) => b.item_id === itemId).reduce((a, b) => a + b.quantity, 0);
 }
 
-function formatDate(d?: string) {
+export function formatDate(d?: string) {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
 }
 
-function getDays(d?: string) {
+export function getDays(d?: string) {
   if (!d) return 999;
   return Math.ceil((new Date(d).getTime() - Date.now()) / 86400000);
 }
@@ -56,7 +60,7 @@ function formatPrice(cents: any) {
 // parent_id pointers up to the root. Used both for the item detail picker's
 // option labels and any place an item's current location needs to be shown
 // in full context (a bare "oben" is meaningless without its ancestors).
-function locationPath(locationId: string | null | undefined, locations: Location[]): string {
+export function locationPath(locationId: string | null | undefined, locations: Location[]): string {
   if (!locationId) return '';
   const byId = new Map(locations.map(l => [l.id, l]));
   const parts: string[] = [];
@@ -74,7 +78,7 @@ function locationPath(locationId: string | null | undefined, locations: Location
 // every node in the tree (not just leaves), each labeled with its full
 // breadcrumb path so "oben" appearing under two different rooms is never
 // ambiguous.
-function locationSelectOptions(locations: Location[], selectedId: string | null | undefined): string {
+export function locationSelectOptions(locations: Location[], selectedId: string | null | undefined): string {
   const byParent = new Map<string | null, Location[]>();
   locations.forEach((l: any) => {
     const key = l.parent_id ?? null;
