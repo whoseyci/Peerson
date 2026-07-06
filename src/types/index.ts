@@ -133,4 +133,11 @@ export interface AppState {
   locations: Location[];
   view: string;
   darkMode: boolean;
+  // Where the Rooms view's drill-down currently is (root location id, then
+  // optionally a child location id one level deeper). Kept on AppState --
+  // not module-local to src/views/rooms.ts -- so it survives across
+  // render() calls the same way state.view does (a background sync
+  // re-render must never silently reset which room/container the user was
+  // looking at).
+  roomsNav: { roomId: string | null; containerId: string | null };
 }

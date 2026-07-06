@@ -6,9 +6,15 @@ import { renderShoppingView } from './views/shopping';
 import { renderTasksView } from './views/tasks';
 import { renderExpensesView } from './views/expenses';
 import { renderBriefView } from './views/brief';
+import { renderHomeView, installHomeSwipeOnce } from './views/home';
+import { renderRoomsView } from './views/rooms';
+import { renderPeopleView } from './views/people';
+import './views/capture';
+import './views/shoppingTrip';
 import { escapeHtml } from './utils/html';
 import { loadExternalScript } from './utils/loadExternalScript';
 import { personalBalanceLines } from './utils/finance';
+import { computeFeed, getSnoozedKeys } from './utils/feed';
 
 interface ActionLog {
   action: string;
@@ -21,7 +27,17 @@ interface ActionLog {
 // also triggers an immediate refresh so switching back to the tab always
 // feels current even between polls.
 const SYNC_INTERVAL_MS = 3000;
-const TAB_ORDER = ['inventory', 'shopping', 'brief', 'tasks', 'expenses'];
+// Primary navigation, redesigned around 3 destinations (Home / Rooms /
+// People) plus the capture FAB, per the approved UX vision at
+// /home/user/ux-vision/peerson-reimagined.html. The previous 5-tab IA
+// (Vorrat/Einkaufen/Heute/Aufgaben/Finanzen) still exists and is fully
+// functional -- those views just aren't in the primary tab bar anymore.
+// They stay reachable as "Klassische Ansicht" links from the Haushalt
+// screen (see household.ts) for anyone who wants the denser power-user
+// views (category/price/nutrition editing, recurring-task setup, split
+// rules, payment history) that the 3 new views don't try to replace.
+const TAB_ORDER = ['home', 'rooms', 'people'];
+const LEGACY_VIEWS = ['inventory', 'shopping', 'brief', 'tasks', 'expenses'];
 
 function redactSensitive(value: string) {
   return value
@@ -68,6 +84,7 @@ export class App {
     locations: [],
     view: 'household',
     darkMode: false,
+    roomsNav: { roomId: null, containerId: null },
   };
 
   actionLog: ActionLog[] = [];
@@ -103,8 +120,8 @@ export class App {
     this.state.darkMode = localStorage.getItem('peerson_darkMode') === 'true';
     if (this.state.darkMode) document.body.classList.add('dark-mode');
 
-    if (savedView && (TAB_ORDER.includes(savedView) || savedView === 'household')) this.state.view = savedView;
-    else if (savedHousehold) this.state.view = 'brief';
+    if (savedView && (TAB_ORDER.includes(savedView) || LEGACY_VIEWS.includes(savedView) || savedView === 'household')) this.state.view = savedView;
+    else if (savedHousehold) this.state.view = 'home';
 
     const url = new URL(location.href);
     const inviteCode = url.searchParams.get('join');
@@ -448,7 +465,7 @@ export class App {
   }
 
   navigate(view: string) {
-    if (!TAB_ORDER.includes(view) && view !== 'household') return;
+    if (!TAB_ORDER.includes(view) && !LEGACY_VIEWS.includes(view) && view !== 'household') return;
     if (view === this.state.view) return;
     const current = TAB_ORDER.indexOf(this.state.view);
     const next = TAB_ORDER.indexOf(view);
@@ -498,13 +515,16 @@ export class App {
 
     let viewHtml = '';
     switch (this.state.view) {
+      case 'home': viewHtml = renderHomeView(this); break;
+      case 'rooms': viewHtml = renderRoomsView(this); break;
+      case 'people': viewHtml = renderPeopleView(this); break;
       case 'brief': viewHtml = renderBriefView(this); break;
       case 'inventory': viewHtml = renderInventoryView(this); break;
       case 'shopping': viewHtml = renderShoppingView(this); break;
       case 'tasks': viewHtml = renderTasksView(this); break;
       case 'expenses': viewHtml = renderExpensesView(this); break;
       case 'household': viewHtml = renderHouseholdView(this); break;
-      default: viewHtml = renderBriefView(this);
+      default: viewHtml = renderHomeView(this);
     }
 
     const unreadTasks = this.state.tasks.filter(t => t.status === 'todo').length;
@@ -524,35 +544,37 @@ export class App {
     const briefDueTasks = this.state.tasks.filter(t => t.status === 'todo' && t.due_date && daysUntil(t.due_date) <= 2).length;
     const briefBalances = personalBalanceLines(this.state.userId, this.state.members, this.state.expenses, this.state.splits).length;
     const dailyAlerts = briefExpiring + lowStock + briefDueTasks + briefBalances;
+    // Home's badge counts exactly what its own swipeable feed will show
+    // (respecting snoozes) so the tab bar and the view it links to can
+    // never visibly disagree -- unlike the old "Heute" tab's badge above,
+    // which is intentionally left as-is since the legacy views still use
+    // their own older counting logic.
+    const homeAlerts = computeFeed(this.state, getSnoozedKeys(this.state.householdId)).length;
     const transitionClass = this.viewTransitionClass;
     this.viewTransitionClass = '';
 
     this.setHtml(appEl, `
       <div class="view-content ${transitionClass}">${viewHtml}</div>
       <nav class="top-tabs" aria-label="Hauptnavigation">
-        <button class="tab-btn ${this.state.view === 'inventory' ? 'active' : ''}" onclick="app.navigate('inventory')" title="Vorrat" aria-label="Vorrat öffnen">
-          <i class="ph ph-package"></i><span class="tab-label">Vorrat</span>
+        <button class="tab-btn ${this.state.view === 'home' ? 'active' : ''}" onclick="app.navigate('home')" title="Home" aria-label="Home öffnen">
+          <i class="ph ph-house"></i><span class="tab-label">Home</span>
+          ${homeAlerts > 0 ? `<span class="badge">${homeAlerts}</span>` : ''}
+        </button>
+        <button class="tab-btn ${this.state.view === 'rooms' ? 'active' : ''}" onclick="app.navigate('rooms')" title="Räume" aria-label="Räume öffnen">
+          <i class="ph ph-grid-four"></i><span class="tab-label">Räume</span>
           ${lowStock > 0 ? `<span class="badge">${lowStock}</span>` : ''}
         </button>
-        <button class="tab-btn ${this.state.view === 'shopping' ? 'active' : ''}" onclick="app.navigate('shopping')" title="Einkaufen" aria-label="Einkaufen öffnen">
-          <i class="ph ph-shopping-cart"></i><span class="tab-label">Einkauf</span>
-        </button>
-        <button class="tab-btn ${this.state.view === 'brief' ? 'active' : ''}" onclick="app.navigate('brief')" title="Heute" aria-label="Heute öffnen">
-          <i class="ph ph-sparkle"></i><span class="tab-label">Heute</span>
-          ${dailyAlerts > 0 ? `<span class="badge">${dailyAlerts}</span>` : ''}
-        </button>
-        <button class="tab-btn ${this.state.view === 'tasks' ? 'active' : ''}" onclick="app.navigate('tasks')" title="Aufgaben" aria-label="Aufgaben öffnen">
-          <i class="ph ph-check-circle"></i><span class="tab-label">Aufgaben</span>
-          ${unreadTasks > 0 ? `<span class="badge">${unreadTasks}</span>` : ''}
-        </button>
-        <button class="tab-btn ${this.state.view === 'expenses' ? 'active' : ''}" onclick="app.navigate('expenses')" title="Finanzen" aria-label="Finanzen öffnen">
-          <i class="ph ph-currency-eur"></i><span class="tab-label">Finanzen</span>
+        <button class="tab-btn ${this.state.view === 'people' ? 'active' : ''}" onclick="app.navigate('people')" title="Leute" aria-label="Leute öffnen">
+          <i class="ph ph-users-three"></i><span class="tab-label">Leute</span>
+          ${(unreadTasks + briefBalances) > 0 ? `<span class="badge">${unreadTasks + briefBalances}</span>` : ''}
         </button>
       </nav>
+      <button class="capture-fab" onclick="openCaptureSheet()" title="Hinzufügen" aria-label="Hinzufügen"><i class="ph-bold ph-plus"></i></button>
       <button class="household-top-btn ${this.state.view === 'household' ? 'active' : ''}" onclick="app.navigate('household')" title="Haushalt" aria-label="Haushalt öffnen"><i class="ph ph-users"></i></button>
     `);
     this.injectBugButton();
     this.injectSyncIndicator();
+    installHomeSwipeOnce();
   }
 
   showModal(id: string, content: string) {
@@ -575,6 +597,45 @@ export class App {
   closeModal(id: string) {
     const modal = document.getElementById(id);
     if (modal) modal.classList.remove('active');
+  }
+
+  // A lighter-weight bottom sheet, distinct from the modal system above --
+  // used by the new capture menu and the shopping trip's quick-log step,
+  // matching the approved UX-vision mock's .sheet/.sheet-backdrop
+  // components (see main.css). Only one sheet is ever open at a time in
+  // practice, but each gets its own backdrop element (id-suffixed) so a
+  // sheet opened from within another (e.g. quick-log opened while the
+  // capture sheet closes) can never fight over a shared backdrop node.
+  showSheet(id: string, title: string, bodyHtml: string) {
+    let backdrop = document.getElementById(id + 'Backdrop');
+    if (!backdrop) {
+      backdrop = document.createElement('div');
+      backdrop.id = id + 'Backdrop';
+      backdrop.className = 'sheet-backdrop';
+      backdrop.addEventListener('click', () => this.closeSheet(id));
+      document.body.appendChild(backdrop);
+    }
+    let sheet = document.getElementById(id);
+    if (!sheet) {
+      sheet = document.createElement('div');
+      sheet.id = id;
+      sheet.className = 'sheet';
+      document.body.appendChild(sheet);
+    }
+    this.setHtml(sheet, `
+      <div class="sheet-handle"></div>
+      <div class="sheet-head"><h2>${title}</h2><button class="close-btn" onclick="window.app.closeSheet('${id}')"><i class="ph ph-x"></i></button></div>
+      <div class="sheet-body">${bodyHtml}</div>
+    `);
+    requestAnimationFrame(() => {
+      backdrop!.classList.add('show');
+      sheet!.classList.add('show');
+    });
+  }
+
+  closeSheet(id: string) {
+    document.getElementById(id)?.classList.remove('show');
+    document.getElementById(id + 'Backdrop')?.classList.remove('show');
   }
 
   toast(msg: string) {
@@ -719,7 +780,7 @@ export class App {
       this.state.household = data.household;
       localStorage.setItem('peerson_householdId', data.household.id);
       this.toast('Haushalt erstellt');
-      this.navigate('brief');
+      this.navigate('home');
       await this.loadData();
       this.render();
     } catch (e: any) {
@@ -735,7 +796,7 @@ export class App {
       this.state.household = data.household;
       localStorage.setItem('peerson_householdId', data.household.id);
       this.toast('Haushalt beigetreten');
-      this.navigate('brief');
+      this.navigate('home');
       await this.loadData();
       this.render();
     } catch (e: any) {
