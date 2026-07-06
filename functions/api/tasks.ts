@@ -25,8 +25,26 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   await requireMember(env.DB, userId, householdId);
   const tasks = await env.DB.prepare('SELECT * FROM tasks WHERE household_id = ? ORDER BY created_at DESC')
     .bind(householdId).all();
-  return Response.json({ tasks: tasks.results.map(parseTaskRow) });
+  // Bundled into the same response as the tasks themselves (rather than a
+  // separate endpoint) following the existing pattern in
+  // functions/api/expenses.ts, which already returns `splits`+`members`
+  // alongside `expenses` -- the People view always needs both the current
+  // task list and the completion history together, so one round trip.
+  let completions: unknown[] = [];
+  try {
+    const rows = await env.DB.prepare('SELECT * FROM task_completions WHERE household_id = ? ORDER BY completed_at DESC')
+      .bind(householdId).all();
+    completions = rows.results;
+  } catch (e: any) {
+    // task_completions doesn't exist yet on a database that hasn't had
+    // this migration applied -- degrade to an empty list rather than
+    // failing the whole tasks fetch, matching the "no such column"
+    // fallback pattern used throughout this file for other columns.
+    if (!e?.message?.includes('no such table')) throw e;
+  }
+  return Response.json({ tasks: tasks.results.map(parseTaskRow), completions });
 };
+
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const userId = request.headers.get('X-User-Id');

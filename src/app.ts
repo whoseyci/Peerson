@@ -11,6 +11,7 @@ import { renderRoomsView } from './views/rooms';
 import { renderPeopleView } from './views/people';
 import './views/capture';
 import './views/shoppingTrip';
+import './views/receiptScan';
 import { escapeHtml } from './utils/html';
 import { loadExternalScript } from './utils/loadExternalScript';
 import { personalBalanceLines } from './utils/finance';
@@ -82,6 +83,7 @@ export class App {
     splits: [],
     shopping: [],
     locations: [],
+    taskCompletions: [],
     view: 'household',
     darkMode: false,
     roomsNav: { roomId: null, containerId: null },
@@ -370,6 +372,7 @@ export class App {
       this.state.items = this.stripPending('item', itemsData.items);
       this.state.batches = itemsData.batches;
       this.state.tasks = this.stripPending('task', tasksData.tasks);
+      this.state.taskCompletions = tasksData.completions || [];
       this.state.expenses = this.stripPending('expense', expensesData.expenses);
       this.state.splits = expensesData.splits;
       this.state.shopping = this.stripPending('shopping', shoppingData.items);

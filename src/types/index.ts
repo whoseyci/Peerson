@@ -73,6 +73,12 @@ export interface Batch {
   grams_per_unit: number;
   date_added: number;
   price?: number | null;
+  // Where this specific batch physically is, if it differs from the
+  // item's own location_id (e.g. half the "Milch" batches are in the
+  // kitchen fridge, one just-bought batch is still in the garage fridge).
+  // null/undefined means "inherit the item's location_id" -- the
+  // pre-existing single-location-per-item behavior.
+  location_id?: string | null;
 }
 
 export interface Task {
@@ -86,6 +92,16 @@ export interface Task {
   created_by?: string;
   recurrence?: string | null;
   rotation_users?: string[] | null;
+}
+
+// One row per completed to-do (append-only log, see schema.sql) -- powers
+// the People view's "who's actually been doing things" fairness summary.
+export interface TaskCompletion {
+  id: string;
+  task_id: string;
+  household_id: string;
+  completed_by: string;
+  completed_at: number;
 }
 
 export interface Expense {
@@ -131,6 +147,11 @@ export interface AppState {
   splits: ExpenseSplit[];
   shopping: ShoppingItem[];
   locations: Location[];
+  // Task-completion log for the whole household, loaded alongside tasks --
+  // powers the People view's fairness summary. Kept as a flat list (not
+  // pre-aggregated) so different aggregation windows (this week / all
+  // time) can be computed client-side without another round trip.
+  taskCompletions: TaskCompletion[];
   view: string;
   darkMode: boolean;
   // Where the Rooms view's drill-down currently is (root location id, then

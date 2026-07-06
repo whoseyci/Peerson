@@ -150,3 +150,32 @@ ALTER TABLE tasks ADD COLUMN rotation_users TEXT DEFAULT NULL;
 
 -- Expenses Category Column
 ALTER TABLE expenses ADD COLUMN category TEXT DEFAULT 'sonstiges';
+
+-- Per-Batch Location Column
+-- A batch can live somewhere more specific than (or different from) its
+-- parent item's own location_id -- e.g. "Milch" the item is nominally
+-- shelved in the kitchen fridge, but one batch someone just bought is
+-- still sitting in a garage fridge. NULL means "inherit the item's own
+-- location_id" (the pre-existing, single-location-per-item behavior),
+-- so every batch written before this column existed keeps behaving
+-- exactly as before with zero backfill required.
+ALTER TABLE batches ADD COLUMN location_id TEXT REFERENCES locations(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_batches_location ON batches(location_id);
+
+-- Task Completion Log
+-- Every time a task is marked done (including each cycle of a recurring
+-- task's rotation), one row is appended here recording who did it and
+-- when. This is intentionally an append-only log, separate from the
+-- tasks table itself (which only ever reflects *current* status/assignee)
+-- -- it exists purely to answer "who's actually been doing the work"
+-- (the People view's fairness summary) without trying to reconstruct
+-- history from a table that overwrites itself on every completion.
+CREATE TABLE IF NOT EXISTS task_completions (
+  id TEXT PRIMARY KEY,
+  task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  household_id TEXT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  completed_by TEXT NOT NULL REFERENCES users(id),
+  completed_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+CREATE INDEX IF NOT EXISTS idx_task_completions_household ON task_completions(household_id);
+CREATE INDEX IF NOT EXISTS idx_task_completions_user ON task_completions(completed_by);

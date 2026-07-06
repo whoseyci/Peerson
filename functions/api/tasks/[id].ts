@@ -37,20 +37,40 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
   if (body.due_date !== undefined) { fields.push('due_date = ?'); values.push(body.due_date); }
   if (body.recurrence !== undefined) { fields.push('recurrence = ?'); values.push(body.recurrence || null); }
   if (body.rotation_users !== undefined) { fields.push('rotation_users = ?'); values.push(body.rotation_users ? JSON.stringify(body.rotation_users) : null); }
-  if (fields.length === 0) return Response.json({ task: parseTaskRow(existing as any) });
 
-  values.push(id);
-  try {
-    await env.DB.prepare(`UPDATE tasks SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
-  } catch (e: any) {
-    if (e?.message?.includes('no such column')) {
-      const fallbackFields = fields.filter(f => !f.startsWith('recurrence') && !f.startsWith('rotation_users'));
-      if (fallbackFields.length > 0) {
-        const fallbackValues = values.filter((_, idx) => !fields[idx].startsWith('recurrence') && !fields[idx].startsWith('rotation_users'));
-        await env.DB.prepare(`UPDATE tasks SET ${fallbackFields.join(', ')} WHERE id = ?`).bind(...fallbackValues).run();
-      }
-    } else { throw e; }
+  if (fields.length > 0) {
+    values.push(id);
+    try {
+      await env.DB.prepare(`UPDATE tasks SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
+    } catch (e: any) {
+      if (e?.message?.includes('no such column')) {
+        const fallbackFields = fields.filter(f => !f.startsWith('recurrence') && !f.startsWith('rotation_users'));
+        if (fallbackFields.length > 0) {
+          const fallbackValues = values.filter((_, idx) => !fields[idx].startsWith('recurrence') && !fields[idx].startsWith('rotation_users'));
+          await env.DB.prepare(`UPDATE tasks SET ${fallbackFields.join(', ')} WHERE id = ?`).bind(...fallbackValues).run();
+        }
+      } else { throw e; }
+    }
   }
+
+  // `completed_by` is an explicit, separate signal from `status` -- a
+  // plain status:'done' update logs a completion for whoever's making the
+  // request, but a *recurring* task's cycle-close never actually sets
+  // status to 'done' (it stays 'todo' and just rotates assignee/due_date,
+  // see src/views/tasks.ts's toggleTask()), so there's no way to infer
+  // "this PATCH represents a completion" purely from the field diff. The
+  // client sends this flag explicitly in both cases instead of the server
+  // guessing from status transitions.
+  if (body.completed_by) {
+    try {
+      await env.DB.prepare(
+        'INSERT INTO task_completions (id, task_id, household_id, completed_by) VALUES (?, ?, ?, ?)'
+      ).bind(crypto.randomUUID(), id, existing.household_id, body.completed_by).run();
+    } catch (e: any) {
+      if (!e?.message?.includes('no such table')) throw e;
+    }
+  }
+
   const task = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(id).first();
   return Response.json({ task: task ? parseTaskRow(task as any) : task });
 };

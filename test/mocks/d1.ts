@@ -42,6 +42,35 @@ export class MockD1Database {
     return params.every(p => Object.values(row).includes(p));
   }
 
+  // Extremely narrow support for the one JOIN shape actually used in this
+  // codebase's handlers: "FROM <table> <alias> JOIN <table2> <alias2> ON
+  // <a>.<col> = <b>.<col>" (see functions/api/batches/[id].ts's
+  // "SELECT b.*, i.household_id FROM batches b JOIN items i ON
+  // b.item_id = i.id" -- used to look up which household a batch belongs
+  // to via its parent item). Not a real SQL engine: this only needs to
+  // resolve exactly this single-join, single-condition pattern, since
+  // that's the only one any handler in functions/api actually issues.
+  private resolveJoin(sql: string): { rows: MockRow[]; table: string } | null {
+    const joinMatch = sql.match(/from\s+(\w+)\s+(\w+)\s+join\s+(\w+)\s+(\w+)\s+on\s+(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)/i);
+    if (!joinMatch) return null;
+    const [, table1, alias1, table2, alias2, leftAlias, leftCol, rightAlias, rightCol] = joinMatch;
+    const rows1 = this.tables.get(table1.toLowerCase()) || [];
+    const rows2 = this.tables.get(table2.toLowerCase()) || [];
+    const [table1Col, table2Col] = leftAlias === alias1 ? [leftCol, rightCol] : [rightCol, leftCol];
+
+    const joined = rows1.map(r1 => {
+      const match = rows2.find(r2 => r2[table2Col] === r1[table1Col]);
+      // Mirrors "SELECT b.*, i.household_id" -- the base table's own
+      // columns win on conflict, with the joined table's columns merged
+      // in underneath (real SQL would need explicit column lists to
+      // avoid ambiguity; every actual usage in this codebase selects
+      // `b.*` plus one specific joined column, so this ordering matches).
+      return match ? { ...match, ...r1 } : null;
+    }).filter((r): r is MockRow => r !== null);
+
+    return { rows: joined, table: table1.toLowerCase() };
+  }
+
   prepare(sql: string) {
     const db = this;
     return {
@@ -51,6 +80,10 @@ export class MockD1Database {
         return this;
       },
       async first(): Promise<MockRow | null> {
+        const joinResult = db.resolveJoin(sql);
+        if (joinResult) {
+          return joinResult.rows.find(r => db.matchWhere(r, this.params)) || null;
+        }
         const table = db.getTable(sql);
         const rows = db.tables.get(table) || [];
         if (table === 'household_members' && this.params.length >= 2) {
@@ -60,6 +93,13 @@ export class MockD1Database {
         return rows.find(r => db.matchWhere(r, this.params)) || null;
       },
       async all(): Promise<{ results: MockRow[] }> {
+        const joinResult = db.resolveJoin(sql);
+        if (joinResult) {
+          const filtered = this.params.length
+            ? joinResult.rows.filter(r => db.matchWhere(r, this.params))
+            : joinResult.rows;
+          return { results: filtered };
+        }
         const table = db.getTable(sql);
         const rows = db.tables.get(table) || [];
         const filtered = this.params.length

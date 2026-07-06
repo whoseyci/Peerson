@@ -56,6 +56,7 @@ describe('Schema SQL', () => {
       'expenses',
       'expense_splits',
       'shopping_items',
+      'task_completions',
     ];
     for (const table of required) {
       expect(sql).toContain(`create table if not exists ${table}`);
@@ -89,6 +90,8 @@ describe('Functions Structure', () => {
       'functions/api/locations.ts',
       'functions/api/locations/[id].ts',
       'functions/api/items/[id]/price-history.ts',
+      'functions/api/receipt-scan.ts',
+      'functions/api/batches/move.ts',
       'functions/_middleware.ts',
     ];
     for (const route of routes) {
