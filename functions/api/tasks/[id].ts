@@ -7,10 +7,11 @@ async function requireMember(db: D1Database, userId: string, householdId: string
   if (!row) throw new Error('Forbidden');
 }
 
-function parseTaskRow<T extends { rotation_users?: unknown }>(row: T): T {
+function parseTaskRow<T extends { rotation_users?: unknown; subtasks?: unknown }>(row: T): T {
   return {
     ...row,
     rotation_users: typeof row.rotation_users === 'string' ? safeJsonParse(row.rotation_users, null) : (row.rotation_users ?? null),
+    subtasks: typeof row.subtasks === 'string' ? safeJsonParse(row.subtasks, null) : (row.subtasks ?? null),
   };
 }
 
@@ -37,6 +38,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
   if (body.due_date !== undefined) { fields.push('due_date = ?'); values.push(body.due_date); }
   if (body.recurrence !== undefined) { fields.push('recurrence = ?'); values.push(body.recurrence || null); }
   if (body.rotation_users !== undefined) { fields.push('rotation_users = ?'); values.push(body.rotation_users ? JSON.stringify(body.rotation_users) : null); }
+  if (body.subtasks !== undefined) { fields.push('subtasks = ?'); values.push(body.subtasks ? JSON.stringify(body.subtasks) : null); }
 
   if (fields.length > 0) {
     values.push(id);
@@ -44,28 +46,23 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
       await env.DB.prepare(`UPDATE tasks SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
     } catch (e: any) {
       if (e?.message?.includes('no such column')) {
-        const fallbackFields = fields.filter(f => !f.startsWith('recurrence') && !f.startsWith('rotation_users'));
+        const fallbackFields = fields.filter(f => !f.startsWith('recurrence') && !f.startsWith('rotation_users') && !f.startsWith('subtasks'));
         if (fallbackFields.length > 0) {
-          const fallbackValues = values.filter((_, idx) => !fields[idx].startsWith('recurrence') && !fields[idx].startsWith('rotation_users'));
+          const fallbackValues = values.filter((_, idx) => !fields[idx].startsWith('recurrence') && !fields[idx].startsWith('rotation_users') && !fields[idx].startsWith('subtasks'));
           await env.DB.prepare(`UPDATE tasks SET ${fallbackFields.join(', ')} WHERE id = ?`).bind(...fallbackValues).run();
         }
       } else { throw e; }
     }
   }
 
-  // `completed_by` is an explicit, separate signal from `status` -- a
-  // plain status:'done' update logs a completion for whoever's making the
-  // request, but a *recurring* task's cycle-close never actually sets
-  // status to 'done' (it stays 'todo' and just rotates assignee/due_date,
-  // see src/views/tasks.ts's toggleTask()), so there's no way to infer
-  // "this PATCH represents a completion" purely from the field diff. The
-  // client sends this flag explicitly in both cases instead of the server
-  // guessing from status transitions.
-  if (body.completed_by) {
+  // If status is transitioning to 'done' and completed_by is sent, log a task completion (for fairness tracking)
+  if (body.status === 'done' && body.completed_by) {
     try {
-      await env.DB.prepare(
-        'INSERT INTO task_completions (id, task_id, household_id, completed_by) VALUES (?, ?, ?, ?)'
-      ).bind(crypto.randomUUID(), id, existing.household_id, body.completed_by).run();
+      const compId = crypto.randomUUID();
+      await env.DB.prepare(`
+        INSERT INTO task_completions (id, task_id, household_id, completed_by, completed_at)
+        VALUES (?, ?, ?, ?, ?)
+      `).bind(compId, id, existing.household_id, body.completed_by, Math.floor(Date.now() / 1000)).run();
     } catch (e: any) {
       if (!e?.message?.includes('no such table')) throw e;
     }

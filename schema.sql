@@ -199,3 +199,6 @@ CREATE TABLE IF NOT EXISTS category_budgets (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_category_budgets_household_category
   ON category_budgets(household_id, category);
+
+-- Task Subtasks (Checklists)
+ALTER TABLE tasks ADD COLUMN subtasks TEXT DEFAULT NULL;
