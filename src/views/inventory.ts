@@ -1,6 +1,7 @@
 import type { App } from '../app';
 import type { Item, Batch, Location } from '../types';
 import { escapeAttr, escapeHtml, escapeJsAttr } from '../utils/html';
+import { predictConsumptionForItem } from '../utils/consumption';
 
 // Matches the shape functions/api/product-lookup.ts already fetches from
 // Open Food Facts (per-100g values) -- Item.nutrition just needs to store
@@ -104,7 +105,7 @@ export function renderInventoryView(app: App) {
   const s = app.state;
   const lowStock = s.items.filter(i => getTotal(i.id, s.batches) < i.threshold);
   const expiring = s.batches
-    .filter((b: any) => b.expiry && getDays(b.expiry) <= 30)
+    .filter((b: any) => b.quantity > 0 && b.expiry && getDays(b.expiry) <= 30)
     .map(b => ({ ...b, item: s.items.find((i: any) => i.id === b.item_id), days: getDays(b.expiry) }))
     .filter((x: any) => x.item)
     .sort((a: any, b: any) => a.days - b.days);
@@ -497,7 +498,12 @@ export function renderInventoryView(app: App) {
         try {
           const item = (window as any).app.state.items.find((i: any) => i.id === id);
           if (!item) return;
-          const batches = (window as any).app.state.batches.filter((b: any) => b.item_id === id).sort((a: any, b: any) => (a.expiry || '').localeCompare(b.expiry || ''));
+          const allItemBatches = (window as any).app.state.batches.filter((b: any) => b.item_id === id);
+          const batches = allItemBatches.filter((b: any) => b.quantity > 0).sort((a: any, b: any) => (a.expiry || '').localeCompare(b.expiry || ''));
+          const prediction = predictConsumptionForItem(id, allItemBatches);
+          const predictionLine = prediction
+            ? '<div class="card-meta" style="margin-bottom:12px;"><i class="ph ph-trend-down"></i> Reicht noch ca. ' + escapeHtml(Math.max(1, Math.ceil(prediction.daysRemaining))) + ' Tag' + (Math.ceil(prediction.daysRemaining) === 1 ? '' : 'e') + ' (bei aktuellem Verbrauch)</div>'
+            : '';
           const catOptions = Object.entries(CATEGORY_META).map(([k, v]) => ({ value: k, label: v.label }));
           detailBarcodeDraft = (Array.isArray(item.barcodes) ? item.barcodes : []).map((b: any) => ({ code: b.code, grams: b.grams || 0 }));
           const priceEuros = (item.price_cents !== null && item.price_cents !== undefined) ? (item.price_cents / 100).toFixed(2).replace('.', ',') : '';
@@ -512,6 +518,7 @@ export function renderInventoryView(app: App) {
               '<div class="form-group"><label>Preis</label><input type="text" inputmode="decimal" id="editPrice" placeholder="z. B. 2,49" value="' + priceEuros + '">' +
                 '<button class="barcode-add-row" onclick="openPriceHistory(\'' + item.id + '\')" style="margin-top:4px;"><i class="ph ph-chart-line"></i> Preisverlauf ansehen</button>' +
               '</div>' +
+              predictionLine +
               renderNutritionSection(item) +
               '<div class="form-group">' +
                 '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><label style="margin:0">Barcodes</label><button class="btn btn-small" onclick="scanIntoDetailBarcodeRow()"><i class="ph ph-barcode"></i></button></div>' +
@@ -712,11 +719,11 @@ export function renderInventoryView(app: App) {
           const b = (window as any).app.state.batches.find((x: any) => x.id === batchId);
           if (!b) return;
           if (b.quantity > 1) {
-            await (window as any).api.batches.update(batchId, { quantity: b.quantity - 1 });
-            b.quantity -= 1;
+            const res = await (window as any).api.batches.update(batchId, { quantity: b.quantity - 1 });
+            Object.assign(b, res.batch || { quantity: b.quantity - 1 });
           } else {
-            await (window as any).api.batches.delete(batchId);
-            (window as any).app.state.batches = (window as any).app.state.batches.filter((x: any) => x.id !== batchId);
+            const res = await (window as any).api.batches.delete(batchId);
+            Object.assign(b, res.batch || { quantity: 0, consumed_at: Math.floor(Date.now() / 1000) });
           }
           (window as any).app.render();
           (window as any).app.toast('Entnommen');

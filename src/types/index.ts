@@ -73,6 +73,8 @@ export interface Batch {
   grams_per_unit: number;
   date_added: number;
   price?: number | null;
+  initial_quantity?: number | null;
+  consumed_at?: number | null;
   // Where this specific batch physically is, if it differs from the
   // item's own location_id (e.g. half the "Milch" batches are in the
   // kitchen fridge, one just-bought batch is still in the garage fridge).

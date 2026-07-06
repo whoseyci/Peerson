@@ -24,25 +24,53 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   // entirely) means "inherit the item's location", matching every other
   // batch field's "omitted = don't care" convention throughout this file.
   const locationId = body.location_id !== undefined ? (body.location_id || null) : null;
+  const quantity = Math.max(0, Number(body.quantity) || 1);
 
   try {
     await env.DB.prepare(`
-      INSERT INTO batches (id, item_id, quantity, expiry, barcode_code, grams_per_unit, price, location_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(id, body.item_id, body.quantity || 1, body.expiry || null, body.barcode_code || null, body.grams_per_unit || 0, price, locationId).run();
+      INSERT INTO batches (id, item_id, quantity, expiry, barcode_code, grams_per_unit, price, location_id, initial_quantity, consumed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      id,
+      body.item_id,
+      quantity,
+      body.expiry || null,
+      body.barcode_code || null,
+      body.grams_per_unit || 0,
+      price,
+      locationId,
+      quantity,
+      quantity === 0 ? Math.floor(Date.now() / 1000) : null
+    ).run();
   } catch (e: any) {
-    if (e?.message?.includes('no such column: location_id')) {
+    if (e?.message?.includes('no such column: initial_quantity') || e?.message?.includes('no such column: consumed_at')) {
+      try {
+        await env.DB.prepare(`
+          INSERT INTO batches (id, item_id, quantity, expiry, barcode_code, grams_per_unit, price, location_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(id, body.item_id, quantity, body.expiry || null, body.barcode_code || null, body.grams_per_unit || 0, price, locationId).run();
+      } catch (e2: any) {
+        if (e2?.message?.includes('no such column: location_id')) {
+          await env.DB.prepare(`
+            INSERT INTO batches (id, item_id, quantity, expiry, barcode_code, grams_per_unit, price)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+          `).bind(id, body.item_id, quantity, body.expiry || null, body.barcode_code || null, body.grams_per_unit || 0, price).run();
+        } else {
+          throw e2;
+        }
+      }
+    } else if (e?.message?.includes('no such column: location_id')) {
       try {
         await env.DB.prepare(`
           INSERT INTO batches (id, item_id, quantity, expiry, barcode_code, grams_per_unit, price)
           VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).bind(id, body.item_id, body.quantity || 1, body.expiry || null, body.barcode_code || null, body.grams_per_unit || 0, price).run();
+        `).bind(id, body.item_id, quantity, body.expiry || null, body.barcode_code || null, body.grams_per_unit || 0, price).run();
       } catch (e2: any) {
         if (e2?.message?.includes('no such column: price')) {
           await env.DB.prepare(`
             INSERT INTO batches (id, item_id, quantity, expiry, barcode_code, grams_per_unit)
             VALUES (?, ?, ?, ?, ?, ?)
-          `).bind(id, body.item_id, body.quantity || 1, body.expiry || null, body.barcode_code || null, body.grams_per_unit || 0).run();
+          `).bind(id, body.item_id, quantity, body.expiry || null, body.barcode_code || null, body.grams_per_unit || 0).run();
         } else {
           throw e2;
         }

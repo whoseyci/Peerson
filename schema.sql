@@ -162,6 +162,15 @@ ALTER TABLE expenses ADD COLUMN category TEXT DEFAULT 'sonstiges';
 ALTER TABLE batches ADD COLUMN location_id TEXT REFERENCES locations(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_batches_location ON batches(location_id);
 
+-- Consumption Prediction Columns
+-- Fully consumed batches are retained at quantity=0 instead of hard-deleted.
+-- initial_quantity records the restocked quantity for new batches; consumed_at
+-- records when the batch first reached zero. Together with date_added, this
+-- provides a simple restocked-to-empty cycle history for consumption forecasts.
+ALTER TABLE batches ADD COLUMN initial_quantity INTEGER DEFAULT NULL;
+ALTER TABLE batches ADD COLUMN consumed_at INTEGER DEFAULT NULL;
+CREATE INDEX IF NOT EXISTS idx_batches_consumed_at ON batches(item_id, consumed_at);
+
 -- Task Completion Log
 -- Every time a task is marked done (including each cycle of a recurring
 -- task's rotation), one row is appended here recording who did it and
