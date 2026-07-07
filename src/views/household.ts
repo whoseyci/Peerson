@@ -207,7 +207,17 @@ export function renderHouseholdView(app: App) {
     </div>
 
     <div class="section">
-      <button class="btn btn-danger" onclick="leaveHousehold()">Haushalt verlassen</button>
+      <div class="section-header"><div class="section-title">Datenschutz & Konto</div></div>
+      <div class="card">
+        <div class="card-content" style="flex-direction:column; align-items:stretch; gap:10px;">
+          <div style="font-size:13px; color:var(--text-soft);">
+            Lade alle Haushaltsdaten als JSON herunter oder lösche dein Konto. Beim Löschen bleiben gemeinsame Einträge erhalten, dein Name wird anonymisiert.
+          </div>
+          <button class="btn btn-secondary" onclick="exportHouseholdData()"><i class="ph ph-download-simple"></i> Haushaltsdaten exportieren</button>
+          <button class="btn btn-danger" onclick="deleteAccount()"><i class="ph ph-trash"></i> Konto löschen</button>
+          <button class="btn btn-danger" onclick="leaveHousehold()">Haushalt verlassen</button>
+        </div>
+      </div>
     </div>
   `;
 }
@@ -360,6 +370,49 @@ export async function kickMember(userId: string, name: string) {
   }
 }
 
+export async function exportHouseholdData() {
+  const app = (window as any).app;
+  const householdId = app.state.household?.id;
+  if (!householdId) return app.toast('Kein Haushalt ausgewählt');
+  try {
+    const data = await app.api.households.exportData(householdId);
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const safeName = String(app.state.household?.name || 'haushalt').replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'haushalt';
+    a.href = url;
+    a.download = `peerson-${safeName}-export-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    app.toast('Export heruntergeladen');
+  } catch (e) {
+    app.toast('Export fehlgeschlagen');
+  }
+}
+
+function clearPeersonLocalStorage() {
+  Object.keys(localStorage)
+    .filter(key => key.startsWith('peerson_'))
+    .forEach(key => localStorage.removeItem(key));
+}
+
+export async function deleteAccount() {
+  const app = (window as any).app;
+  const warning = 'Konto wirklich löschen? Dein Name wird anonymisiert und du wirst aus allen Haushalten entfernt. Gemeinsame Ausgaben, Aufgaben und Vorräte bleiben für die übrigen Mitglieder erhalten. Diese Aktion kann nicht rückgängig gemacht werden.';
+  if (!confirm(warning)) return;
+  try {
+    await app.api.users.deleteAccount();
+    clearPeersonLocalStorage();
+    app.toast('Konto gelöscht');
+    setTimeout(() => location.reload(), 700);
+  } catch (e) {
+    app.toast('Konto konnte nicht gelöscht werden');
+  }
+}
+
 export async function leaveHousehold() {
   const app = (window as any).app;
   if (!confirm('Haushalt wirklich verlassen?')) return;
@@ -475,6 +528,8 @@ Object.assign(window as any, {
   saveProfileName,
   regenerateInvite,
   kickMember,
+  exportHouseholdData,
+  deleteAccount,
   leaveHousehold,
   openLocationNameModal,
   submitLocationNameModal,

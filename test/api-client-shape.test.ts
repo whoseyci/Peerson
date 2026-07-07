@@ -16,4 +16,9 @@ describe('API client surface', () => {
   it('exposes markSettled() for the settlement flow', () => {
     expect(typeof api.expenses.markSettled).toBe('function');
   });
+
+  it('exposes GDPR export and account deletion helpers used by household settings', () => {
+    expect(typeof api.households.exportData).toBe('function');
+    expect(typeof api.users.deleteAccount).toBe('function');
+  });
 });

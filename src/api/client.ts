@@ -50,6 +50,7 @@ export const api = {
   households: {
     list: () => get('/api/households') as Promise<{ households: Household[] }>,
     get: (id: string) => get(`/api/households?householdId=${id}`) as Promise<{ household: Household; members: HouseholdMember[] }>,
+    exportData: (id: string) => get(`/api/export?householdId=${encodeURIComponent(id)}`) as Promise<Record<string, unknown>>,
     create: (name: string) => post('/api/households', { name }) as Promise<{ household: Household }>,
     join: (code: string) => post('/api/households', { action: 'join', code }) as Promise<{ household: Household }>,
     leave: (householdId: string, targetUserId: string) => post('/api/households', { action: 'leave', household_id: householdId, target_user_id: targetUserId }),
@@ -109,6 +110,7 @@ export const api = {
   },
   users: {
     updateName: (name: string) => post('/api/users', { action: 'update_name', name }),
+    deleteAccount: () => post('/api/users', { action: 'delete_account' }) as Promise<{ success: boolean; anonymized: boolean }>,
   },
   bugReport: {
     submit: (data: {
