@@ -14,6 +14,7 @@ export function openShoppingTrip() {
   const app = (window as any).app as App;
   const open = app.state.shopping.filter(s => s.status === 'open');
   trip = { ids: open.map(s => s.id), checkedIds: new Set(), totalSpent: 0, summary: false };
+  app.setShoppingPresence(true);
   renderTripScreen();
   requestAnimationFrame(() => {
     document.getElementById('tripScreen')?.classList.add('show');
@@ -21,6 +22,8 @@ export function openShoppingTrip() {
 }
 
 export function closeShoppingTrip() {
+  const app = (window as any).app as App;
+  app.setShoppingPresence(false);
   document.getElementById('tripScreen')?.classList.remove('show');
   setTimeout(() => {
     document.getElementById('tripScreen')?.remove();

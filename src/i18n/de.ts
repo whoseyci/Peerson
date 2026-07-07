@@ -451,6 +451,9 @@ const de: Translations = {
   'expense.validRequired':                 'Bitte gültige Daten eingeben',
   'expense.onePersonRequired':             'Mindestens eine Person auswählen',
 
+  'presence.shoppingOne':                  '{{name}} ist gerade einkaufen',
+  'presence.shoppingMany':                 '{{names}} sind gerade einkaufen',
+
   'action.save':                          'Speichern',
   'action.cancel':                        'Abbrechen',
 };

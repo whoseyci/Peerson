@@ -50,6 +50,8 @@ export function renderHomeView(app: App) {
       <p>${sub}</p>
     </div>
 
+    ${renderPresenceBand(app)}
+
     <div id="stackWrap" data-stack-index="0">
       ${renderStack(app, stack)}
     </div>
@@ -75,6 +77,16 @@ export function renderHomeView(app: App) {
       ${overflow.map(f => renderOverflowRow(f)).join('')}
     </div>` : ''}
   `;
+}
+
+function renderPresenceBand(app: App) {
+  const shoppers = (app.realtimePresence || []).filter(u => u.shopping);
+  if (!shoppers.length) return '';
+  const names = shoppers.map(u => escapeHtml(u.name || 'Someone')).join(', ');
+  const text = shoppers.length === 1
+    ? t('presence.shoppingOne', { name: names })
+    : t('presence.shoppingMany', { names });
+  return `<div class="status-card" style="margin:0 16px 14px;"><i class="ph ph-shopping-cart-simple"></i> ${text}</div>`;
 }
 
 function renderStack(app: App, stack: FeedItem[]) {

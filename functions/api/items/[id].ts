@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../../_middleware';
 import { requireMember } from '../../auth';
 import { jsonError } from '../../http';
+import { notifyHouseholdChanged } from '../../realtime-notify';
 
 
 // See functions/api/items.ts for the full write-up of this bug: `barcodes`
@@ -115,6 +116,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
   values.push(id);
   await env.DB.prepare(`UPDATE items SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
   const item = await env.DB.prepare('SELECT * FROM items WHERE id = ?').bind(id).first();
+  await notifyHouseholdChanged(env, { householdId: existing.household_id as string, resource: 'items', action: 'update', actorUserId: userId, excludeClientId: request.headers.get('X-Client-Id') });
   return Response.json({ item: item ? parseItemRow(item as any) : item });
 };
 
@@ -127,5 +129,6 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env, params
   if (!existing) return jsonError(404, 'Not found');
   await requireMember(env.DB, userId, existing.household_id as string);
   await env.DB.prepare('DELETE FROM items WHERE id = ?').bind(id).run();
+  await notifyHouseholdChanged(env, { householdId: existing.household_id as string, resource: 'items', action: 'delete', actorUserId: userId, excludeClientId: request.headers.get('X-Client-Id') });
   return Response.json({ success: true });
 };

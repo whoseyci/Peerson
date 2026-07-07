@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../../_middleware';
 import { requireMember } from '../../auth';
 import { jsonError } from '../../http';
+import { notifyHouseholdChanged } from '../../realtime-notify';
 
 
 interface BatchRow {
@@ -101,5 +102,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   const refreshed = await env.DB.prepare('SELECT * FROM batches WHERE item_id = ?').bind(itemId).all();
+  await notifyHouseholdChanged(env, { householdId: item.household_id as string, resource: 'batches', action: 'move', actorUserId: userId, excludeClientId: request.headers.get('X-Client-Id') });
   return Response.json({ moved, requested: quantity, batches: refreshed.results });
 };

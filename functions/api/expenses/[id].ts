@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../../_middleware';
 import { requireMember } from '../../auth';
 import { jsonError } from '../../http';
+import { notifyHouseholdChanged } from '../../realtime-notify';
 
 
 export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params }) => {
@@ -48,6 +49,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
   }
 
   const updated = await env.DB.prepare('SELECT * FROM expenses WHERE id = ?').bind(id).first();
+  await notifyHouseholdChanged(env, { householdId: existing.household_id as string, resource: 'expenses', action: 'update', actorUserId: userId, excludeClientId: request.headers.get('X-Client-Id') });
   return Response.json({ expense: updated });
 };
 
@@ -60,5 +62,6 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env, params
   await requireMember(env.DB, userId, existing.household_id as string);
   await env.DB.prepare('DELETE FROM expense_splits WHERE expense_id = ?').bind(id).run();
   await env.DB.prepare('DELETE FROM expenses WHERE id = ?').bind(id).run();
+  await notifyHouseholdChanged(env, { householdId: existing.household_id as string, resource: 'expenses', action: 'delete', actorUserId: userId, excludeClientId: request.headers.get('X-Client-Id') });
   return Response.json({ success: true });
 };

@@ -14,6 +14,7 @@ import { loadExternalScript } from './utils/loadExternalScript';
 import { personalBalanceLines } from './utils/finance';
 import { computeFeed, getSnoozedKeys } from './utils/feed';
 import { t, setLanguage, getLanguage } from './i18n';
+import { RealtimeClient, type PresenceUser } from './realtime';
 
 interface ActionLog {
   action: string;
@@ -101,7 +102,11 @@ export class App {
   private syncTimer: ReturnType<typeof setInterval> | null = null;
   private syncInFlight = false;
   isSyncing = false;
+  realtimeStatus: 'disconnected' | 'connecting' | 'connected' | 'fallback' = 'disconnected';
+  realtimePresence: PresenceUser[] = [];
   private lastSyncTimestamp = 0;
+  private realtime: RealtimeClient | null = null;
+  private realtimeSyncTimer: ReturnType<typeof setTimeout> | null = null;
 
   // --- Soft-delete / undo state ---
   // Keyed by "type:id" so an item and a task can never collide even if
@@ -137,12 +142,18 @@ export class App {
       return;
     }
 
+    this.realtime = new RealtimeClient({
+      onChanged: () => this.scheduleRealtimeSync(),
+      onPresence: (users) => { this.realtimePresence = users.filter(u => u.userId !== this.state.userId); this.renderIfSafe(); },
+      onStatus: (status) => { this.realtimeStatus = status; this.injectSyncIndicator(); },
+    });
+
     if (savedHousehold) {
       this.isLoading = true;
       this.loadError = null;
       this.render();
       this.loadHousehold(savedHousehold)
-        .then(() => { this.isLoading = false; this.render(); this.startSync(); })
+        .then(() => { this.isLoading = false; this.render(); this.startSync(); this.connectRealtime(); })
         .catch(() => { this.isLoading = false; this.render(); });
     } else {
       this.render();
@@ -155,6 +166,7 @@ export class App {
     // covers the common case of switching away and back without waiting
     // for the next poll tick, e.g. checking another app and coming back.
     document.addEventListener('visibilitychange', () => {
+      this.realtime?.setPresence({ idle: document.visibilityState !== 'visible' });
       if (document.visibilityState === 'visible') this.syncNow();
     });
     window.addEventListener('focus', () => this.syncNow());
@@ -416,7 +428,7 @@ export class App {
     }
   }
 
-  async syncNow() {
+  async syncNow(force = false) {
     if (!this.state.householdId || this.syncInFlight || this.isLoading) return;
     this.syncInFlight = true;
     this.isSyncing = true;
@@ -424,7 +436,7 @@ export class App {
     try {
       try {
         const check = await (this.api as any).syncCheck(this.state.householdId);
-        if (check && check.lastModified && check.lastModified === this.lastSyncTimestamp) {
+        if (!force && check && check.lastModified && check.lastModified === this.lastSyncTimestamp) {
           return;
         }
         this.lastSyncTimestamp = (check && check.lastModified) ? check.lastModified : 0;
@@ -443,6 +455,30 @@ export class App {
     const modalOpen = !!document.querySelector('.modal.active');
     if (isTyping || modalOpen) return;
     this.render();
+  }
+
+  private scheduleRealtimeSync() {
+    if (this.realtimeSyncTimer) clearTimeout(this.realtimeSyncTimer);
+    this.realtimeSyncTimer = setTimeout(() => {
+      this.realtimeSyncTimer = null;
+      void this.syncNow(true);
+    }, 250);
+  }
+
+  private renderIfSafe() {
+    const activeTag = document.activeElement?.tagName;
+    const isTyping = activeTag === 'INPUT' || activeTag === 'TEXTAREA';
+    const modalOpen = !!document.querySelector('.modal.active');
+    if (!isTyping && !modalOpen) this.render();
+  }
+
+  private connectRealtime() {
+    this.realtime?.connect(this.state.householdId);
+    this.realtime?.setPresence({ view: this.state.view, shopping: false, idle: document.visibilityState !== 'visible' });
+  }
+
+  setShoppingPresence(active: boolean) {
+    this.realtime?.setPresence({ shopping: active, view: active ? 'shoppingTrip' : this.state.view });
   }
 
   private installSwipeNavigation() {
@@ -488,6 +524,7 @@ export class App {
     this.logAction('Navigation', `→ ${view}`);
     this.state.view = view;
     localStorage.setItem('peerson_view', view);
+    this.realtime?.setPresence({ view });
     this.render();
   }
 
@@ -786,6 +823,7 @@ export class App {
       this.navigate('home');
       await this.loadData();
       this.render();
+      this.connectRealtime();
     } catch (e: any) {
       this.toast(e.message || t('app.householdCreateError'));
     }
@@ -802,6 +840,7 @@ export class App {
       this.navigate('home');
       await this.loadData();
       this.render();
+      this.connectRealtime();
     } catch (e: any) {
       this.toast(e.message || t('app.invalidCode'));
       this.render();

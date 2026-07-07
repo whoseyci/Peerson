@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../../_middleware';
 import { requireMember } from '../../auth';
 import { jsonError } from '../../http';
+import { notifyHouseholdChanged } from '../../realtime-notify';
 
 
 // Walks parent_id pointers up from `startId` to the root, returning true if
@@ -69,6 +70,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
   values.push(id);
   await env.DB.prepare(`UPDATE locations SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
   const location = await env.DB.prepare('SELECT * FROM locations WHERE id = ?').bind(id).first();
+  await notifyHouseholdChanged(env, { householdId: existing.household_id as string, resource: 'locations', action: 'update', actorUserId: userId, excludeClientId: request.headers.get('X-Client-Id') });
   return Response.json({ location });
 };
 
@@ -84,5 +86,6 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env, params
   if (!existing) return jsonError(404, 'Not found');
   await requireMember(env.DB, userId, existing.household_id as string);
   await env.DB.prepare('DELETE FROM locations WHERE id = ?').bind(id).run();
+  await notifyHouseholdChanged(env, { householdId: existing.household_id as string, resource: 'locations', action: 'delete', actorUserId: userId, excludeClientId: request.headers.get('X-Client-Id') });
   return Response.json({ success: true });
 };

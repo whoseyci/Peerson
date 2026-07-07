@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../_middleware';
 import { requireMember } from '../auth';
 import { jsonError } from '../http';
+import { notifyHouseholdChanged } from '../realtime-notify';
 
 
 // D1 (SQLite) has no native JSON column type: `items.barcodes` and
@@ -77,5 +78,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   ).run();
 
   const item = await env.DB.prepare('SELECT * FROM items WHERE id = ?').bind(id).first();
+  await notifyHouseholdChanged(env, { householdId: body.household_id, resource: 'items', action: 'create', actorUserId: userId, excludeClientId: request.headers.get('X-Client-Id') });
   return Response.json({ item: item ? parseItemRow(item as any) : item }, { status: 201 });
 };
