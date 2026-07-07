@@ -1,13 +1,9 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../_middleware';
+import { requireMember } from '../auth';
 
 const BUDGETABLE_CATEGORIES = new Set(['groceries', 'rent', 'household', 'leisure', 'sonstiges']);
 
-async function requireMember(db: D1Database, userId: string, householdId: string) {
-  const row = await db.prepare('SELECT 1 FROM household_members WHERE household_id = ? AND user_id = ?')
-    .bind(householdId, userId).first();
-  if (!row) throw new Error('Forbidden');
-}
 
 function validateCategory(category: unknown) {
   const value = String(category || '').trim();

@@ -99,6 +99,23 @@ describe('Functions Structure', () => {
     }
   });
 
+  it('has shared auth helper instead of duplicated API membership guards', () => {
+    expect(existsSync('functions/auth.ts')).toBe(true);
+    const checkDir = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = resolve(dir, entry.name);
+        if (entry.isDirectory()) {
+          checkDir(path);
+          continue;
+        }
+        if (!entry.name.endsWith('.ts')) continue;
+        const content = readFileSync(path, 'utf-8');
+        expect(content, `${path} should not redeclare requireMember`).not.toMatch(/function\s+requireMember\s*\(/);
+      }
+    };
+    checkDir('functions/api');
+  });
+
   it('has no external imports outside functions tree', () => {
     const checkDir = (dir: string) => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
