@@ -63,8 +63,8 @@ export function renderHomeView(app: App) {
     </div>
 
     <div class="section">
-      <div class="section-header"><div class="section-title">Aufgaben</div></div>
-      <button class="add-row-dashed" onclick="window.app.navigate('tasks')"><i class="ph ph-list-checks"></i> Alle Aufgaben ansehen</button>
+      <div class="section-header"><div class="section-title">${t('home.tasksTitle')}</div></div>
+      <button class="add-row-dashed" onclick="window.app.navigate('tasks')"><i class="ph ph-list-checks"></i> ${t('home.viewAllTasks')}</button>
     </div>
 
     ${renderBudgetsSection(app)}
