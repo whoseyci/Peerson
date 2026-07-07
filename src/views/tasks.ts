@@ -16,11 +16,11 @@ export function renderTasksView(app: App) {
     <div class="section">
       <div class="section-header"><div class="section-title">Offen</div><span class="badge">${todo.length}</span></div>
       ${todo.length ? todo.map(t => {
-        const recLabel = t.recurrence === 'daily' ? 'Täglich' : t.recurrence === 'weekly' ? 'Wöchentlich' : t.recurrence === 'monthly' ? 'Monatlich' : '';
-        const rotLabel = (t.rotation_users && t.rotation_users.length > 1) ? ' (Rotation)' : '';
+        const recLabel = t.recurrence === 'daily' ? 'Täglich' : t.recurrence === 'weekly' ? 'Wöchentlich' : t.recurrence === 'monthly' ? 'Monatlich' : t.recurrence === 'irregular' ? 'Nach Bedarf' : '';
+        const rotLabel = (t.recurrence !== 'irregular' && t.rotation_users && t.rotation_users.length > 1) ? ' (Rotation)' : '';
         const taskId = escapeJsAttr(t.id);
         const title = escapeHtml(t.title);
-        const assignee = escapeHtml(app.getMemberName(t.assigned_to));
+        const assignee = t.assigned_to ? escapeHtml(app.getMemberName(t.assigned_to)) : (t.recurrence === 'irregular' ? 'Frei · wer Zeit hat' : escapeHtml(app.getMemberName(t.assigned_to)));
         const subDone = Array.isArray(t.subtasks) ? t.subtasks.filter((s: any) => s.done).length : 0;
         const subTotal = Array.isArray(t.subtasks) ? t.subtasks.length : 0;
         const subBadge = subTotal > 0 ? `<span class="chip ${subDone === subTotal ? 'good' : 'warn'}" style="margin-left:6px; font-weight:700;"><i class="ph ph-check-square"></i> ${subDone}/${subTotal}</span>` : '';
@@ -92,12 +92,16 @@ export async function openAddTaskModal() {
       <div class="form-group"><label>Fällig am</label><input type="date" id="taskDue"></div>
       <div class="form-group">
         <label>Wiederholung</label>
-        <select id="taskRecurrence" onchange="document.getElementById('rotSection').style.display = this.value ? 'block' : 'none';">
+        <select id="taskRecurrence" onchange="document.getElementById('rotSection').style.display = this.value === 'daily' || this.value === 'weekly' || this.value === 'monthly' ? 'block' : 'none'; document.getElementById('irregularHint').style.display = this.value === 'irregular' ? 'block' : 'none';">
           <option value="">Einmalig</option>
           <option value="daily">Täglich</option>
           <option value="weekly">Wöchentlich</option>
           <option value="monthly">Monatlich</option>
+          <option value="irregular">Nach Bedarf (unregelmäßig, für alle offen)</option>
         </select>
+      </div>
+      <div id="irregularHint" class="form-group" style="display:none; font-size:12.5px; color:var(--text-soft); background:var(--field-bg); border:1px solid var(--border); padding:10px; border-radius:var(--radius-sm);">
+        <i class="ph ph-info"></i> Für Aufgaben ohne festen Rhythmus (z. B. Wäsche waschen) -- bleibt unzugewiesen und offen für alle, wird nach Erledigung nicht neu zugeteilt, sondern springt einfach wieder auf "offen" zurück, sobald es wieder nötig ist.
       </div>
       <div id="rotSection" class="form-group" style="display:none; background:var(--field-bg); border:1px solid var(--border); padding:10px; border-radius:var(--radius-sm);">
         <label style="margin-bottom:6px;">Team-Rotation (Wer wechselt sich ab?)</label>
@@ -140,14 +144,18 @@ export async function openEditTaskModal(id: string) {
       <div class="form-group"><label>Fällig am</label><input type="date" id="taskDue" value="${t.due_date || ''}"></div>
       <div class="form-group">
         <label>Wiederholung</label>
-        <select id="taskRecurrence" onchange="document.getElementById('rotSection').style.display = this.value ? 'block' : 'none';">
+        <select id="taskRecurrence" onchange="document.getElementById('rotSection').style.display = this.value === 'daily' || this.value === 'weekly' || this.value === 'monthly' ? 'block' : 'none'; document.getElementById('irregularHint').style.display = this.value === 'irregular' ? 'block' : 'none';">
           <option value="" ${!t.recurrence ? 'selected' : ''}>Einmalig</option>
           <option value="daily" ${t.recurrence === 'daily' ? 'selected' : ''}>Täglich</option>
           <option value="weekly" ${t.recurrence === 'weekly' ? 'selected' : ''}>Wöchentlich</option>
           <option value="monthly" ${t.recurrence === 'monthly' ? 'selected' : ''}>Monatlich</option>
+          <option value="irregular" ${t.recurrence === 'irregular' ? 'selected' : ''}>Nach Bedarf (unregelmäßig, für alle offen)</option>
         </select>
       </div>
-      <div id="rotSection" class="form-group" style="display:${t.recurrence ? 'block' : 'none'}; background:var(--field-bg); border:1px solid var(--border); padding:10px; border-radius:var(--radius-sm);">
+      <div id="irregularHint" class="form-group" style="display:${t.recurrence === 'irregular' ? 'block' : 'none'}; font-size:12.5px; color:var(--text-soft); background:var(--field-bg); border:1px solid var(--border); padding:10px; border-radius:var(--radius-sm);">
+        <i class="ph ph-info"></i> Für Aufgaben ohne festen Rhythmus (z. B. Wäsche waschen) -- bleibt unzugewiesen und offen für alle, wird nach Erledigung nicht neu zugeteilt, sondern springt einfach wieder auf "offen" zurück, sobald es wieder nötig ist.
+      </div>
+      <div id="rotSection" class="form-group" style="display:${(t.recurrence && t.recurrence !== 'irregular') ? 'block' : 'none'}; background:var(--field-bg); border:1px solid var(--border); padding:10px; border-radius:var(--radius-sm);">
         <label style="margin-bottom:6px;">Team-Rotation (Wer wechselt sich ab?)</label>
         <div style="display:flex; flex-direction:column; gap:4px;">${rotCheckboxes}</div>
       </div>
@@ -170,8 +178,13 @@ export async function saveTask() {
     const title = (document.getElementById('taskTitle') as HTMLInputElement)?.value.trim();
     if (!title) return app.toast('Titel erforderlich');
     const recurrence = (document.getElementById('taskRecurrence') as HTMLSelectElement)?.value || null;
+    // "Irregular" tasks (no fixed rhythm, e.g. laundry) deliberately have no
+    // rotation -- they're open to whoever's available, not handed round a
+    // fixed roster -- and start unassigned so they show up as genuinely
+    // "up for grabs" rather than looking like someone's already on it.
+    const isIrregular = recurrence === 'irregular';
     const rotChecks = Array.from(document.querySelectorAll('.rot-check:checked')) as HTMLInputElement[];
-    const rotation_users = recurrence ? rotChecks.map(c => c.value) : null;
+    const rotation_users = (recurrence && !isIrregular) ? rotChecks.map(c => c.value) : null;
 
     const cleanedSubtasks = taskSubtasksDraft.filter((s: any) => s.text.trim()).map((s: any) => ({ id: s.id, text: s.text.trim(), done: !!s.done }));
     const subtasks = cleanedSubtasks.length > 0 ? cleanedSubtasks : null;
@@ -180,8 +193,8 @@ export async function saveTask() {
       household_id: app.state.householdId,
       title,
       description: (document.getElementById('taskDesc') as HTMLTextAreaElement)?.value || null,
-      assigned_to: (document.getElementById('taskAssignee') as HTMLSelectElement)?.value || null,
-      due_date: (document.getElementById('taskDue') as HTMLInputElement)?.value || null,
+      assigned_to: isIrregular ? null : ((document.getElementById('taskAssignee') as HTMLSelectElement)?.value || null),
+      due_date: isIrregular ? null : ((document.getElementById('taskDue') as HTMLInputElement)?.value || null),
       recurrence,
       rotation_users,
       subtasks
@@ -202,8 +215,9 @@ export async function updateExistingTask(id: string) {
     const title = (document.getElementById('taskTitle') as HTMLInputElement)?.value.trim();
     if (!title) return app.toast('Titel erforderlich');
     const recurrence = (document.getElementById('taskRecurrence') as HTMLSelectElement)?.value || null;
+    const isIrregular = recurrence === 'irregular';
     const rotChecks = Array.from(document.querySelectorAll('.rot-check:checked')) as HTMLInputElement[];
-    const rotation_users = recurrence ? rotChecks.map(c => c.value) : null;
+    const rotation_users = (recurrence && !isIrregular) ? rotChecks.map(c => c.value) : null;
 
     const cleanedSubtasks = taskSubtasksDraft.filter((s: any) => s.text.trim()).map((s: any) => ({ id: s.id, text: s.text.trim(), done: !!s.done }));
     const subtasks = cleanedSubtasks.length > 0 ? cleanedSubtasks : null;
@@ -211,13 +225,24 @@ export async function updateExistingTask(id: string) {
     const t = app.state.tasks.find((x: any) => x.id === id);
 
     let status = t ? t.status : 'todo';
-    let assigned_to = (document.getElementById('taskAssignee') as HTMLSelectElement)?.value || null;
-    let due_date = (document.getElementById('taskDue') as HTMLInputElement)?.value || null;
+    let assigned_to = isIrregular ? null : ((document.getElementById('taskAssignee') as HTMLSelectElement)?.value || null);
+    let due_date = isIrregular ? null : ((document.getElementById('taskDue') as HTMLInputElement)?.value || null);
     let completed_by = null;
 
     if (cleanedSubtasks.length > 0) {
       if (allDone && t && t.status !== 'done') {
-        if (recurrence) {
+        if (isIrregular) {
+          // No fixed rhythm and no rotation to hand off to -- just reset
+          // the checklist and drop straight back to "open, unassigned"
+          // rather than rotating an assignee or advancing a due date
+          // that doesn't exist for this task type.
+          cleanedSubtasks.forEach((s: any) => s.done = false);
+          assigned_to = null;
+          due_date = null;
+          status = 'todo';
+          completed_by = app.state.userId;
+          app.toast('Erledigt! Aufgabe ist wieder offen, sobald sie erneut nötig ist.');
+        } else if (recurrence) {
           // Recurring task with all subtasks checked! Reset subtasks and advance!
           cleanedSubtasks.forEach((s: any) => s.done = false);
           if (Array.isArray(rotation_users) && rotation_users.length > 0) {
@@ -272,6 +297,18 @@ export async function toggleTask(id: string) {
   try {
     const t = app.state.tasks.find((x: any) => x.id === id);
     if (!t) return;
+
+    if (t.status === 'todo' && t.recurrence === 'irregular') {
+      // No rotation, no due date to advance -- just log the completion
+      // and leave it open/unassigned, ready to be picked up again
+      // whenever it's next needed.
+      await api.tasks.update(id, { status: 'todo', assigned_to: null, due_date: null, completed_by: app.state.userId });
+      app.state.taskCompletions.unshift({ id: `local-${Date.now()}`, task_id: id, household_id: app.state.householdId, completed_by: app.state.userId, completed_at: Math.floor(Date.now() / 1000) });
+      t.assigned_to = null;
+      app.toast('Erledigt! Aufgabe ist wieder offen, sobald sie erneut nötig ist.');
+      app.render();
+      return;
+    }
 
     if (t.status === 'todo' && t.recurrence) {
       let nextAssignee = t.assigned_to;
@@ -351,7 +388,15 @@ export async function toggleSubtaskInstant(taskId: string, idx: number, checked:
   let completed_by = null;
 
   if (allDone && t.status !== 'done') {
-    if (t.recurrence) {
+    if (t.recurrence === 'irregular') {
+      t.subtasks.forEach((s: any) => (s.done = false));
+      if (taskSubtasksDraft.length) taskSubtasksDraft.forEach(s => (s.done = false));
+      assigned_to = null;
+      due_date = null;
+      status = 'todo';
+      completed_by = app.state.userId;
+      app.toast('Erledigt! Aufgabe ist wieder offen, sobald sie erneut nötig ist.');
+    } else if (t.recurrence) {
       t.subtasks.forEach((s: any) => (s.done = false));
       if (taskSubtasksDraft.length) taskSubtasksDraft.forEach(s => (s.done = false));
       if (Array.isArray(t.rotation_users) && t.rotation_users.length > 0) {

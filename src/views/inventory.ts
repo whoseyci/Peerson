@@ -101,63 +101,16 @@ export function locationSelectOptions(locations: Location[], selectedId: string 
   return options.join('');
 }
 
-export function renderInventoryView(app: App) {
-  const s = app.state;
-  const lowStock = s.items.filter(i => getTotal(i.id, s.batches) < i.threshold);
-  const expiring = s.batches
-    .filter((b: any) => b.quantity > 0 && b.expiry && getDays(b.expiry) <= 30)
-    .map(b => ({ ...b, item: s.items.find((i: any) => i.id === b.item_id), days: getDays(b.expiry) }))
-    .filter((x: any) => x.item)
-    .sort((a: any, b: any) => a.days - b.days);
-
-  return `
-    <div class="header">
-      <h1><i class="ph ph-package"></i> Vorrat</h1>
-      <div style="display:flex; gap:8px;">
-        <button class="icon-btn" onclick="startScanFlow()" title="Barcode scannen"><i class="ph ph-barcode"></i></button>
-        <button class="icon-btn" onclick="openAddItemModal()" title="Manuell hinzufügen"><i class="ph ph-plus"></i></button>
-      </div>
-    </div>
-
-    ${expiring.length ? `
-    <div class="section">
-      <div class="section-header">
-        <div class="section-title"><i class="ph ph-clock"></i> Check MHD</div>
-        <span class="badge">${expiring.length}</span>
-      </div>
-      ${expiring.map(b => {
-        const itemId = escapeJsAttr(b.item!.id);
-        const itemName = escapeHtml(b.item!.name);
-        const icon = escapeAttr(getItemIcon(b.item!));
-        return `
-        <div class="card ${b.days < 0 ? 'danger' : b.days < 14 ? 'warning' : ''}">
-          <div class="card-content" onclick="openItemDetail('${itemId}')">
-            <div class="card-icon"><i class="ph ph-${icon}"></i></div>
-            <div class="card-text">
-              <div class="card-header"><div class="item-name">${itemName}</div><div class="item-qty">${escapeHtml(b.quantity)}</div></div>
-              <div class="card-meta">${b.days < 0 ? 'Abgelaufen' : escapeHtml(b.days) + ' Tage'} · ${formatDate(b.expiry)}</div>
-            </div>
-          </div>
-        </div>
-      `}).join('')}
-    </div>` : ''}
-
-
-    <div class="section">
-      <div class="section-header">
-        <div class="section-title"><i class="ph ph-list"></i> Alle Artikel</div>
-      </div>
-      <div class="form-group">
-        <input type="text" id="invSearch" placeholder="Artikel suchen..." onkeyup="filterInventory()">
-      </div>
-      <div id="inventoryList">
-        ${renderInventoryList(app, '')}
-      </div>
-    </div>
-
-    <div id="modals"></div>
-  `;
-}
+// NOTE: this module used to also export renderInventoryView() (the
+// standalone "Vorrat" page). That page was removed -- its "Check MHD"
+// 30-day expiry section now lives in rooms.ts's renderExpiryCheckSection()
+// (shown at the top of the Rooms root level), and its full alphabetical
+// item list is superseded by Rooms' location-organized browsing (plus the
+// new "Ohne festen Ort" bucket for anything with no location at all, see
+// roomStock.ts's itemsWithNoLocation()). Every modal/CRUD function this
+// file defines below (openAddItemModal, openItemDetail, saveItemDetail,
+// etc.) is still very much alive -- they're what Rooms and the capture
+// sheet actually call.
 
 
       // Injected once per render from the TS-level NUTRITION_FIELDS const --
@@ -170,10 +123,6 @@ export function renderInventoryView(app: App) {
       // top-level 'const' the second time throws.
       
 
-      export function filterInventory() {
-        const term = (document.getElementById('invSearch') as any).value.toLowerCase();
-        (document.getElementById('inventoryList') as any).innerHTML = (window as any).renderInventoryList((window as any).app, term);
-      }
       export async function openAddItemModal(prefill: any = {}) {
         prefill = prefill || {};
         (window as any)._pendingNutrition = prefill.nutrition || {};
@@ -761,7 +710,6 @@ export function renderInventoryView(app: App) {
     
 // Attach all handlers to window for HTML onclick attributes
 Object.assign(window as any, {
-  filterInventory,
   openAddItemModal,
   scanIntoBarcodeField,
   saveNewItem,

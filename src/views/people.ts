@@ -3,6 +3,7 @@ import { allMemberBalances } from '../utils/finance';
 import { fairnessSummary, startOfThisWeek } from '../utils/fairness';
 import { colorFor, initials } from '../utils/color';
 import { escapeHtml, escapeJsAttr } from '../utils/html';
+import { renderFinanceSection } from './expenses';
 
 export function renderPeopleView(app: App) {
   const s = app.state;
@@ -60,6 +61,8 @@ export function renderPeopleView(app: App) {
       <div class="section-header"><div class="section-title">Mitglieder</div><span class="badge">${s.members.length}</span></div>
       ${balances.map(b => renderPersonCard(app, b, fairnessById.get(b.memberId))).join('')}
     </div>
+
+    ${renderFinanceSection(app)}
   `;
 }
 

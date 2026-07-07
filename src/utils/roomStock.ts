@@ -87,6 +87,39 @@ export function itemsAtLocation(items: Item[], batches: Batch[], locationId: str
   return result;
 }
 
+// Items with genuinely no location anywhere -- no batch has ever been
+// given an explicit location_id (or an item-level location_id to inherit
+// from), so effectiveBatchLocation() would return null for every one of
+// their batches. Without a dedicated bucket for these, once the old
+// standalone "Vorrat" list view is gone, an item like this would become
+// completely invisible in Rooms (which is location-indexed) even though
+// it's still real pantry stock -- this powers Rooms' "Ohne festen Ort"
+// section so nothing an item can silently vanish from the UI.
+export function itemsWithNoLocation(items: Item[], batches: Batch[]): ItemStockAtLocation[] {
+  const totals = new Map<string, number>();
+  const hasAnyBatch = new Set<string>();
+  const byItem = new Map(items.map(i => [i.id, i]));
+
+  for (const batch of batches) {
+    const item = byItem.get(batch.item_id);
+    if (!item) continue;
+    hasAnyBatch.add(batch.item_id);
+    if (effectiveBatchLocation(batch, item) === null) {
+      totals.set(batch.item_id, (totals.get(batch.item_id) || 0) + batch.quantity);
+    }
+  }
+
+  const result: ItemStockAtLocation[] = [];
+  items.forEach(item => {
+    if (totals.has(item.id)) {
+      result.push({ item, quantity: totals.get(item.id)! });
+    } else if (!hasAnyBatch.has(item.id) && (item.location_id ?? null) === null) {
+      result.push({ item, quantity: 0 });
+    }
+  });
+  return result;
+}
+
 // How many distinct items currently have any stock (quantity > 0)
 // anywhere within a room's subtree -- used for a room tile's "N Artikel"
 // summary, which should count an item once even if it's split across a

@@ -33,7 +33,13 @@ function formatExpenseDate(createdAt: unknown) {
   return Number.isNaN(date.getTime()) ? 'Datum unbekannt' : date.toLocaleDateString('de-DE');
 }
 
-export function renderExpensesView(app: App) {
+// Balance summary + full expense history + budgets management, all as one
+// reusable "Finanzen" section -- originally the standalone Finanzen page's
+// body, now embedded directly into the People view (see people.ts) since
+// the standalone page was removed. Kept as one function (rather than
+// splitting further) so the header actions (payment history / settle /
+// add-expense) stay next to the content they act on.
+export function renderFinanceSection(app: App) {
   const s = app.state;
   const settlementExpenses = s.expenses.filter(isSettlementExpense);
   const settledRegularExpenses = s.expenses.filter(e => !isSettlementExpense(e) && isExpenseSettled(e, s.splits));
@@ -42,20 +48,15 @@ export function renderExpensesView(app: App) {
   const hasImbalance = personalBalances.length > 0;
 
   return `
-    <div class="header">
-      <h1><i class="ph ph-currency-eur"></i> Finanzen</h1>
-      <div style="display:flex; gap:8px;">
-        <button class="icon-btn" onclick="openPaymentHistoryModal()" title="Zahlungshistorie" aria-label="Zahlungshistorie öffnen"><i class="ph ph-clock-counter-clockwise"></i></button>
-        ${hasImbalance ? `<button class="icon-btn" onclick="openSettleModal()" title="Schulden ausgleichen" aria-label="Schulden ausgleichen"><i class="ph ph-scales"></i></button>` : ''}
-        <button class="icon-btn" onclick="openAddExpenseModal()" title="Ausgabe hinzufügen" aria-label="Ausgabe hinzufügen"><i class="ph ph-plus"></i></button>
-      </div>
-    </div>
-
     <div class="section">
       <div class="section-header">
-        <div class="section-title">Bilanz</div>
-        ${hasImbalance ? `<button class="btn-mini" onclick="openSettleModal()" style="font-size: 0.75rem; padding: 4px 8px;"><i class="ph ph-scales"></i> Ausgleichen</button>` : ''}
+        <div class="section-title"><i class="ph ph-currency-eur"></i> Finanzen</div>
+        <div style="display:flex; gap:6px;">
+          <button class="icon-btn-sm" onclick="openPaymentHistoryModal()" title="Zahlungshistorie" aria-label="Zahlungshistorie öffnen"><i class="ph ph-clock-counter-clockwise"></i></button>
+          <button class="icon-btn-sm" onclick="openAddExpenseModal()" title="Ausgabe hinzufügen" aria-label="Ausgabe hinzufügen"><i class="ph ph-plus"></i></button>
+        </div>
       </div>
+      ${hasImbalance ? `<button class="btn-mini" onclick="openSettleModal()" style="font-size: 0.75rem; padding: 4px 8px; margin-bottom:10px;"><i class="ph ph-scales"></i> Ausgleichen</button>` : ''}
       ${personalBalances.length ? personalBalances.map(line => `
         <div class="card">
           <div class="card-content">
@@ -73,8 +74,6 @@ export function renderExpensesView(app: App) {
         </div>
       `).join('') : `<div class="empty-state">Du bist mit allen ausgeglichen</div>`}
     </div>
-
-    ${renderBudgetsSection(app)}
 
     <div class="section">
       <div class="section-header"><div class="section-title">Ausgaben</div></div>
@@ -111,7 +110,7 @@ function categoryLabel(category: string) {
   return EXPENSE_CATEGORIES[category]?.label || category;
 }
 
-function renderBudgetsSection(app: App) {
+export function renderBudgetsSection(app: App) {
   const lines = budgetProgressLines(app.state.categoryBudgets, app.state.expenses);
   const budgeted = new Set(app.state.categoryBudgets.map(b => b.category));
   const available = BUDGETABLE_CATEGORIES.filter(c => !budgeted.has(c));

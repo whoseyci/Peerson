@@ -49,6 +49,16 @@ export function openCaptureSheet() {
         <div class="co-title">Zur Liste</div>
         <div class="co-sub">Ohne Tour hinzufügen</div>
       </button>
+      <button class="capture-opt" onclick="window.app.closeSheet('sheetCapture'); window.app.navigate('shopping');">
+        <span class="co-icon"><i class="ph ph-list-checks"></i></span>
+        <div class="co-title">Einkaufsliste ansehen</div>
+        <div class="co-sub">Liste bearbeiten, ohne Tour</div>
+      </button>
+      <button class="capture-opt" onclick="window.app.closeSheet('sheetCapture'); window.app.navigate('tasks');">
+        <span class="co-icon"><i class="ph ph-list-checks"></i></span>
+        <div class="co-title">Alle Aufgaben</div>
+        <div class="co-sub">Komplette Aufgabenliste</div>
+      </button>
     </div>
   `);
 }
