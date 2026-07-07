@@ -2,3 +2,5 @@ node_modules
 dist
 .env
 .wrangler
+# Playwright smoke-test screenshots (regenerated on demand).
+test-playwright/shots/
