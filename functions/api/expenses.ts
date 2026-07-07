@@ -1,5 +1,10 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
-import type { Env } from '../_middleware';
+import type { Env as BaseEnv } from '../_middleware';
+import { notifyUsers, type Env as PushCapableEnv } from './_pushNotify';
+
+// Adds VAPID_* env vars on top of the base Env so `notifyUsers` can read them.
+// Every other handler that only reads DB keeps using the plain `Env`.
+export interface Env extends BaseEnv, Pick<PushCapableEnv, 'VAPID_PUBLIC_KEY' | 'VAPID_PRIVATE_KEY' | 'VAPID_SUBJECT'> {}
 
 async function requireMember(db: D1Database, userId: string, householdId: string) {
   const row = await db.prepare('SELECT 1 FROM household_members WHERE household_id = ? AND user_id = ?')
@@ -100,6 +105,48 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   // `new Date(e.created_at).toLocaleDateString('de-DE')`, so a missing
   // created_at rendered as "Invalid Date" right after creating an expense,
   // until the next background sync poll re-fetched the real row.
-  const created = await env.DB.prepare('SELECT * FROM expenses WHERE id = ?').bind(id).first();
+  const created = await env.DB.prepare('SELECT * FROM expenses WHERE id = ?').bind(id).first<any>();
+
+  // Fire Web Push notifications (Issue #48). Every household member with
+  // a non-zero split OTHER than the payer gets pinged that a new expense
+  // was logged that they now owe money on. Failures here are swallowed —
+  // creating the expense must always succeed even if the push service is
+  // slow or a subscription is expired.
+  //
+  // Category "settlement" (created when someone marks debts as settled)
+  // is intentionally skipped: it isn't a real new expense worth waking
+  // people up for, it's book-keeping.
+  try {
+    const isSettlement = (created?.category || category) === 'settlement';
+    if (!isSettlement && Array.isArray(body.splits) && body.splits.length) {
+      const payerId = body.paid_by || userId;
+      const recipientUserIds = body.splits
+        .filter((s: any) => s && s.user_id && s.user_id !== payerId && Number(s.amount) > 0)
+        .map((s: any) => s.user_id as string);
+      if (recipientUserIds.length) {
+        const payerName = await env.DB.prepare('SELECT name FROM users WHERE id = ?')
+          .bind(payerId).first<{ name: string }>();
+        const who = payerName?.name || 'Jemand';
+        const title = (body.title || 'Neue Ausgabe').toString();
+        const amount = Number(body.amount || 0);
+        // Payload strings stay in German to match the app's default UI language.
+        await notifyUsers(env, {
+          householdId: body.household_id,
+          recipientUserIds,
+          actorUserId: userId,
+          payload: {
+            title: `${who} hat eine Ausgabe eingetragen`,
+            body: `${title} — ${amount.toFixed(2)} €`,
+            url: '/',
+            tag: `expense:${id}`,
+          },
+          dedupeKey: `expense:${id}`,
+        });
+      }
+    }
+  } catch (e) {
+    console.error('Push notify (new expense) failed', e);
+  }
+
   return Response.json({ expense: created }, { status: 201 });
 };
