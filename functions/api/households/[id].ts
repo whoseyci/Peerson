@@ -1,6 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../../_middleware';
 import { requireMember } from '../../auth';
+import { jsonError } from '../../http';
 
 function generateCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -12,7 +13,7 @@ function generateCode() {
 export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params }) => {
   const userId = request.headers.get('X-User-Id');
   const householdId = String(params.id);
-  if (!userId) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  if (!userId) return jsonError(401, 'Unauthorized');
 
   const db = env.DB;
   await requireMember(db, userId, householdId);
@@ -24,5 +25,5 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
     return Response.json({ invite_code: newCode });
   }
 
-  return new Response(JSON.stringify({ error: 'Bad request' }), { status: 400 });
+  return jsonError(400, 'Bad request');
 };

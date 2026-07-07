@@ -1,5 +1,6 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env as BaseEnv } from '../_middleware';
+import { jsonError } from '../http';
 
 // Extends the shared Env with the secret needed to talk to Google AI
 // Studio's Gemini API. GEMINI_API_KEY must be set as an encrypted
@@ -80,7 +81,7 @@ function extractJson(text: string): GeminiReceiptResult | null {
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const userId = request.headers.get('X-User-Id');
-  if (!userId) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  if (!userId) return jsonError(401, 'Unauthorized');
 
   const apiKey = env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -95,12 +96,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
     body = await request.json();
   } catch {
-    return new Response(JSON.stringify({ error: 'Invalid JSON body' }), { status: 400 });
+    return jsonError(400, 'Invalid JSON body');
   }
 
   const match = /^data:(image\/(?:png|jpeg|jpg|webp));base64,(.+)$/.exec(body.image || '');
   if (!match) {
-    return new Response(JSON.stringify({ error: 'image must be a data:image/(png|jpeg|webp);base64,... URL' }), { status: 400 });
+    return jsonError(400, 'image must be a data:image/(png|jpeg|webp);base64,... URL');
   }
   const [, mimeType, base64Data] = match;
 
@@ -120,13 +121,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       }),
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: 'Receipt scanning service unreachable' }), { status: 502 });
+    return jsonError(502, 'Receipt scanning service unreachable');
   }
 
   if (!upstream.ok) {
     const errorText = await upstream.text();
     console.error('Gemini receipt scan failed', upstream.status, errorText);
-    return new Response(JSON.stringify({ error: 'Receipt scanning failed' }), { status: 502 });
+    return jsonError(502, 'Receipt scanning failed');
   }
 
   const data = await upstream.json<{ candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }>();
@@ -134,7 +135,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const parsed = extractJson(rawText);
   if (!parsed) {
     console.error('Gemini receipt scan returned unparseable output', rawText);
-    return new Response(JSON.stringify({ error: 'Could not parse receipt' }), { status: 502 });
+    return jsonError(502, 'Could not parse receipt');
   }
 
   const items = (Array.isArray(parsed.items) ? parsed.items : [])

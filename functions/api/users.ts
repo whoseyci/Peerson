@@ -1,9 +1,10 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../_middleware';
+import { jsonError } from '../http';
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const userId = request.headers.get('X-User-Id');
-  if (!userId) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  if (!userId) return jsonError(401, 'Unauthorized');
 
   const body = await request.json<{ action?: string; name?: string; target_user_id?: string; user_id?: string; userId?: string }>();
   const db = env.DB;
@@ -17,7 +18,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     if ((body.target_user_id && body.target_user_id !== userId) ||
         (body.user_id && body.user_id !== userId) ||
         (body.userId && body.userId !== userId)) {
-      return new Response(JSON.stringify({ error: 'Forbidden: cannot delete another user' }), { status: 403 });
+      return jsonError(403, 'Forbidden: cannot delete another user');
     }
 
     await db.prepare("UPDATE users SET name = ? WHERE id = ?").bind('Gelöschter Nutzer', userId).run();
@@ -32,5 +33,5 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return Response.json({ success: true });
   }
 
-  return new Response(JSON.stringify({ error: 'Bad request' }), { status: 400 });
+  return jsonError(400, 'Bad request');
 };

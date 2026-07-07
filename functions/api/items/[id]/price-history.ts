@@ -1,6 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../../../_middleware';
 import { requireMember } from '../../../auth';
+import { jsonError } from '../../../http';
 
 
 // GET /api/items/:id/price-history -- the closed (superseded) price entries
@@ -11,10 +12,10 @@ import { requireMember } from '../../../auth';
 export const onRequestGet: PagesFunction<Env> = async ({ request, env, params }) => {
   const userId = request.headers.get('X-User-Id');
   const id = String(params.id);
-  if (!userId) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  if (!userId) return jsonError(401, 'Unauthorized');
 
   const item = await env.DB.prepare('SELECT household_id FROM items WHERE id = ?').bind(id).first();
-  if (!item) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404 });
+  if (!item) return jsonError(404, 'Not found');
   await requireMember(env.DB, userId, item.household_id as string);
 
   const history = await env.DB.prepare('SELECT * FROM item_price_history WHERE item_id = ?').bind(id).all();

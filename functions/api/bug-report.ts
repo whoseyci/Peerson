@@ -1,5 +1,6 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env as BaseEnv } from '../_middleware';
+import { jsonError } from '../http';
 
 // Extends the shared Env with the secret + repo config needed to talk to
 // GitHub on the server. GITHUB_PAT must be set as an encrypted environment
@@ -90,12 +91,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
     body = await request.json();
   } catch {
-    return new Response(JSON.stringify({ error: 'Invalid JSON body' }), { status: 400 });
+    return jsonError(400, 'Invalid JSON body');
   }
 
   const title = (body.title || '').trim();
   if (!title) {
-    return new Response(JSON.stringify({ error: 'Title required' }), { status: 400 });
+    return jsonError(400, 'Title required');
   }
 
   const issueSlug = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

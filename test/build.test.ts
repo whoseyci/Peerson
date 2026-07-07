@@ -99,8 +99,9 @@ describe('Functions Structure', () => {
     }
   });
 
-  it('has shared auth helper instead of duplicated API membership guards', () => {
+  it('has shared auth and error helpers instead of duplicated API boilerplate', () => {
     expect(existsSync('functions/auth.ts')).toBe(true);
+    expect(existsSync('functions/http.ts')).toBe(true);
     const checkDir = (dir: string) => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
         const path = resolve(dir, entry.name);
@@ -111,6 +112,7 @@ describe('Functions Structure', () => {
         if (!entry.name.endsWith('.ts')) continue;
         const content = readFileSync(path, 'utf-8');
         expect(content, `${path} should not redeclare requireMember`).not.toMatch(/function\s+requireMember\s*\(/);
+        expect(content, `${path} should use jsonError() for standard error bodies`).not.toContain('new Response(JSON.stringify({ error');
       }
     };
     checkDir('functions/api');

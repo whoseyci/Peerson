@@ -1,16 +1,17 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../../_middleware';
 import { requireMember } from '../../auth';
+import { jsonError } from '../../http';
 
 
 export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params }) => {
   const userId = request.headers.get('X-User-Id');
   const id = String(params.id);
-  if (!userId) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  if (!userId) return jsonError(401, 'Unauthorized');
   const body = await request.json<any>();
 
   const batch = await env.DB.prepare('SELECT b.*, i.household_id FROM batches b JOIN items i ON b.item_id = i.id WHERE b.id = ?').bind(id).first<any>();
-  if (!batch) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404 });
+  if (!batch) return jsonError(404, 'Not found');
   await requireMember(env.DB, userId, batch.household_id as string);
 
   if (body.quantity !== undefined) {
@@ -50,9 +51,9 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
 export const onRequestDelete: PagesFunction<Env> = async ({ request, env, params }) => {
   const userId = request.headers.get('X-User-Id');
   const id = String(params.id);
-  if (!userId) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  if (!userId) return jsonError(401, 'Unauthorized');
   const batch = await env.DB.prepare('SELECT b.*, i.household_id FROM batches b JOIN items i ON b.item_id = i.id WHERE b.id = ?').bind(id).first<any>();
-  if (!batch) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404 });
+  if (!batch) return jsonError(404, 'Not found');
   await requireMember(env.DB, userId, batch.household_id as string);
 
   // Retain the row at quantity=0 so consumption prediction has a completed

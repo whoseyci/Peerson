@@ -1,6 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../../_middleware';
 import { requireMember } from '../../auth';
+import { jsonError } from '../../http';
 
 
 interface BatchRow {
@@ -32,25 +33,25 @@ interface BatchRow {
 // location") -- consistent with how location_id already works elsewhere.
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const userId = request.headers.get('X-User-Id');
-  if (!userId) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  if (!userId) return jsonError(401, 'Unauthorized');
   const body = await request.json<any>();
 
   const itemId = body.item_id as string | undefined;
   const quantity = Math.floor(Number(body.quantity));
   if (!itemId || !Number.isFinite(quantity) || quantity <= 0) {
-    return new Response(JSON.stringify({ error: 'item_id and a positive quantity are required' }), { status: 400 });
+    return jsonError(400, 'item_id and a positive quantity are required');
   }
   const fromLocationId: string | null = body.from_location_id ?? null;
   const toLocationId: string | null = body.to_location_id ?? null;
 
   const item = await env.DB.prepare('SELECT household_id, location_id FROM items WHERE id = ?').bind(itemId).first();
-  if (!item) return new Response(JSON.stringify({ error: 'Item not found' }), { status: 404 });
+  if (!item) return jsonError(404, 'Item not found');
   await requireMember(env.DB, userId, item.household_id as string);
 
   if (toLocationId) {
     const dest = await env.DB.prepare('SELECT household_id FROM locations WHERE id = ?').bind(toLocationId).first();
     if (!dest || dest.household_id !== item.household_id) {
-      return new Response(JSON.stringify({ error: 'Invalid to_location_id' }), { status: 400 });
+      return jsonError(400, 'Invalid to_location_id');
     }
   }
 
