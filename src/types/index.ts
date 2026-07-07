@@ -32,6 +32,7 @@ export interface Item {
   created_by?: string;
   recurrence?: string | null;
   rotation_users?: string[] | null;
+  subtasks?: TaskSubtask[] | null;
 }
 
 export interface Barcode {
@@ -94,6 +95,7 @@ export interface Task {
   created_by?: string;
   recurrence?: string | null;
   rotation_users?: string[] | null;
+  subtasks?: TaskSubtask[] | null;
 }
 
 // One row per completed to-do (append-only log, see schema.sql) -- powers
@@ -172,4 +174,10 @@ export interface AppState {
   // re-render must never silently reset which room/container the user was
   // looking at).
   roomsNav: { roomId: string | null; containerId: string | null };
+}
+
+export interface TaskSubtask {
+  id: string;
+  text: string;
+  done: boolean;
 }

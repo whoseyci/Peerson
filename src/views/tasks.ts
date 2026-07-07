@@ -21,12 +21,15 @@ export function renderTasksView(app: App) {
         const taskId = escapeJsAttr(t.id);
         const title = escapeHtml(t.title);
         const assignee = escapeHtml(app.getMemberName(t.assigned_to));
+        const subDone = Array.isArray(t.subtasks) ? t.subtasks.filter((s: any) => s.done).length : 0;
+        const subTotal = Array.isArray(t.subtasks) ? t.subtasks.length : 0;
+        const subBadge = subTotal > 0 ? `<span class="chip ${subDone === subTotal ? 'good' : 'warn'}" style="margin-left:6px; font-weight:700;"><i class="ph ph-check-square"></i> ${subDone}/${subTotal}</span>` : '';
         return `
         <div class="card">
           <div class="card-content" style="align-items: flex-start;" onclick="openEditTaskModal('${taskId}')">
             <button class="shopping-check" style="margin-top: 2px;" onclick="event.stopPropagation(); toggleTask('${taskId}')" aria-label="${title} erledigen"></button>
             <div class="card-text" style="margin-left: 8px;">
-              <div class="card-header"><div class="item-name">${title}</div></div>
+              <div class="card-header"><div class="item-name">${title}${subBadge}</div></div>
               ${t.description ? `<div class="task-meta">${escapeHtml(t.description)}</div>` : ''}
               <div class="task-meta">
                 <span class="task-assignee"><i class="ph ph-user"></i> ${assignee}${rotLabel}</span>
@@ -48,12 +51,15 @@ export function renderTasksView(app: App) {
       ${done.map(t => {
         const taskId = escapeJsAttr(t.id);
         const title = escapeHtml(t.title);
+        const subDone = Array.isArray(t.subtasks) ? t.subtasks.filter((s: any) => s.done).length : 0;
+        const subTotal = Array.isArray(t.subtasks) ? t.subtasks.length : 0;
+        const subBadge = subTotal > 0 ? `<span class="chip good" style="margin-left:6px; font-weight:700;"><i class="ph ph-check-square"></i> ${subDone}/${subTotal}</span>` : '';
         return `
         <div class="card" style="opacity: 0.6;">
           <div class="card-content" style="align-items: flex-start;" onclick="openEditTaskModal('${taskId}')">
             <button class="shopping-check checked" style="margin-top: 2px;" onclick="event.stopPropagation(); toggleTask('${taskId}')" aria-label="${title} wieder öffnen"><i class="ph-bold ph-check"></i></button>
             <div class="card-text" style="margin-left: 8px;">
-              <div class="card-header"><div class="item-name" style="text-decoration: line-through;">${title}</div></div>
+              <div class="card-header"><div class="item-name" style="text-decoration: line-through;">${title}${subBadge}</div></div>
             </div>
           </div>
           <div class="card-actions">
@@ -67,6 +73,7 @@ export function renderTasksView(app: App) {
 
 export async function openAddTaskModal() {
   const app = (window as any).app;
+  taskSubtasksDraft = [];
   const members = app.state.members;
   const memberOptions = members.map((m: any) => `<option value="${escapeAttr(m.id)}">${escapeHtml(m.name)}</option>`).join('');
   const rotCheckboxes = members.map((m: any) => `
@@ -96,7 +103,14 @@ export async function openAddTaskModal() {
         <label style="margin-bottom:6px;">Team-Rotation (Wer wechselt sich ab?)</label>
         <div style="display:flex; flex-direction:column; gap:4px;">${rotCheckboxes}</div>
       </div>
-      <button class="btn" onclick="saveTask()"><i class="ph-bold ph-check"></i> Aufgabe erstellen</button>
+      <div class="form-group" style="margin-top:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <label style="margin:0">Checkliste (Unteraufgaben)</label>
+          <button class="btn btn-small btn-secondary" type="button" onclick="addTaskSubtaskRow()"><i class="ph ph-plus"></i> Schritt hinzufügen</button>
+        </div>
+        <div id="taskSubtasksContainer" style="background:var(--field-bg); border:1px solid var(--border); padding:10px; border-radius:var(--radius-sm);">${renderTaskSubtasksRows()}</div>
+      </div>
+      <button class="btn mt-2" onclick="saveTask()"><i class="ph-bold ph-check"></i> Aufgabe erstellen</button>
     </div>
   `);
 }
@@ -105,6 +119,7 @@ export async function openEditTaskModal(id: string) {
   const app = (window as any).app;
   const t = app.state.tasks.find((x: any) => x.id === id);
   if (!t) return;
+  taskSubtasksDraft = (Array.isArray(t.subtasks) ? t.subtasks : []).map((s: any) => ({ id: s.id || crypto.randomUUID(), text: s.text || '', done: !!s.done }));
 
   const members = app.state.members;
   const memberOptions = members.map((m: any) => `<option value="${escapeAttr(m.id)}" ${t.assigned_to === m.id ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('');
@@ -136,7 +151,14 @@ export async function openEditTaskModal(id: string) {
         <label style="margin-bottom:6px;">Team-Rotation (Wer wechselt sich ab?)</label>
         <div style="display:flex; flex-direction:column; gap:4px;">${rotCheckboxes}</div>
       </div>
-      <button class="btn" onclick="updateExistingTask('${escapeJsAttr(t.id)}')"><i class="ph-bold ph-check"></i> Änderungen speichern</button>
+      <div class="form-group" style="margin-top:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <label style="margin:0">Checkliste (Unteraufgaben)</label>
+          <button class="btn btn-small btn-secondary" type="button" onclick="addTaskSubtaskRow()"><i class="ph ph-plus"></i> Schritt hinzufügen</button>
+        </div>
+        <div id="taskSubtasksContainer" style="background:var(--field-bg); border:1px solid var(--border); padding:10px; border-radius:var(--radius-sm);">${renderTaskSubtasksRows()}</div>
+      </div>
+      <button class="btn mt-2" onclick="updateExistingTask('${escapeJsAttr(t.id)}')"><i class="ph-bold ph-check"></i> Änderungen speichern</button>
     </div>
   `);
 }
@@ -151,6 +173,9 @@ export async function saveTask() {
     const rotChecks = Array.from(document.querySelectorAll('.rot-check:checked')) as HTMLInputElement[];
     const rotation_users = recurrence ? rotChecks.map(c => c.value) : null;
 
+    const cleanedSubtasks = taskSubtasksDraft.filter((s: any) => s.text.trim()).map((s: any) => ({ id: s.id, text: s.text.trim(), done: !!s.done }));
+    const subtasks = cleanedSubtasks.length > 0 ? cleanedSubtasks : null;
+
     const task = await api.tasks.create({
       household_id: app.state.householdId,
       title,
@@ -158,7 +183,8 @@ export async function saveTask() {
       assigned_to: (document.getElementById('taskAssignee') as HTMLSelectElement)?.value || null,
       due_date: (document.getElementById('taskDue') as HTMLInputElement)?.value || null,
       recurrence,
-      rotation_users
+      rotation_users,
+      subtasks
     });
     app.state.tasks.push(task.task);
     app.closeModal('taskModal');
@@ -179,16 +205,58 @@ export async function updateExistingTask(id: string) {
     const rotChecks = Array.from(document.querySelectorAll('.rot-check:checked')) as HTMLInputElement[];
     const rotation_users = recurrence ? rotChecks.map(c => c.value) : null;
 
-    const data = {
+    const cleanedSubtasks = taskSubtasksDraft.filter((s: any) => s.text.trim()).map((s: any) => ({ id: s.id, text: s.text.trim(), done: !!s.done }));
+    const subtasks = cleanedSubtasks.length > 0 ? cleanedSubtasks : null;
+    const allDone = cleanedSubtasks.length > 0 && cleanedSubtasks.every((s: any) => s.done);
+    const t = app.state.tasks.find((x: any) => x.id === id);
+
+    let status = t ? t.status : 'todo';
+    let assigned_to = (document.getElementById('taskAssignee') as HTMLSelectElement)?.value || null;
+    let due_date = (document.getElementById('taskDue') as HTMLInputElement)?.value || null;
+    let completed_by = null;
+
+    if (cleanedSubtasks.length > 0) {
+      if (allDone && t && t.status !== 'done') {
+        if (recurrence) {
+          // Recurring task with all subtasks checked! Reset subtasks and advance!
+          cleanedSubtasks.forEach((s: any) => s.done = false);
+          if (Array.isArray(rotation_users) && rotation_users.length > 0) {
+            const currIdx = rotation_users.indexOf(assigned_to || '');
+            const nextIdx = (currIdx + 1) % rotation_users.length;
+            assigned_to = rotation_users[nextIdx];
+          }
+          if (due_date) {
+            const d = new Date(due_date);
+            if (recurrence === 'daily') d.setDate(d.getDate() + 1);
+            else if (recurrence === 'weekly') d.setDate(d.getDate() + 7);
+            else if (recurrence === 'monthly') d.setMonth(d.getMonth() + 1);
+            due_date = d.toISOString().split('T')[0];
+          }
+          status = 'todo';
+          completed_by = app.state.userId;
+          app.toast('Wiederholende Aufgabe für nächste Runde fällig gestellt! (Checkliste zurückgesetzt)');
+        } else {
+          status = 'done';
+          completed_by = app.state.userId;
+        }
+      } else if (!allDone && t && t.status === 'done') {
+        status = 'todo';
+      }
+    }
+
+    const data: any = {
       title,
       description: (document.getElementById('taskDesc') as HTMLTextAreaElement)?.value || null,
-      assigned_to: (document.getElementById('taskAssignee') as HTMLSelectElement)?.value || null,
-      due_date: (document.getElementById('taskDue') as HTMLInputElement)?.value || null,
+      assigned_to,
+      due_date,
       recurrence,
-      rotation_users
+      rotation_users,
+      subtasks: cleanedSubtasks.length > 0 ? cleanedSubtasks : null,
+      status
     };
+    if (completed_by) data.completed_by = completed_by;
+
     await api.tasks.update(id, data);
-    const t = app.state.tasks.find((x: any) => x.id === id);
     if (t) Object.assign(t, data);
     app.closeModal('taskModal');
     app.render();
@@ -266,12 +334,136 @@ export async function deleteTask(id: string) {
   });
 }
 
+
+export async function toggleSubtaskInstant(taskId: string, idx: number, checked: boolean) {
+  const app = (window as any).app;
+  const api = (window as any).api;
+  const t = app.state.tasks.find((x: any) => x.id === taskId);
+  if (!t || !Array.isArray(t.subtasks) || !t.subtasks[idx]) return;
+
+  t.subtasks[idx].done = checked;
+  if (taskSubtasksDraft[idx]) taskSubtasksDraft[idx].done = checked;
+
+  const allDone = t.subtasks.every((s: any) => s.done);
+  let status = t.status;
+  let assigned_to = t.assigned_to;
+  let due_date = t.due_date;
+  let completed_by = null;
+
+  if (allDone && t.status !== 'done') {
+    if (t.recurrence) {
+      t.subtasks.forEach((s: any) => (s.done = false));
+      if (taskSubtasksDraft.length) taskSubtasksDraft.forEach(s => (s.done = false));
+      if (Array.isArray(t.rotation_users) && t.rotation_users.length > 0) {
+        const currIdx = t.rotation_users.indexOf(assigned_to || '');
+        const nextIdx = (currIdx + 1) % t.rotation_users.length;
+        assigned_to = t.rotation_users[nextIdx];
+      }
+      if (due_date) {
+        const d = new Date(due_date);
+        if (t.recurrence === 'daily') d.setDate(d.getDate() + 1);
+        else if (t.recurrence === 'weekly') d.setDate(d.getDate() + 7);
+        else if (t.recurrence === 'monthly') d.setMonth(d.getMonth() + 1);
+        due_date = d.toISOString().split('T')[0];
+      }
+      status = 'todo';
+      completed_by = app.state.userId;
+      app.toast('Wiederholende Aufgabe für nächste Runde fällig gestellt! (Checkliste zurückgesetzt)');
+    } else {
+      status = 'done';
+      completed_by = app.state.userId;
+    }
+  } else if (!allDone && t.status === 'done') {
+    status = 'todo';
+  }
+
+  const payload: any = { subtasks: t.subtasks, status, assigned_to, due_date };
+  if (completed_by) payload.completed_by = completed_by;
+
+  t.status = status;
+  t.assigned_to = assigned_to;
+  t.due_date = due_date;
+
+  try {
+    await api.tasks.update(taskId, payload);
+    app.render();
+  } catch (e) {
+    app.toast('Fehler beim Aktualisieren');
+  }
+}
+
 // Bind to window for HTML onclick handlers
-Object.assign(window as any, {
-  openAddTaskModal,
-  openEditTaskModal,
-  saveTask,
-  updateExistingTask,
-  toggleTask,
-  deleteTask
-});
+
+
+let taskSubtasksDraft: Array<{ id: string; text: string; done: boolean }> = [];
+
+export function renderTaskSubtasksRows(): string {
+  if (!taskSubtasksDraft.length) {
+    return '<div class="empty-state" style="padding:12px;">Keine Checklisten-Punkte</div>';
+  }
+  return taskSubtasksDraft
+    .map(
+      (sub, idx) =>
+        '<div class="subtask-row" style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">' +
+        '<input type="checkbox" class="subtask-row-check" ' +
+        (sub.done ? 'checked' : '') +
+        ' onchange="updateTaskSubtaskDone(' +
+        idx +
+        ', this.checked)">' +
+        '<input type="text" class="subtask-row-text" placeholder="Schritt (z. B. Boden wischen)" value="' +
+        escapeAttr(sub.text || '') +
+        '" style="flex:1; padding:6px 10px; border-radius:6px; border:1px solid var(--border); background:var(--field-bg); color:var(--text); font-size:14px;" oninput="updateTaskSubtaskText(' +
+        idx +
+        ', this.value)">' +
+        '<button class="icon-btn btn-mini" type="button" onclick="removeTaskSubtaskRow(' +
+        idx +
+        ')" title="Entfernen"><i class="ph ph-x"></i></button>' +
+        '</div>'
+    )
+    .join('');
+}
+
+export function updateTaskSubtaskDone(idx: number, checked: boolean) {
+  if (taskSubtasksDraft[idx]) {
+    taskSubtasksDraft[idx].done = checked;
+  }
+}
+
+export function updateTaskSubtaskText(idx: number, value: string) {
+  if (taskSubtasksDraft[idx]) taskSubtasksDraft[idx].text = value;
+}
+
+export function addTaskSubtaskRow() {
+  taskSubtasksDraft.push({
+    id: crypto.randomUUID(),
+    text: '',
+    done: false,
+  });
+  const el = document.getElementById('taskSubtasksContainer');
+  if (el) el.innerHTML = renderTaskSubtasksRows();
+}
+
+export function removeTaskSubtaskRow(idx: number) {
+  taskSubtasksDraft.splice(idx, 1);
+  const el = document.getElementById('taskSubtasksContainer');
+  if (el) el.innerHTML = renderTaskSubtasksRows();
+}
+
+
+// Bind to window for HTML onclick handlers
+if (typeof window !== 'undefined') {
+  Object.assign(window as any, {
+    openAddTaskModal,
+    openEditTaskModal,
+    saveTask,
+    updateExistingTask,
+    toggleTask,
+    deleteTask,
+    renderTaskSubtasksRows,
+    updateTaskSubtaskDone,
+    updateTaskSubtaskText,
+    addTaskSubtaskRow,
+    removeTaskSubtaskRow,
+    toggleSubtaskInstant
+  });
+}
