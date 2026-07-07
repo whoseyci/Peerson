@@ -1,6 +1,7 @@
 import type { App } from '../app';
 import type { Location } from '../types';
 import { escapeAttr, escapeHtml, escapeJsAttr } from '../utils/html';
+import { enablePush, disablePush, getPushStatus, type PushStatus } from '../utils/push';
 
 interface LocationNode extends Location {
   children: LocationNode[];
@@ -52,6 +53,11 @@ function formatJoinedAt(joinedAt: unknown): string {
 
 export function renderHouseholdView(app: App) {
   const s = app.state;
+  // Push toggle status is a browser-owned value (permission + existing
+  // PushManager subscription), so we can't render it synchronously as
+  // part of the returned HTML. Schedule an async refresh right after
+  // the DOM lands.
+  if (typeof window !== 'undefined') schedulePushRefresh();
 
   if (!s.householdId || !s.household) {
     return `
@@ -184,6 +190,22 @@ export function renderHouseholdView(app: App) {
               <div style="font-family:monospace; background:var(--bg); padding:7px 8px; border-radius:8px; user-select:all; border:1px solid var(--border); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(s.userId)}</div>
               <button class="btn btn-secondary btn-small" style="width:auto; margin-top:0; flex-shrink:0;" onclick="copyUserId('${escapeJsAttr(s.userId)}')"><i class="ph ph-copy"></i> Kopieren</button>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header"><div class="section-title">Benachrichtigungen</div></div>
+      <div class="card">
+        <div class="card-content" style="flex-direction:column; align-items:stretch;">
+          <div id="pushStatusText" style="font-size:13px; color:var(--text-soft); margin-bottom:12px;">
+            Push-Benachrichtigungen halten dich auch bei geschlossener App über neue Ausgaben auf dem Laufenden.
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button class="btn" id="pushToggleBtn" onclick="togglePushNotifications()" disabled>
+              <i class="ph ph-bell"></i> <span id="pushToggleLabel">Status wird geladen…</span>
+            </button>
           </div>
         </div>
       </div>
@@ -465,6 +487,111 @@ export async function deleteLocation(id: string, name: string) {
   }
 }
 
+// --- Push notifications toggle (Issue #48) ---------------------------
+//
+// Rendered as a single global on/off button in the household view. Full
+// state is read fresh from the browser (permission, existing subscription)
+// on every refresh so re-entering the settings screen always shows the
+// truth even if the user tweaked things elsewhere.
+
+function pushStatusToUi(status: PushStatus): { label: string; enabled: boolean; help: string } {
+  switch (status.state) {
+    case 'unsupported':
+      return {
+        label: 'Nicht unterstützt',
+        enabled: false,
+        help: `Dieses Gerät unterstützt keine Push-Benachrichtigungen (${status.reason}).`,
+      };
+    case 'unconfigured':
+      return {
+        label: 'Nicht konfiguriert',
+        enabled: false,
+        help: 'Push-Benachrichtigungen sind auf diesem Server nicht eingerichtet.',
+      };
+    case 'denied':
+      return {
+        label: 'Blockiert',
+        enabled: false,
+        help: 'Benachrichtigungen wurden im Browser blockiert. Bitte in den Browser-Einstellungen erlauben und die Seite neu laden.',
+      };
+    case 'on':
+      return {
+        label: 'Benachrichtigungen an',
+        enabled: true,
+        help: 'Du bekommst eine Benachrichtigung, wenn jemand eine Ausgabe einträgt, an der du beteiligt bist.',
+      };
+    case 'off':
+    default:
+      return {
+        label: 'Benachrichtigungen aktivieren',
+        enabled: true,
+        help: 'Push-Benachrichtigungen halten dich auch bei geschlossener App über neue Ausgaben auf dem Laufenden.',
+      };
+  }
+}
+
+function applyPushUi(status: PushStatus, isBusy = false) {
+  const btn = document.getElementById('pushToggleBtn') as HTMLButtonElement | null;
+  const label = document.getElementById('pushToggleLabel');
+  const help = document.getElementById('pushStatusText');
+  if (!btn || !label || !help) return;
+
+  const ui = pushStatusToUi(status);
+  label.textContent = isBusy ? 'Einen Moment…' : ui.label;
+  help.textContent = ui.help;
+  btn.disabled = isBusy || !ui.enabled;
+  btn.dataset.state = status.state;
+  btn.setAttribute('aria-pressed', status.state === 'on' ? 'true' : 'false');
+}
+
+async function refreshPushStatus() {
+  try {
+    const status = await getPushStatus();
+    applyPushUi(status);
+  } catch (e) {
+    applyPushUi({ state: 'off' });
+  }
+}
+
+export async function togglePushNotifications() {
+  const app = (window as any).app;
+  const btn = document.getElementById('pushToggleBtn') as HTMLButtonElement | null;
+  const currentState = btn?.dataset.state;
+  applyPushUi({ state: 'off' }, true);
+  try {
+    let next: PushStatus;
+    if (currentState === 'on') {
+      next = await disablePush();
+      app?.toast?.('Benachrichtigungen deaktiviert');
+    } else {
+      next = await enablePush();
+      app?.toast?.('Benachrichtigungen aktiviert');
+    }
+    applyPushUi(next);
+  } catch (e: any) {
+    app?.toast?.(e?.message || 'Aktion fehlgeschlagen');
+    // Re-render truth from browser state.
+    await refreshPushStatus();
+  }
+}
+
+// Poll briefly for the toggle button after a re-render so we can populate
+// its label from the (async) browser-side status. Renders are synchronous
+// (see App.render()) so the element is normally present within one
+// microtask; the 2s upper bound is just a safety net.
+function schedulePushRefresh() {
+  const started = Date.now();
+  const tick = () => {
+    if (document.getElementById('pushToggleBtn')) {
+      refreshPushStatus();
+      return;
+    }
+    if (Date.now() - started > 2000) return;
+    setTimeout(tick, 100);
+  };
+  setTimeout(tick, 0);
+}
+
 // Attach to window so HTML onclick handlers work
 Object.assign(window as any, {
   createHousehold,
@@ -481,5 +608,6 @@ Object.assign(window as any, {
   addRootLocation,
   addChildLocation,
   renameLocation,
-  deleteLocation
+  deleteLocation,
+  togglePushNotifications,
 });
