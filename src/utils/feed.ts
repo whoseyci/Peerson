@@ -2,36 +2,18 @@ import type { AppState } from '../types';
 import { personalBalanceLines } from './finance';
 import { PREDICTED_LOW_STOCK_DAYS, predictConsumptionForItem } from './consumption';
 import { BUDGET_CATEGORY_LABELS, budgetProgressLines, monthlySpentByCategory } from './budgets';
+import { t } from '../i18n';
 
-// The Home view's "things that need your attention today" feed --
-// deliberately a *pure* function of state (no DOM, no window) so it can be
-// unit-tested directly and so app.ts's tab-badge count and home.ts's
-// card-stack rendering can never drift out of sync (both call this exact
-// function rather than each re-deriving their own notion of "what's
-// urgent").
 export interface FeedItem {
-  // Stable, content-derived key (not a random id) so a snooze recorded
-  // against e.g. "expiring:<batchId>" survives a background sync
-  // re-render as long as the same batch is still the one that's expiring.
   key: string;
   kind: 'expiring' | 'lowstock' | 'predicted-low' | 'task' | 'balance' | 'budget';
   icon: string;
   title: string;
   sub: string;
-  // Lower sorts first (more urgent). Not shown in the UI, purely for
-  // ordering the stack + overflow list.
   urgency: number;
-  // The id of the underlying record (item id / task id / member id) that
-  // an action handler needs to actually do something about this entry.
   refId: string;
 }
 
-// Calendar-day difference (midnight-to-midnight), matching the same
-// "due today counts as due, not overdue" semantics app.ts's own inline
-// daysUntil() already uses for tab badges -- a raw ms/86400000 diff
-// without normalizing hours would flip from "1 day left" to "0 days left"
-// depending on what time of day it currently is, which is confusing for
-// a due-date/expiry feed a household checks at random times.
 function daysUntil(dateString?: string | null): number {
   if (!dateString) return 9999;
   const today = new Date();
@@ -47,7 +29,6 @@ export function computeFeed(
 ): FeedItem[] {
   const items: FeedItem[] = [];
 
-  // Expiring / already-expired batches, within 3 days either side of today.
   state.batches.forEach(b => {
     if (b.quantity <= 0 || !b.expiry) return;
     const days = daysUntil(b.expiry);
@@ -56,24 +37,23 @@ export function computeFeed(
     if (!item) return;
     const key = `expiring:${b.id}`;
     if (snoozed.has(key)) return;
+    const absDays = Math.abs(days);
+    const plural = absDays === 1 ? '' : 'en';
     items.push({
       key,
       kind: 'expiring',
       icon: item.icon || 'package',
       title: item.name,
       sub: days < 0
-        ? `Seit ${Math.abs(days)} Tag${Math.abs(days) === 1 ? '' : 'en'} abgelaufen`
+        ? t('feed.expired.n', { days: absDays, plural })
         : days === 0
-          ? 'Läuft heute ab'
-          : `Läuft in ${days} Tag${days === 1 ? '' : 'en'} ab`,
+          ? t('feed.expiring.today')
+          : t('feed.expiring.n', { days, plural }),
       urgency: days,
       refId: item.id,
     });
   });
 
-  // Low-stock items that are not already on the open shopping list. If an
-  // item is already below its static threshold, that concrete alert wins and
-  // the predictive alert below is suppressed to avoid duplicate cards.
   const openShopping = state.shopping || [];
   state.items.forEach(item => {
     const total = state.batches.filter(b => b.item_id === item.id).reduce((a, b) => a + b.quantity, 0);
@@ -92,11 +72,7 @@ export function computeFeed(
         kind: 'lowstock',
         icon: item.icon || 'package',
         title: item.name,
-        sub: `Nur noch ${total} von ${item.threshold} vorrätig`,
-        // Bigger deficits are more urgent, so they need a *lower* number to
-        // sort first alongside expiring items' day-counts (which can go
-        // negative for already-expired stock) -- flip the deficit's sign
-        // rather than just offsetting it.
+        sub: t('feed.lowstock', { total: String(total), threshold: String(item.threshold) }),
         urgency: 10 - Math.max(0, item.threshold - total),
         refId: item.id,
       });
@@ -114,32 +90,31 @@ export function computeFeed(
       icon: item.icon || 'package',
       title: item.name,
       sub: days <= 1
-        ? 'Voraussichtlich morgen leer'
-        : `Reicht voraussichtlich noch ${days} Tage`,
+        ? t('feed.predicted.tomorrow')
+        : t('feed.predicted.n', { days: String(days) }),
       urgency: 8 + days,
       refId: item.id,
     });
   });
 
-  // Tasks due within 2 days (or overdue), still open.
-  state.tasks.forEach(t => {
-    if (t.status !== 'todo' || !t.due_date) return;
-    const days = daysUntil(t.due_date);
+  state.tasks.forEach(task => {
+    if (task.status !== 'todo' || !task.due_date) return;
+    const days = daysUntil(task.due_date);
     if (days > 2) return;
-    const key = `task:${t.id}`;
+    const key = `task:${task.id}`;
     if (snoozed.has(key)) return;
+    const plural = Math.abs(days) === 1 ? '' : 'en';
     items.push({
       key,
       kind: 'task',
       icon: 'check-circle',
-      title: t.title,
-      sub: days < 0 ? 'Überfällig' : days === 0 ? 'Heute fällig' : `In ${days} Tag${days === 1 ? '' : 'en'} fällig`,
+      title: task.title,
+      sub: days < 0 ? t('feed.task.overdue') : days === 0 ? t('feed.task.today') : t('feed.task.n', { days: String(days), plural }),
       urgency: 5 + days,
-      refId: t.id,
+      refId: task.id,
     });
   });
 
-  // Unsettled personal balances.
   const balances = personalBalanceLines(state.userId, state.members, state.expenses, state.splits);
   balances.forEach(line => {
     const key = `balance:${line.memberId}`;
@@ -148,7 +123,7 @@ export function computeFeed(
       key,
       kind: 'balance',
       icon: line.direction === 'you_owe' ? 'arrow-up-right' : 'arrow-down-left',
-      title: line.direction === 'you_owe' ? `Du schuldest ${line.memberName}` : `${line.memberName} schuldet dir`,
+      title: line.direction === 'you_owe' ? t('feed.balance.youOwe', { name: line.memberName }) : t('feed.balance.owesYou', { name: line.memberName }),
       sub: `${line.amount.toFixed(2)} €`,
       urgency: 50,
       refId: line.memberId,
@@ -182,10 +157,10 @@ export function computeFeed(
         key,
         kind: 'budget',
         icon: 'chart-pie-slice',
-        title: `Budget-Warnung: ${catLabel}`,
+        title: t('feed.budget.title', { category: catLabel }),
         sub: isExceeded
-          ? `Budget überschritten (${spent.toFixed(2)} € von ${line.monthlyAmount.toFixed(2)} €)`
-          : `Hochgerechnet ca. ${projected.toFixed(2)} € (Budget: ${line.monthlyAmount.toFixed(2)} €)`,
+          ? t('feed.budget.exceeded', { spent: spent.toFixed(2), budget: line.monthlyAmount.toFixed(2) })
+          : t('feed.budget.projected', { projected: projected.toFixed(2), budget: line.monthlyAmount.toFixed(2) }),
         urgency: isExceeded ? 15 : 25,
         refId: line.category,
       });
@@ -195,11 +170,6 @@ export function computeFeed(
   return items.sort((a, b) => a.urgency - b.urgency);
 }
 
-// Per-household, per-day snooze bookkeeping shared by home.ts (to filter
-// the feed it renders) and app.ts (so the Home tab's badge count matches
-// exactly what the feed will show, never a stale pre-snooze number).
-// Keyed by household so switching households on the same device never
-// leaks one household's snoozed items into another's feed.
 export function getSnoozedKeys(householdId: string | null): Set<string> {
   if (!householdId) return new Set();
   const storageKey = `peerson_home_snoozed_${householdId}`;

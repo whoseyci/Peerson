@@ -2,12 +2,8 @@ import type { App } from '../app';
 import { computeFeed, getSnoozedKeys, snoozeKey, type FeedItem } from '../utils/feed';
 import { escapeHtml } from '../utils/html';
 import { renderBudgetsSection } from './expenses';
+import { t } from '../i18n';
 
-// How many cards sit in the physical swipeable stack at once; anything
-// beyond this shows as a plain scrollable list below it instead (matching
-// /home/user/ux-vision/peerson-reimagined.html's design -- a stack of
-// more than ~3 becomes visually confusing and mostly hides its own
-// contents behind the top card anyway).
 const STACK_SIZE = 3;
 
 function feedItemIcon(f: FeedItem): string {
@@ -18,12 +14,12 @@ function feedItemIcon(f: FeedItem): string {
 
 function actionLabel(f: FeedItem): string {
   switch (f.kind) {
-    case 'expiring': return 'Verbraucht';
+    case 'expiring': return t('feed.action.expiring');
     case 'lowstock':
-    case 'predicted-low': return 'Einkaufen';
-    case 'task': return 'Erledigt';
-    case 'balance': return 'Ausgleichen';
-    case 'budget': return 'Ansehen';
+    case 'predicted-low': return t('feed.action.lowstock');
+    case 'task': return t('feed.action.task');
+    case 'balance': return t('feed.action.balance');
+    case 'budget': return t('feed.action.budget');
   }
 }
 
@@ -35,16 +31,16 @@ export function renderHomeView(app: App) {
   const overflow = feed.slice(STACK_SIZE);
 
   const hour = new Date().getHours();
-  const greet = hour < 5 ? 'Noch wach?' : hour < 11 ? 'Guten Morgen' : hour < 18 ? 'Guten Tag' : 'Guten Abend';
+  const greet = hour < 5 ? t('home.greet.night') : hour < 11 ? t('home.greet.morning') : hour < 18 ? t('home.greet.afternoon') : t('home.greet.evening');
   const alertCount = feed.length;
   const headline = alertCount === 0
-    ? 'Alles im grünen Bereich'
+    ? t('home.headline.ok')
     : alertCount === 1
-      ? 'Eine Sache braucht deine Aufmerksamkeit'
-      : `${alertCount} Dinge brauchen deine Aufmerksamkeit`;
+      ? t('home.headline.one')
+      : t('home.headline.n', { count: alertCount });
   const sub = alertCount === 0
-    ? 'Kein Handlungsbedarf gerade — genieß die Ruhe.'
-    : 'Wisch nach rechts zum Erledigen, nach links zum Verschieben.';
+    ? t('home.sub.ok')
+    : t('home.sub.n');
 
   return `
     <div class="home-hero">
@@ -60,10 +56,10 @@ export function renderHomeView(app: App) {
     ${stack.length ? `<div class="swipe-progress">${stack.map((_, i) => `<span class="${i === 0 ? '' : ''}" data-dot="${i}"></span>`).join('')}</div>` : ''}
 
     <div class="quick-row">
-      <button class="quick-tile" onclick="openShoppingTrip()"><span class="qt-icon"><i class="ph ph-shopping-cart-simple"></i></span>Tour starten</button>
-      <button class="quick-tile" onclick="startScanFlow()"><span class="qt-icon"><i class="ph ph-barcode"></i></span>Scannen</button>
-      <button class="quick-tile" onclick="openAddTaskModal()"><span class="qt-icon"><i class="ph ph-check-circle"></i></span>Aufgabe</button>
-      <button class="quick-tile" onclick="openAddExpenseModal()"><span class="qt-icon"><i class="ph ph-currency-eur"></i></span>Ausgabe</button>
+      <button class="quick-tile" onclick="openShoppingTrip()"><span class="qt-icon"><i class="ph ph-shopping-cart-simple"></i></span>${t('home.tourStart')}</button>
+      <button class="quick-tile" onclick="startScanFlow()"><span class="qt-icon"><i class="ph ph-barcode"></i></span>${t('home.scan')}</button>
+      <button class="quick-tile" onclick="openAddTaskModal()"><span class="qt-icon"><i class="ph ph-check-circle"></i></span>${t('home.task')}</button>
+      <button class="quick-tile" onclick="openAddExpenseModal()"><span class="qt-icon"><i class="ph ph-currency-eur"></i></span>${t('home.expense')}</button>
     </div>
 
     <div class="section">
@@ -75,7 +71,7 @@ export function renderHomeView(app: App) {
 
     ${overflow.length ? `
     <div class="section">
-      <div class="section-header"><div class="section-title">Außerdem offen</div><span class="badge">${overflow.length}</span></div>
+      <div class="section-header"><div class="section-title">${t('home.overflow')}</div><span class="badge">${overflow.length}</span></div>
       ${overflow.map(f => renderOverflowRow(f)).join('')}
     </div>` : ''}
   `;
@@ -86,15 +82,15 @@ function renderStack(app: App, stack: FeedItem[]) {
     return `
       <div class="stack-empty">
         <i class="ph ph-check-circle"></i>
-        <span>Nichts Dringendes gerade</span>
+        <span>${t('home.stackEmpty')}</span>
       </div>`;
   }
   return `
     <div class="stack-wrap">
       ${stack.map((f, i) => `
         <div class="swipe-card" data-feed-key="${escapeHtml(f.key)}" data-stack-pos="${i}" style="z-index:${stack.length - i}; ${i > 0 ? `transform: scale(${1 - i * 0.04}) translateY(${i * 10}px); opacity:${1 - i * 0.25};` : ''}">
-          <div class="stack-hint left"><i class="ph-bold ph-clock"></i>&nbsp;Später</div>
-          <div class="stack-hint right"><i class="ph-bold ph-check"></i>&nbsp;Erledigt</div>
+          <div class="stack-hint left"><i class="ph-bold ph-clock"></i>&nbsp;${t('home.swipeLater')}</div>
+          <div class="stack-hint right"><i class="ph-bold ph-check"></i>&nbsp;${t('home.swipeDone')}</div>
           <div class="sc-top">
             <div class="sc-icon"><i class="ph ph-${escapeHtml(feedItemIcon(f))}"></i></div>
             <div>
@@ -103,7 +99,7 @@ function renderStack(app: App, stack: FeedItem[]) {
             </div>
           </div>
           <div class="sc-actions">
-            <button class="sc-btn snooze" onclick="snoozeFeedItem('${escapeHtml(f.key)}')"><i class="ph ph-clock"></i> Später</button>
+            <button class="sc-btn snooze" onclick="snoozeFeedItem('${escapeHtml(f.key)}')"><i class="ph ph-clock"></i> ${t('home.swipeLater')}</button>
             <button class="sc-btn act" onclick="actOnFeedItem('${escapeHtml(f.key)}')"><i class="ph ph-check"></i> ${escapeHtml(actionLabel(f))}</button>
           </div>
         </div>
@@ -127,9 +123,6 @@ function renderOverflowRow(f: FeedItem) {
     </div>`;
 }
 
-// Finds the underlying FeedItem for a key by recomputing the feed fresh
-// (cheap -- state is already in memory) rather than trying to keep a
-// separate cache in sync with app.render() cycles.
 function findFeedItem(app: App, key: string): FeedItem | undefined {
   const snoozed = getSnoozedKeys(app.state.householdId);
   return computeFeed(app.state, snoozed).find(f => f.key === key);
@@ -177,11 +170,6 @@ export async function actOnFeedItem(key: string) {
   });
 }
 
-// A quick CSS fly-out (matching the mock's swipe-physics feel without
-// reimplementing full drag tracking for this button-triggered path --
-// pointer-drag swiping is handled separately by installHomeSwipe below)
-// before re-rendering, so acting on the top card doesn't feel like an
-// abrupt jump-cut.
 function animateStackCardOut(key: string, direction: 'left' | 'right', done: () => void) {
   const card = document.querySelector(`.swipe-card[data-feed-key="${CSS.escape(key)}"]`) as HTMLElement | null;
   if (!card) { done(); return; }
@@ -191,15 +179,6 @@ function animateStackCardOut(key: string, direction: 'left' | 'right', done: () 
   setTimeout(done, 220);
 }
 
-// --- Pointer-based drag-to-swipe for the top card of the stack ---------
-//
-// Mirrors the physics in the approved standalone mock
-// (/home/user/ux-vision/peerson-reimagined.html): drag horizontally,
-// rotate proportional to distance, fade in a colored hint overlay, and
-// past a threshold either fly the card out (committing the swipe) or
-// snap back to center. Installed once per app lifetime (idempotent) via
-// event delegation on document, since renderHomeView() replaces the DOM
-// on every render and per-element listeners would otherwise leak/vanish.
 let homeSwipeInstalled = false;
 export function installHomeSwipeOnce() {
   if (homeSwipeInstalled) return;

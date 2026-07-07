@@ -2,3 +2,7 @@ node_modules
 dist
 .env
 .wrangler
+.cache
+.npm
+test-results
+playwright-report
