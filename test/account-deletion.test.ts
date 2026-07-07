@@ -122,7 +122,7 @@ describe('Account Deletion API', () => {
     expect(delRes.status).toBe(200);
 
     // Verify balances after Alice's deletion
-    const membersAfter = [
+    const activeMembersAfter = [
       { id: 'user-2', name: 'Bob', role: 'member' },
     ];
     const expensesAfter = (await d1.prepare("SELECT * FROM expenses WHERE household_id = ?").bind('house-1').all()).results as any[];
@@ -132,16 +132,26 @@ describe('Account Deletion API', () => {
     expect(expensesAfter.length).toBe(1);
     expect(splitsAfter.length).toBe(2);
 
-    // Bob's debt remains 5€ (no silent holes or balance corruption!)
-    const bobLinesAfter = personalBalanceLines('user-2', membersAfter, expensesAfter, splitsAfter);
+    // Bob's debt remains 5€ even if a caller only has active members locally.
+    const bobLinesAfter = personalBalanceLines('user-2', activeMembersAfter, expensesAfter, splitsAfter);
     expect(bobLinesAfter.length).toBe(1);
     expect(bobLinesAfter[0].memberId).toBe('user-1');
     expect(bobLinesAfter[0].amount).toBe(5);
     expect(bobLinesAfter[0].direction).toBe('you_owe');
     expect(bobLinesAfter[0].memberName).toBe('Unbekannt'); // since user-1 is no longer in active members list
 
-    // Check allMemberBalances for remaining members
-    const allAfter = allMemberBalances(membersAfter, expensesAfter, splitsAfter);
+    // The expenses API should add anonymized former ledger participants back
+    // into its returned members list, so the UI can show "Gelöschter Nutzer"
+    // and all-member balance summaries still net to zero across the full ledger.
+    const { onRequestGet: getExpenses } = await import('../functions/api/expenses');
+    const expensesResponse = await runHandler(getExpenses, makeRequest('http://test/api/expenses?householdId=house-1', {}, 'user-2'), env);
+    expect(expensesResponse.status).toBe(200);
+    const expensesBody = await expensesResponse.json() as any;
+    expect(expensesBody.members.find((m: any) => m.id === 'user-1')).toMatchObject({ name: 'Gelöschter Nutzer', role: 'former' });
+
+    const allAfter = allMemberBalances(expensesBody.members, expensesBody.expenses, expensesBody.splits);
+    expect(allAfter.find(m => m.memberId === 'user-1')?.balance).toBe(5);
     expect(allAfter.find(m => m.memberId === 'user-2')?.balance).toBe(-5);
+    expect(allAfter.reduce((sum, m) => sum + m.balance, 0)).toBeCloseTo(0);
   });
 });

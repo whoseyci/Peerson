@@ -26,8 +26,24 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     WHERE hm.household_id = ?
   `).bind(householdId).all();
 
+  // Account deletion anonymizes the user row and removes membership rows, but
+  // deliberately keeps shared ledger rows intact. Include anonymized former
+  // ledger participants here so balance calculations still net to zero and the
+  // UI can display "Gelöschter Nutzer" instead of dropping a payer/split user.
+  const memberRows = [...(members.results as any[])];
+  const knownMemberIds = new Set(memberRows.map((m: any) => m.id));
+  const ledgerUserIds = new Set<string>();
+  (expenses.results as any[]).forEach((e: any) => { if (e.paid_by) ledgerUserIds.add(e.paid_by); });
+  (splits.results as any[]).forEach((s: any) => { if (s.user_id) ledgerUserIds.add(s.user_id); });
+  for (const ledgerUserId of ledgerUserIds) {
+    if (knownMemberIds.has(ledgerUserId)) continue;
+    const user = await env.DB.prepare('SELECT id, name FROM users WHERE id = ?').bind(ledgerUserId).first();
+    memberRows.push({ id: ledgerUserId, name: (user as any)?.name || 'Unbekannt', role: 'former', joined_at: 0 });
+    knownMemberIds.add(ledgerUserId);
+  }
+
   const balances: Record<string, number> = {};
-  members.results.forEach((m: any) => balances[m.id] = 0);
+  memberRows.forEach((m: any) => balances[m.id] = 0);
   (expenses.results as any[]).forEach((e: any) => {
     balances[e.paid_by] = (balances[e.paid_by] || 0) + e.amount;
   });
@@ -35,7 +51,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     balances[s.user_id] = (balances[s.user_id] || 0) - s.amount;
   });
 
-  return Response.json({ expenses: expenses.results, splits: splits.results, members: members.results, balances });
+  return Response.json({ expenses: expenses.results, splits: splits.results, members: memberRows, balances });
 };
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
