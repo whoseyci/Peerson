@@ -8,4 +8,4 @@ class_name = "HouseholdSyncHub"
 
 [[migrations]]
 tag = "v1_household_sync_hub"
-new_classes = ["HouseholdSyncHub"]
+new_sqlite_classes = ["HouseholdSyncHub"]
