@@ -132,6 +132,11 @@ Deploy the realtime Worker once:
 npx wrangler deploy --config wrangler.realtime.toml
 ```
 
+`wrangler.realtime.toml` uses `new_sqlite_classes` for the Durable Object
+migration because Cloudflare's free plan requires SQLite-backed Durable
+Objects. Using the legacy `new_classes` migration form will fail with API
+error `10097` on free plans.
+
 Add these encrypted environment variables/secrets:
 
 - On the **realtime Worker**:
