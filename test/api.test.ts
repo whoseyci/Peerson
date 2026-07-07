@@ -260,6 +260,64 @@ describe('Batches API', () => {
   });
 });
 
+
+describe('Category Budgets API', () => {
+  let env: Env;
+  let d1: ReturnType<typeof createMockD1>;
+
+  beforeEach(() => {
+    d1 = createMockD1();
+    d1.seedMembership('house-1', 'test-user');
+    env = { DB: d1 } as unknown as Env;
+  });
+
+  it('POST /api/category-budgets upserts a household category budget', async () => {
+    const { onRequestPost, onRequestGet } = await import('../functions/api/category-budgets');
+    const createReq = makeRequest('http://test/api/category-budgets', {
+      method: 'POST',
+      body: JSON.stringify({ household_id: 'house-1', category: 'groceries', monthly_amount: 300 }),
+    });
+    const createRes = await runHandler(onRequestPost, createReq, env);
+    expect(createRes.status).toBe(201);
+    expect((await createRes.json()).budget.monthly_amount).toBe(300);
+
+    const updateReq = makeRequest('http://test/api/category-budgets', {
+      method: 'POST',
+      body: JSON.stringify({ household_id: 'house-1', category: 'groceries', monthly_amount: 350 }),
+    });
+    const updateRes = await runHandler(onRequestPost, updateReq, env);
+    expect(updateRes.status).toBe(200);
+
+    const listReq = makeRequest('http://test/api/category-budgets?householdId=house-1');
+    const listRes = await runHandler(onRequestGet, listReq, env);
+    const body = await listRes.json();
+    expect(body.budgets).toHaveLength(1);
+    expect(body.budgets[0].monthly_amount).toBe(350);
+  });
+
+  it('rejects settlement as a budget category', async () => {
+    const { onRequestPost } = await import('../functions/api/category-budgets');
+    const request = makeRequest('http://test/api/category-budgets', {
+      method: 'POST',
+      body: JSON.stringify({ household_id: 'house-1', category: 'settlement', monthly_amount: 100 }),
+    });
+    const response = await runHandler(onRequestPost, request, env);
+    expect(response.status).toBe(400);
+  });
+
+  it('DELETE /api/category-budgets removes a budget by household and category', async () => {
+    const { onRequestPost, onRequestDelete, onRequestGet } = await import('../functions/api/category-budgets');
+    await runHandler(onRequestPost, makeRequest('http://test/api/category-budgets', {
+      method: 'POST',
+      body: JSON.stringify({ household_id: 'house-1', category: 'rent', monthly_amount: 1000 }),
+    }), env);
+    const delRes = await runHandler(onRequestDelete, makeRequest('http://test/api/category-budgets?householdId=house-1&category=rent', { method: 'DELETE' }), env);
+    expect(delRes.status).toBe(200);
+    const listRes = await runHandler(onRequestGet, makeRequest('http://test/api/category-budgets?householdId=house-1'), env);
+    expect((await listRes.json()).budgets).toEqual([]);
+  });
+});
+
 describe('Route Params Handlers', () => {
   let env: Env;
   let d1: ReturnType<typeof createMockD1>;

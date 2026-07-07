@@ -81,6 +81,7 @@ export class App {
     tasks: [],
     expenses: [],
     splits: [],
+    categoryBudgets: [],
     shopping: [],
     locations: [],
     taskCompletions: [],
@@ -362,12 +363,13 @@ export class App {
     if (!this.state.householdId) return;
     const hid = this.state.householdId;
     try {
-      const [itemsData, tasksData, expensesData, shoppingData, locationsData] = await Promise.all([
+      const [itemsData, tasksData, expensesData, shoppingData, locationsData, budgetsData] = await Promise.all([
         api.items.list(hid),
         api.tasks.list(hid),
         api.expenses.list(hid),
         api.shopping.list(hid),
         api.locations.list(hid),
+        api.categoryBudgets.list(hid),
       ]);
       this.state.items = this.stripPending('item', itemsData.items);
       this.state.batches = itemsData.batches;
@@ -375,6 +377,7 @@ export class App {
       this.state.taskCompletions = tasksData.completions || [];
       this.state.expenses = this.stripPending('expense', expensesData.expenses);
       this.state.splits = expensesData.splits;
+      this.state.categoryBudgets = budgetsData.budgets || [];
       this.state.shopping = this.stripPending('shopping', shoppingData.items);
       this.state.members = expensesData.members;
       this.state.locations = locationsData.locations;
