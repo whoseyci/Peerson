@@ -18,7 +18,8 @@ function feedItemIcon(f: FeedItem): string {
 function actionLabel(f: FeedItem): string {
   switch (f.kind) {
     case 'expiring': return 'Verbraucht';
-    case 'lowstock': return 'Einkaufen';
+    case 'lowstock':
+    case 'predicted-low': return 'Einkaufen';
     case 'task': return 'Erledigt';
     case 'balance': return 'Ausgleichen';
   }
@@ -141,7 +142,8 @@ export async function actOnFeedItem(key: string) {
       case 'expiring':
         await (window as any).removeOne(item.refId);
         break;
-      case 'lowstock': {
+      case 'lowstock':
+      case 'predicted-low': {
         const total = app.state.batches.filter(b => b.item_id === item.refId).reduce((a, b) => a + b.quantity, 0);
         const pantryItem = app.state.items.find(i => i.id === item.refId);
         const needed = pantryItem ? Math.max(1, pantryItem.threshold - total) : 1;

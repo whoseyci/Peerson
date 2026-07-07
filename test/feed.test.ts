@@ -74,6 +74,47 @@ describe('computeFeed', () => {
 
 
 
+  it('surfaces predicted-low items before they cross the static threshold', () => {
+    const now = Math.floor(Date.now() / 1000);
+    const day = 86400;
+    const items: Item[] = [
+      { id: 'i1', household_id: 'h1', name: 'Milch', category: 'milch', threshold: 1, barcodes: [], nutrition: {} },
+    ];
+    const batches: Batch[] = [
+      { id: 'old1', item_id: 'i1', quantity: 0, grams_per_unit: 0, date_added: now - 20 * day, initial_quantity: 6, consumed_at: now - 14 * day },
+      { id: 'old2', item_id: 'i1', quantity: 0, grams_per_unit: 0, date_added: now - 12 * day, initial_quantity: 6, consumed_at: now - 6 * day },
+      { id: 'active', item_id: 'i1', quantity: 2, grams_per_unit: 0, date_added: now - day, initial_quantity: 2 },
+    ];
+
+    const feed = computeFeed(
+      { items, batches, tasks: [], expenses: [], splits: [], members, userId: 'u1' },
+      new Set()
+    );
+
+    expect(feed.map(f => f.key)).toEqual(['predicted-low:i1']);
+    expect(feed[0].kind).toBe('predicted-low');
+  });
+
+  it('suppresses predicted-low when static low-stock already applies', () => {
+    const now = Math.floor(Date.now() / 1000);
+    const day = 86400;
+    const items: Item[] = [
+      { id: 'i1', household_id: 'h1', name: 'Milch', category: 'milch', threshold: 3, barcodes: [], nutrition: {} },
+    ];
+    const batches: Batch[] = [
+      { id: 'old1', item_id: 'i1', quantity: 0, grams_per_unit: 0, date_added: now - 20 * day, initial_quantity: 6, consumed_at: now - 14 * day },
+      { id: 'old2', item_id: 'i1', quantity: 0, grams_per_unit: 0, date_added: now - 12 * day, initial_quantity: 6, consumed_at: now - 6 * day },
+      { id: 'active', item_id: 'i1', quantity: 2, grams_per_unit: 0, date_added: now - day, initial_quantity: 2 },
+    ];
+
+    const feed = computeFeed(
+      { items, batches, tasks: [], expenses: [], splits: [], members, userId: 'u1' },
+      new Set()
+    );
+
+    expect(feed.map(f => f.key)).toEqual(['lowstock:i1']);
+  });
+
   it('does not resurface low-stock items that are already on the open shopping list', () => {
     const items: Item[] = [
       { id: 'i1', household_id: 'h1', name: 'Kaffee', category: 'sonstiges', threshold: 5, barcodes: [], nutrition: {} },
@@ -139,9 +180,9 @@ describe('computeFeed', () => {
 
   it('sorts the most urgent (most overdue / most depleted) entries first', () => {
     const items: Item[] = [
-      { id: 'i1', household_id: 'h1', name: 'A', category: 'sonstiges', threshold: 1, barcodes: [], nutrition: {} },
+      { id: 'i1', household_id: 'h1', name: 'A', category: 'sonstiges', threshold: 2, barcodes: [], nutrition: {} },
     ];
-    const batches: Batch[] = [{ id: 'b1', item_id: 'i1', quantity: 0, expiry: iso(-2), grams_per_unit: 0, date_added: 0 }];
+    const batches: Batch[] = [{ id: 'b1', item_id: 'i1', quantity: 1, expiry: iso(-2), grams_per_unit: 0, date_added: 0 }];
     const tasks: Task[] = [{ id: 't1', household_id: 'h1', title: 'Task', status: 'todo', due_date: iso(-1) }];
     const feed = computeFeed(
       { items, batches, tasks, expenses: [], splits: [], members, userId: 'u1' },

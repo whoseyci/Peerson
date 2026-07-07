@@ -1,5 +1,6 @@
 import type { AppState } from '../types';
 import { personalBalanceLines } from './finance';
+import { PREDICTED_LOW_STOCK_DAYS, predictConsumptionForItem } from './consumption';
 
 // The Home view's "things that need your attention today" feed --
 // deliberately a *pure* function of state (no DOM, no window) so it can be
@@ -12,7 +13,7 @@ export interface FeedItem {
   // against e.g. "expiring:<batchId>" survives a background sync
   // re-render as long as the same batch is still the one that's expiring.
   key: string;
-  kind: 'expiring' | 'lowstock' | 'task' | 'balance';
+  kind: 'expiring' | 'lowstock' | 'predicted-low' | 'task' | 'balance';
   icon: string;
   title: string;
   sub: string;
@@ -47,7 +48,7 @@ export function computeFeed(
 
   // Expiring / already-expired batches, within 3 days either side of today.
   state.batches.forEach(b => {
-    if (!b.expiry) return;
+    if (b.quantity <= 0 || !b.expiry) return;
     const days = daysUntil(b.expiry);
     if (days > 3) return;
     const item = state.items.find(i => i.id === b.item_id);
@@ -69,30 +70,52 @@ export function computeFeed(
     });
   });
 
-  // Low-stock items that are not already on the open shopping list.
+  // Low-stock items that are not already on the open shopping list. If an
+  // item is already below its static threshold, that concrete alert wins and
+  // the predictive alert below is suppressed to avoid duplicate cards.
   const openShopping = state.shopping || [];
   state.items.forEach(item => {
     const total = state.batches.filter(b => b.item_id === item.id).reduce((a, b) => a + b.quantity, 0);
-    if (total >= item.threshold) return;
     const alreadyOnShoppingList = openShopping.some(sh =>
       sh.status === 'open' && (
         sh.linked_item_id === item.id || sh.name.trim().toLowerCase() === item.name.trim().toLowerCase()
       )
     );
     if (alreadyOnShoppingList) return;
-    const key = `lowstock:${item.id}`;
+
+    if (total < item.threshold) {
+      const key = `lowstock:${item.id}`;
+      if (snoozed.has(key)) return;
+      items.push({
+        key,
+        kind: 'lowstock',
+        icon: item.icon || 'package',
+        title: item.name,
+        sub: `Nur noch ${total} von ${item.threshold} vorrätig`,
+        // Bigger deficits are more urgent, so they need a *lower* number to
+        // sort first alongside expiring items' day-counts (which can go
+        // negative for already-expired stock) -- flip the deficit's sign
+        // rather than just offsetting it.
+        urgency: 10 - Math.max(0, item.threshold - total),
+        refId: item.id,
+      });
+      return;
+    }
+
+    const prediction = predictConsumptionForItem(item.id, state.batches);
+    if (!prediction || prediction.daysRemaining > PREDICTED_LOW_STOCK_DAYS) return;
+    const key = `predicted-low:${item.id}`;
     if (snoozed.has(key)) return;
+    const days = Math.max(0, Math.ceil(prediction.daysRemaining));
     items.push({
       key,
-      kind: 'lowstock',
+      kind: 'predicted-low',
       icon: item.icon || 'package',
       title: item.name,
-      sub: `Nur noch ${total} von ${item.threshold} vorrätig`,
-      // Bigger deficits are more urgent, so they need a *lower* number to
-      // sort first alongside expiring items' day-counts (which can go
-      // negative for already-expired stock) -- flip the deficit's sign
-      // rather than just offsetting it.
-      urgency: 10 - Math.max(0, item.threshold - total),
+      sub: days <= 1
+        ? 'Voraussichtlich morgen leer'
+        : `Reicht voraussichtlich noch ${days} Tage`,
+      urgency: 8 + days,
       refId: item.id,
     });
   });

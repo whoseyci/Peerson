@@ -257,6 +257,32 @@ describe('Batches API', () => {
     expect(response.status).toBe(201);
     const body = await response.json();
     expect(body.batch.quantity).toBe(5);
+    expect(body.batch.initial_quantity).toBe(5);
+    expect(body.batch.consumed_at).toBeNull();
+  });
+
+  it('DELETE /api/batches/:id retains a zeroed batch for consumption history', async () => {
+    d1.seed('batches', [{
+      id: 'batch-1',
+      item_id: 'item-1',
+      quantity: 1,
+      initial_quantity: 5,
+      date_added: 1000,
+      grams_per_unit: 0,
+    }]);
+    const { onRequestDelete } = await import('../functions/api/batches/[id]');
+    const request = makeRequest('http://test/api/batches/batch-1', { method: 'DELETE' });
+
+    const response = await runHandler(onRequestDelete, request, env, { id: 'batch-1' });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.batch.quantity).toBe(0);
+    expect(body.batch.initial_quantity).toBe(5);
+    expect(typeof body.batch.consumed_at).toBe('number');
+
+    const rows = await (d1 as any).prepare('SELECT * FROM batches WHERE id = ?').bind('batch-1').all();
+    expect(rows.results).toHaveLength(1);
+    expect(rows.results[0].quantity).toBe(0);
   });
 });
 
