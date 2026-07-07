@@ -206,8 +206,10 @@ export function renderHouseholdView(app: App) {
       </div>
     </div>
 
-    <div class="section">
+    <div class="section" style="display:flex; flex-direction:column; gap:12px;">
+      <button class="btn btn-secondary" onclick="exportHouseholdData()"><i class="ph ph-download-simple"></i> Daten exportieren (JSON)</button>
       <button class="btn btn-danger" onclick="leaveHousehold()">Haushalt verlassen</button>
+      <button class="btn btn-danger" onclick="deleteAccount()" style="border-color:#dc2626; color:#dc2626;">Konto löschen</button>
     </div>
   `;
 }
@@ -373,6 +375,59 @@ export async function leaveHousehold() {
   app.render();
 }
 
+export async function exportHouseholdData() {
+  const app = (window as any).app;
+  if (!app.state.household?.id) return;
+  try {
+    app.toast('Daten werden exportiert...');
+    const data = await app.api.export.get(app.state.household.id);
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `peerson-export-${app.state.household.name || 'haushalt'}-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    app.toast('Export erfolgreich');
+  } catch (e) {
+    app.toast('Fehler beim Exportieren');
+  }
+}
+
+export async function deleteAccount() {
+  const app = (window as any).app;
+  if (!confirm('Konto wirklich löschen? Dies entfernt deinen Zugang aus allen Haushalten und ist unwiderruflich.')) return;
+  try {
+    await app.api.users.deleteAccount();
+  } catch (e) {
+    app.toast('Fehler beim Löschen des Kontos');
+    return;
+  }
+  const knownKeys = [
+    'peerson_userId',
+    'peerson_userName',
+    'peerson_householdId',
+    'peerson_view',
+    'peerson_darkMode',
+    'peerson_scanMode',
+  ];
+  knownKeys.forEach(k => localStorage.removeItem(k));
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('peerson_')) {
+      localStorage.removeItem(key);
+    }
+  }
+  app.state.userId = null;
+  app.state.userName = null;
+  app.state.householdId = null;
+  app.state.household = null;
+  app.state.members = [];
+  location.reload();
+}
+
 export function openLocationNameModal(title: string, initialValue: string, onSave: (name: string) => Promise<void>) {
   const app = (window as any).app;
   (window as any)._locationModalOnSave = onSave;
@@ -466,20 +521,24 @@ export async function deleteLocation(id: string, name: string) {
 }
 
 // Attach to window so HTML onclick handlers work
-Object.assign(window as any, {
-  createHousehold,
-  joinHousehold,
-  restoreAccount,
-  pasteIntoField,
-  copyUserId,
-  saveProfileName,
-  regenerateInvite,
-  kickMember,
-  leaveHousehold,
-  openLocationNameModal,
-  submitLocationNameModal,
-  addRootLocation,
-  addChildLocation,
-  renameLocation,
-  deleteLocation
-});
+if (typeof window !== 'undefined') {
+  Object.assign(window as any, {
+    createHousehold,
+    joinHousehold,
+    restoreAccount,
+    pasteIntoField,
+    copyUserId,
+    saveProfileName,
+    regenerateInvite,
+    kickMember,
+    leaveHousehold,
+    exportHouseholdData,
+    deleteAccount,
+    openLocationNameModal,
+    submitLocationNameModal,
+    addRootLocation,
+    addChildLocation,
+    renameLocation,
+    deleteLocation
+  });
+}

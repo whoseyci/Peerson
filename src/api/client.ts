@@ -109,6 +109,10 @@ export const api = {
   },
   users: {
     updateName: (name: string) => post('/api/users', { action: 'update_name', name }),
+    deleteAccount: () => post('/api/users', { action: 'delete_account' }),
+  },
+  export: {
+    get: (householdId: string) => get(`/api/export?householdId=${encodeURIComponent(householdId)}`),
   },
   bugReport: {
     submit: (data: {
