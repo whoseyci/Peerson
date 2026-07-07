@@ -2,7 +2,7 @@ import type { App } from '../app';
 import type { Expense } from '../types';
 import { escapeAttr, escapeHtml, escapeJsAttr } from '../utils/html';
 import { personalBalanceLines } from '../utils/finance';
-import { BUDGETABLE_CATEGORIES, budgetProgressLines } from '../utils/budgets';
+import { BUDGETABLE_CATEGORIES, budgetProgressLines, cleanExpenseTitle, isSettlementExpense } from '../utils/budgets';
 
 const EXPENSE_CATEGORIES: Record<string, { icon: string; label: string }> = {
   groceries: { icon: 'shopping-cart-simple', label: 'Lebensmittel' },
@@ -12,15 +12,6 @@ const EXPENSE_CATEGORIES: Record<string, { icon: string; label: string }> = {
   settlement: { icon: 'hand-coins', label: 'Schuldenausgleich' },
   sonstiges: { icon: 'package', label: 'Sonstiges' },
 };
-
-function cleanExpenseTitle(title: string) {
-  return title.replace(/^\s*\u{1F4B8}\s*/u, '').trim();
-}
-
-function isSettlementExpense(expense: Expense) {
-  const title = cleanExpenseTitle(expense.title || '').toLowerCase();
-  return expense.category === 'settlement' || title.includes('schuldenausgleich') || title.includes('ausgleich');
-}
 
 function isExpenseSettled(expense: Expense, splits: Array<{ expense_id: string; settled?: number }>) {
   if (isSettlementExpense(expense)) return true;
@@ -33,6 +24,7 @@ function expenseMeta(expense: Expense) {
     ? EXPENSE_CATEGORIES.settlement
     : (EXPENSE_CATEGORIES[expense.category || 'sonstiges'] || EXPENSE_CATEGORIES.sonstiges);
 }
+
 
 function formatExpenseDate(createdAt: unknown) {
   const seconds = typeof createdAt === 'number' ? createdAt : Number(createdAt);

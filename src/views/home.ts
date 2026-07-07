@@ -22,6 +22,7 @@ function actionLabel(f: FeedItem): string {
     case 'predicted-low': return 'Einkaufen';
     case 'task': return 'Erledigt';
     case 'balance': return 'Ausgleichen';
+    case 'budget': return 'Ansehen';
   }
 }
 
@@ -155,6 +156,13 @@ export async function actOnFeedItem(key: string) {
         break;
       case 'balance':
         (window as any).openSettleModal();
+        break;
+      case 'budget':
+        // Nothing to "resolve" here the way a low-stock item or an
+        // overdue task can be -- take the user straight to Finanzen so
+        // they can see (and if they want, adjust) the budget that's
+        // being projected to run over.
+        app.navigate('expenses');
         break;
     }
     app.render();

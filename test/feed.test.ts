@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import type { Item, Batch, Task, Expense, ExpenseSplit, HouseholdMember } from '../src/types';
+import type { Item, Batch, Task, Expense, ExpenseSplit, HouseholdMember, CategoryBudget } from '../src/types';
 
 // The test environment runs under Node (see vitest.config.ts), which has
 // no `localStorage` global -- unlike every other utility module tested so
@@ -164,6 +164,80 @@ describe('computeFeed', () => {
     expect(feed).toHaveLength(1);
     expect(feed[0].kind).toBe('balance');
     expect(feed[0].title).toContain('Bob');
+  });
+
+  it('surfaces a projected budget overrun before the budget is actually exceeded', () => {
+    // Fix "now" so the linear day-of-month projection is deterministic:
+    // 300 spent by day 10 of a 30-day month (April) projects to 900,
+    // well over a 500 budget, even though actual spend-to-date hasn't
+    // crossed it yet.
+    const fixedNow = new Date(2026, 3, 10, 12, 0, 0); // April 10 2026 -- April has 30 days
+    const expenses: Expense[] = [
+      { id: 'e1', household_id: 'h1', title: 'Wocheneinkauf', amount: 300, paid_by: 'u1', split_type: 'equal', category: 'groceries', created_at: Math.floor(new Date(2026, 3, 5, 12).getTime() / 1000) },
+    ];
+    const budgets: CategoryBudget[] = [
+      { id: 'b1', household_id: 'h1', category: 'groceries', monthly_amount: 500, created_at: 0 },
+    ];
+    const realDateNow = Date;
+    // computeFeed derives "now" internally via `new Date()`, so freeze time.
+    (globalThis as any).Date = class extends realDateNow {
+      constructor(...args: any[]) {
+        if (args.length === 0) { super(fixedNow.getTime()); return; }
+        // @ts-ignore
+        super(...args);
+      }
+    } as any;
+    try {
+      const feed = computeFeed(
+        { items: [], batches: [], tasks: [], expenses, splits: [], members, userId: 'u1', categoryBudgets: budgets },
+        new Set()
+      );
+      const budgetItem = feed.find(f => f.kind === 'budget');
+      expect(budgetItem).toBeDefined();
+      expect(budgetItem!.key).toBe('budget:groceries');
+      expect(budgetItem!.title).toContain('Lebensmittel');
+      expect(budgetItem!.sub).toContain('Hochgerechnet');
+    } finally {
+      (globalThis as any).Date = realDateNow;
+    }
+  });
+
+  it('does not surface a budget warning when nothing has been spent in that category yet', () => {
+    const budgets: CategoryBudget[] = [
+      { id: 'b1', household_id: 'h1', category: 'groceries', monthly_amount: 500, created_at: 0 },
+    ];
+    const feed = computeFeed(
+      { items: [], batches: [], tasks: [], expenses: [], splits: [], members, userId: 'u1', categoryBudgets: budgets },
+      new Set()
+    );
+    expect(feed.find(f => f.kind === 'budget')).toBeUndefined();
+  });
+
+  it('does not surface a budget warning when spending is comfortably within projection', () => {
+    const fixedNow = new Date(2026, 3, 5, 12, 0, 0);
+    const expenses: Expense[] = [
+      { id: 'e1', household_id: 'h1', title: 'Wocheneinkauf', amount: 20, paid_by: 'u1', split_type: 'equal', category: 'groceries', created_at: Math.floor(new Date(2026, 3, 3, 12).getTime() / 1000) },
+    ];
+    const budgets: CategoryBudget[] = [
+      { id: 'b1', household_id: 'h1', category: 'groceries', monthly_amount: 500, created_at: 0 },
+    ];
+    const realDateNow = Date;
+    (globalThis as any).Date = class extends realDateNow {
+      constructor(...args: any[]) {
+        if (args.length === 0) { super(fixedNow.getTime()); return; }
+        // @ts-ignore
+        super(...args);
+      }
+    } as any;
+    try {
+      const feed = computeFeed(
+        { items: [], batches: [], tasks: [], expenses, splits: [], members, userId: 'u1', categoryBudgets: budgets },
+        new Set()
+      );
+      expect(feed.find(f => f.kind === 'budget')).toBeUndefined();
+    } finally {
+      (globalThis as any).Date = realDateNow;
+    }
   });
 
   it('excludes anything whose key is in the snoozed set', () => {

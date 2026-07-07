@@ -1,6 +1,7 @@
 import type { AppState } from '../types';
 import { personalBalanceLines } from './finance';
 import { PREDICTED_LOW_STOCK_DAYS, predictConsumptionForItem } from './consumption';
+import { BUDGET_CATEGORY_LABELS, budgetProgressLines, monthlySpentByCategory } from './budgets';
 
 // The Home view's "things that need your attention today" feed --
 // deliberately a *pure* function of state (no DOM, no window) so it can be
@@ -13,7 +14,7 @@ export interface FeedItem {
   // against e.g. "expiring:<batchId>" survives a background sync
   // re-render as long as the same batch is still the one that's expiring.
   key: string;
-  kind: 'expiring' | 'lowstock' | 'predicted-low' | 'task' | 'balance';
+  kind: 'expiring' | 'lowstock' | 'predicted-low' | 'task' | 'balance' | 'budget';
   icon: string;
   title: string;
   sub: string;
@@ -41,7 +42,7 @@ function daysUntil(dateString?: string | null): number {
 }
 
 export function computeFeed(
-  state: Pick<AppState, 'items' | 'batches' | 'tasks' | 'expenses' | 'splits' | 'members' | 'userId'> & Pick<Partial<AppState>, 'shopping'>,
+  state: Pick<AppState, 'items' | 'batches' | 'tasks' | 'expenses' | 'splits' | 'members' | 'userId'> & Pick<Partial<AppState>, 'shopping' | 'categoryBudgets'>,
   snoozed: Set<string>
 ): FeedItem[] {
   const items: FeedItem[] = [];
@@ -153,6 +154,43 @@ export function computeFeed(
       refId: line.memberId,
     });
   });
+
+  // Projected category-budget overruns (Issue #52 stretch scope): once
+  // there's been *any* real spending in a budgeted category this month, we
+  // linearly project "spend so far / days elapsed * days in month" to warn
+  // before the budget is actually blown, not just after. A category that's
+  // already over budget is always shown regardless of the projection (a
+  // short/early month can't undercount an already-real overrun).
+  if (state.categoryBudgets && state.categoryBudgets.length > 0) {
+    const now = new Date();
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const dayOfMonth = now.getDate();
+    const spentByCategory = monthlySpentByCategory(state.expenses, now);
+
+    budgetProgressLines(state.categoryBudgets, state.expenses, now).forEach(line => {
+      const spent = spentByCategory[line.category] || 0;
+      if (spent <= 0) return;
+      const key = `budget:${line.category}`;
+      if (snoozed.has(key)) return;
+
+      const projected = (spent / Math.max(1, dayOfMonth)) * daysInMonth;
+      const isExceeded = spent >= line.monthlyAmount;
+      if (!isExceeded && projected <= line.monthlyAmount) return;
+
+      const catLabel = BUDGET_CATEGORY_LABELS[line.category] || line.category;
+      items.push({
+        key,
+        kind: 'budget',
+        icon: 'chart-pie-slice',
+        title: `Budget-Warnung: ${catLabel}`,
+        sub: isExceeded
+          ? `Budget überschritten (${spent.toFixed(2)} € von ${line.monthlyAmount.toFixed(2)} €)`
+          : `Hochgerechnet ca. ${projected.toFixed(2)} € (Budget: ${line.monthlyAmount.toFixed(2)} €)`,
+        urgency: isExceeded ? 15 : 25,
+        refId: line.category,
+      });
+    });
+  }
 
   return items.sort((a, b) => a.urgency - b.urgency);
 }
