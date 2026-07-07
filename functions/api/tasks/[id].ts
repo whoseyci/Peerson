@@ -46,17 +46,52 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
       await env.DB.prepare(`UPDATE tasks SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
     } catch (e: any) {
       if (e?.message?.includes('no such column')) {
-        const fallbackFields = fields.filter(f => !f.startsWith('recurrence') && !f.startsWith('rotation_users') && !f.startsWith('subtasks'));
-        if (fallbackFields.length > 0) {
-          const fallbackValues = values.filter((_, idx) => !fields[idx].startsWith('recurrence') && !fields[idx].startsWith('rotation_users') && !fields[idx].startsWith('subtasks'));
+        // BUGFIX (pre-existing, not introduced by this PR): the previous
+        // version filtered `values` (which has one MORE element than
+        // `fields` -- the appended `id` -- see `values.push(id)` above)
+        // by indexing into `fields` at the same index. For that trailing
+        // `id` element, `fields[idx]` is `undefined`, so calling
+        // `.startsWith(...)` on it threw a TypeError, meaning this
+        // graceful-degradation fallback path itself crashed instead of
+        // degrading gracefully on a database missing the newer columns.
+        // Fixed by zipping fields+values together BEFORE appending id,
+        // filtering that paired list, then appending id once at the end.
+        const newColumnPrefixes = ['recurrence', 'rotation_users', 'subtasks'];
+        const paired = fields.map((f, idx) => ({ field: f, value: values[idx] }));
+        const fallbackPairs = paired.filter(p => !newColumnPrefixes.some(prefix => p.field.startsWith(prefix)));
+        if (fallbackPairs.length > 0) {
+          const fallbackFields = fallbackPairs.map(p => p.field);
+          const fallbackValues = fallbackPairs.map(p => p.value);
+          fallbackValues.push(id);
           await env.DB.prepare(`UPDATE tasks SET ${fallbackFields.join(', ')} WHERE id = ?`).bind(...fallbackValues).run();
         }
       } else { throw e; }
     }
   }
 
-  // If status is transitioning to 'done' and completed_by is sent, log a task completion (for fairness tracking)
-  if (body.status === 'done' && body.completed_by) {
+  // `completed_by` is an explicit, separate signal from `status` -- a
+  // plain status:'done' update logs a completion for whoever's making the
+  // request, but a *recurring* task's cycle-close (with or without a
+  // subtask checklist) never actually sets status to 'done' -- it stays
+  // 'todo' and just rotates assigned_to/due_date (and, if it has a
+  // checklist, resets every subtask to unchecked), see
+  // src/views/tasks.ts's toggleTask()/toggleSubtaskInstant(). So there's
+  // no way to infer "this PATCH represents a completion" purely from a
+  // status transition. The client sends this flag explicitly in every
+  // completion case (plain done, recurring cycle-close, and checklist
+  // cycle-close alike) instead of the server guessing from `status`.
+  //
+  // BUGFIX: this used to be gated on `body.status === 'done' &&
+  // body.completed_by`, which silently broke completion logging for
+  // every recurring task (whether or not it has a checklist) -- a
+  // regression against already-shipped behavior, since toggleTask()'s
+  // recurring-cycle path has always sent completed_by while
+  // deliberately keeping status:'todo'. Reproduced directly: PATCHing
+  // { status: 'todo', assigned_to, due_date, completed_by } (the exact
+  // payload toggleTask() sends for a plain, non-checklist recurring
+  // task) wrote zero rows to task_completions with the buggy condition,
+  // vs. the expected one row.
+  if (body.completed_by) {
     try {
       const compId = crypto.randomUUID();
       await env.DB.prepare(`
