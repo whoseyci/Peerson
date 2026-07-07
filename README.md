@@ -18,6 +18,7 @@ A wholesome app for shared households. Track your pantry, split expenses, assign
 - **Fairness Tracking** — A running log of who actually completes tasks over time, surfaced as a "this week" summary and per-person stats — purely informational, doesn't change how tasks are assigned or rotated.
 - **Move Stock Between Rooms** — Assign a batch to a specific room/container independent of its item's default location, and move a quantity between locations with one tap — moves are FIFO-aware and split a batch if needed so expiry dates are never lost.
 - **Receipt Scanning** *(optional, requires a Gemini API key)* — Photograph a paper receipt to auto-extract its line items for review before adding them to your shopping list.
+- **Push Notifications** *(optional, requires VAPID keys)* — Get a real OS-level notification when a flatmate logs an expense you owe money on, even if the app is closed. Per-device on/off toggle in the Haushalt settings.
 - **Expense & Income Splitting** — Log who paid what and split costs equally among members. Balances are calculated automatically.
 - **Monochrome Design** — Clean, accessible UI with dark mode support.
 
@@ -164,7 +165,65 @@ API. To enable it:
 client-side code, for the same reason as `GITHUB_PAT` above — it must
 only ever live as an encrypted Pages environment variable.
 
-### 9. Barcode scanning & product lookup
+### 9. (Optional) Push notifications
+
+Peerson can send real Web Push notifications when a flatmate logs an
+expense you owe money on — the notification lands on the device even
+when the app isn't open. To enable this:
+
+1. **Generate a VAPID key pair once** (any modern Node version, no
+   dependencies needed):
+
+   ```bash
+   node -e "(async()=>{const k=await crypto.subtle.generateKey({name:'ECDSA',namedCurve:'P-256'},true,['sign','verify']);const pub=new Uint8Array(await crypto.subtle.exportKey('raw',k.publicKey));const jwk=await crypto.subtle.exportKey('jwk',k.privateKey);const b64=b=>Buffer.from(b).toString('base64').replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');console.log('VAPID_PUBLIC_KEY=',b64(pub));console.log('VAPID_PRIVATE_KEY=',jwk.d);})()"
+   ```
+
+   Save both values somewhere safe — you'll need them below.
+
+2. In your Cloudflare Pages project: **Settings → Environment variables**,
+   add three **encrypted/secret** variables (for both Production and
+   Preview environments):
+
+   - `VAPID_PUBLIC_KEY` — the public key from step 1.
+   - `VAPID_PRIVATE_KEY` — the private key (`d`) from step 1.
+   - `VAPID_SUBJECT` — a `mailto:` address or `https://…` URL the push
+     service can contact you at if there's an abuse issue, e.g.
+     `mailto:you@example.com`.
+
+3. Apply the schema addition to your D1 database (fresh setups running
+   `schema.sql` are already covered; existing databases need the
+   migration):
+
+   ```bash
+   wrangler d1 execute peerson-db --file=./migrations/005_push_subscriptions.sql
+   ```
+
+4. Redeploy. Users will see an **"Benachrichtigungen aktivieren"** button
+   in the Haushalt (household) settings screen. Toggling it on triggers
+   the browser's notification permission prompt and registers the device
+   with the server.
+
+**Graceful degradation.** If any of the three `VAPID_*` variables is
+missing, `POST /api/push-subscribe` returns a clear `501` and the toggle
+in the UI shows *"Nicht konfiguriert"* instead of prompting for
+permission — mirroring the exact pattern used by `functions/api/bug-report.ts`
+and `functions/api/receipt-scan.ts` for their optional integrations.
+
+**Never** put the VAPID *private* key in `wrangler.toml`, a `[vars]`
+block, or any client-side code, for the same reason as `GITHUB_PAT` /
+`GEMINI_API_KEY` above — it must only ever live as an encrypted Pages
+environment variable. The public key (`VAPID_PUBLIC_KEY`) is fine to be
+exposed; the client fetches it via `GET /api/push-config` at subscribe
+time.
+
+**Currently notified events:** a new expense being logged that puts you
+in the payer's debt (i.e. you have a non-zero split and you're not the
+payer). Scheduled notifications for "task due today" and "batch expires
+in 2 days" require a Cloudflare cron trigger and are tracked as
+follow-up work — the dedup infrastructure (`notification_log` table +
+`dedupeKey` parameter in `notifyUsers`) is already in place for them.
+
+### 10. Barcode scanning & product lookup
 
 No setup required — `functions/api/product-lookup.ts` proxies to
 [Open Food Facts](https://world.openfoodfacts.org), a free, keyless,
