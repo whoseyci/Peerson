@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../../_middleware';
 import { requireMember } from '../../auth';
 import { jsonError } from '../../http';
+import { notifyHouseholdChanged } from '../../realtime-notify';
 
 
 export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params }) => {
@@ -45,6 +46,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
     }
   }
   const updated = await env.DB.prepare('SELECT * FROM batches WHERE id = ?').bind(id).first();
+  await notifyHouseholdChanged(env, { householdId: batch.household_id as string, resource: 'batches', action: 'update', actorUserId: userId, excludeClientId: request.headers.get('X-Client-Id') });
   return Response.json({ batch: updated });
 };
 
@@ -70,5 +72,6 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env, params
   }
 
   const updated = await env.DB.prepare('SELECT * FROM batches WHERE id = ?').bind(id).first();
+  await notifyHouseholdChanged(env, { householdId: batch.household_id as string, resource: 'batches', action: 'delete', actorUserId: userId, excludeClientId: request.headers.get('X-Client-Id') });
   return Response.json({ success: true, batch: updated });
 };

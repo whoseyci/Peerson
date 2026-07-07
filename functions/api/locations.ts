@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../_middleware';
 import { requireMember } from '../auth';
 import { jsonError } from '../http';
+import { notifyHouseholdChanged } from '../realtime-notify';
 
 
 // GET /api/locations?householdId=... -- returns the whole location tree for
@@ -61,6 +62,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   ).bind(id, body.household_id, parentId, name, siblingCount).run();
 
   const location = await env.DB.prepare('SELECT * FROM locations WHERE id = ?').bind(id).first();
+  await notifyHouseholdChanged(env, { householdId: body.household_id, resource: 'locations', action: 'create', actorUserId: userId, excludeClientId: request.headers.get('X-Client-Id') });
   return Response.json({ location }, { status: 201 });
 };
 

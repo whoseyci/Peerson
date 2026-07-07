@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../_middleware';
 import { requireMember } from '../auth';
 import { jsonError } from '../http';
+import { notifyHouseholdChanged } from '../realtime-notify';
 
 const BUDGETABLE_CATEGORIES = new Set(['groceries', 'rent', 'household', 'leisure', 'sonstiges']);
 
@@ -48,6 +49,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const budget = await env.DB.prepare('SELECT * FROM category_budgets WHERE household_id = ? AND category = ?')
     .bind(body.household_id, category).first();
+  await notifyHouseholdChanged(env, { householdId: body.household_id, resource: 'budgets', action: existing?.id ? 'update' : 'create', actorUserId: userId, excludeClientId: request.headers.get('X-Client-Id') });
   return Response.json({ budget }, { status: existing?.id ? 200 : 201 });
 };
 
@@ -62,5 +64,6 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env }) => {
 
   await env.DB.prepare('DELETE FROM category_budgets WHERE household_id = ? AND category = ?')
     .bind(householdId, category).run();
+  await notifyHouseholdChanged(env, { householdId, resource: 'budgets', action: 'delete', actorUserId: userId, excludeClientId: request.headers.get('X-Client-Id') });
   return Response.json({ success: true });
 };

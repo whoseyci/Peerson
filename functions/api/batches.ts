@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../_middleware';
 import { requireMember } from '../auth';
 import { jsonError } from '../http';
+import { notifyHouseholdChanged } from '../realtime-notify';
 
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
@@ -86,5 +87,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   // comparison (NaN) until the next background sync poll re-fetched the
   // real row and fixed it up.
   const created = await env.DB.prepare('SELECT * FROM batches WHERE id = ?').bind(id).first();
+  await notifyHouseholdChanged(env, { householdId: item.household_id as string, resource: 'batches', action: 'create', actorUserId: userId, excludeClientId: request.headers.get('X-Client-Id') });
   return Response.json({ batch: created }, { status: 201 });
 };

@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../_middleware';
 import { requireMember } from '../auth';
 import { jsonError } from '../http';
+import { notifyHouseholdChanged } from '../realtime-notify';
 
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
@@ -45,5 +46,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   // the previous `{ id, ...body, price }` response silently omitted both
   // until the next background sync poll re-fetched the real row.
   const created = await env.DB.prepare('SELECT * FROM shopping_items WHERE id = ?').bind(id).first();
+  await notifyHouseholdChanged(env, { householdId: body.household_id, resource: 'shopping', action: 'create', actorUserId: userId, excludeClientId: request.headers.get('X-Client-Id') });
   return Response.json({ item: created }, { status: 201 });
 };

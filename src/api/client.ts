@@ -2,6 +2,15 @@ import type { Household, Item, Batch, Task, Expense, ShoppingItem, HouseholdMemb
 
 const API_BASE = '';
 
+export function getClientId() {
+  let id = localStorage.getItem('peerson_clientId') || '';
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem('peerson_clientId', id);
+  }
+  return id;
+}
+
 function headers() {
   const userId = localStorage.getItem('peerson_userId') || '';
   const userName = localStorage.getItem('peerson_userName') || '';
@@ -11,6 +20,7 @@ function headers() {
     'X-User-Id': userId,
     'X-User-Name': userName,
     'X-Household-Id': householdId,
+    'X-Client-Id': getClientId(),
   };
 }
 
@@ -135,6 +145,9 @@ export const api = {
     // see ReceiptScanResult for why this degrades gracefully when no API
     // key is configured server-side.
     scan: (imageDataUrl: string) => post('/api/receipt-scan', { image: imageDataUrl }) as Promise<ReceiptScanResult>,
+  },
+  realtime: {
+    token: () => post('/api/realtime-token', {}) as Promise<{ token: string; exp: number; wsUrl: string | null }>,
   },
 };
 

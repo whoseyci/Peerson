@@ -1,0 +1,11 @@
+name = "peerson-realtime"
+main = "realtime-worker/index.ts"
+compatibility_date = "2024-07-01"
+
+[[durable_objects.bindings]]
+name = "SYNC_HUB"
+class_name = "HouseholdSyncHub"
+
+[[migrations]]
+tag = "v1_household_sync_hub"
+new_classes = ["HouseholdSyncHub"]

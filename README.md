@@ -118,7 +118,55 @@ After the first deploy, go to your Cloudflare Pages project settings:
 - Add a binding named `DB` pointing to your `peerson-db` database.
 - Redeploy if needed.
 
-### 7. (Optional) In-app bug reporting
+### 7. Realtime live sync / presence
+
+Peerson can use a small companion Cloudflare Worker with a Durable
+Object-backed WebSocket hub for near-instant household sync and lightweight
+presence (for example, showing when a flatmate is currently shopping).
+Polling remains as a fallback, so the app still works if realtime is not
+configured.
+
+Deploy the realtime Worker once:
+
+```bash
+npx wrangler deploy --config wrangler.realtime.toml
+```
+
+Add these encrypted environment variables/secrets:
+
+- On the **realtime Worker**:
+  - `REALTIME_TOKEN_SECRET` — used to verify short-lived WebSocket tokens.
+  - `REALTIME_NOTIFY_SECRET` — used to protect the Worker `/notify` endpoint.
+- On the **Pages project**:
+  - `REALTIME_TOKEN_SECRET` — same value as the Worker secret above.
+  - `REALTIME_NOTIFY_SECRET` — same value as the Worker secret above.
+  - `REALTIME_WS_URL` — `wss://<your-realtime-worker-subdomain>/ws`.
+  - `REALTIME_NOTIFY_URL` — `https://<your-realtime-worker-subdomain>/notify`.
+
+Generate the two secrets locally with:
+
+```bash
+openssl rand -base64 32
+openssl rand -base64 32
+```
+
+If any realtime env var is missing, clients automatically keep using the
+polling fallback.
+
+For local Pages + Functions testing after building the app:
+
+```bash
+npm run build
+npx wrangler pages dev dist --d1=DB
+```
+
+For local realtime Worker testing:
+
+```bash
+npx wrangler dev --config wrangler.realtime.toml
+```
+
+### 8. (Optional) In-app bug reporting
 
 The "🐛" button lets users file a bug report without leaving the app or
 needing a GitHub account — it's handled entirely server-side by

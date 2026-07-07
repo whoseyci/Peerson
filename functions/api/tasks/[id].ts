@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../../_middleware';
 import { requireMember } from '../../auth';
 import { jsonError } from '../../http';
+import { notifyHouseholdChanged } from '../../realtime-notify';
 
 
 function parseTaskRow<T extends { rotation_users?: unknown; subtasks?: unknown }>(row: T): T {
@@ -101,6 +102,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
   }
 
   const task = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(id).first();
+  await notifyHouseholdChanged(env, { householdId: existing.household_id as string, resource: 'tasks', action: 'update', actorUserId: userId, excludeClientId: request.headers.get('X-Client-Id') });
   return Response.json({ task: task ? parseTaskRow(task as any) : task });
 };
 
@@ -112,5 +114,6 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env, params
   if (!existing) return jsonError(404, 'Not found');
   await requireMember(env.DB, userId, existing.household_id as string);
   await env.DB.prepare('DELETE FROM tasks WHERE id = ?').bind(id).run();
+  await notifyHouseholdChanged(env, { householdId: existing.household_id as string, resource: 'tasks', action: 'delete', actorUserId: userId, excludeClientId: request.headers.get('X-Client-Id') });
   return Response.json({ success: true });
 };

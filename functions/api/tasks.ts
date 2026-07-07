@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../_middleware';
 import { requireMember } from '../auth';
 import { jsonError } from '../http';
+import { notifyHouseholdChanged } from '../realtime-notify';
 
 
 function parseTaskRow<T extends { rotation_users?: unknown; subtasks?: unknown }>(row: T): T {
@@ -70,5 +71,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   const task = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(id).first();
+  await notifyHouseholdChanged(env, { householdId: body.household_id, resource: 'tasks', action: 'create', actorUserId: userId, excludeClientId: request.headers.get('X-Client-Id') });
   return Response.json({ task: task ? parseTaskRow(task as any) : task }, { status: 201 });
 };
