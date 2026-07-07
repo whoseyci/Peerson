@@ -12,6 +12,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240512.0",
+    "@playwright/test": "^1.61.1",
     "typescript": "^5.4.0",
     "vite": "^5.2.0",
     "vitest": "^1.6.0",

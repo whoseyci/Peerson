@@ -13,6 +13,7 @@ import { escapeHtml } from './utils/html';
 import { loadExternalScript } from './utils/loadExternalScript';
 import { personalBalanceLines } from './utils/finance';
 import { computeFeed, getSnoozedKeys } from './utils/feed';
+import { t, setLanguage, getLanguage } from './i18n';
 
 interface ActionLog {
   action: string;
@@ -55,7 +56,7 @@ function safeLastActions(actions: ActionLog[]) {
     const time = new Date(a.timestamp).toLocaleTimeString('de-DE');
     const details = a.details ? ' — ' + redactSensitive(a.details) : '';
     return `${i + 1}. [${time}] ${redactSensitive(a.action)}${details}`;
-  }).join('\n') || 'Keine Aktionen aufgezeichnet';
+  }).join('\n') || t('app.noActions');
 }
 
 type DeletableType = 'item' | 'task' | 'shopping' | 'expense';
@@ -165,8 +166,8 @@ export class App {
     const btn = document.createElement('button');
     btn.id = 'bugReportBtn';
     btn.className = 'bug-report-btn';
-    btn.title = 'Bug melden';
-    btn.setAttribute('aria-label', 'Bug melden');
+    btn.title = t('app.bugReport');
+    btn.setAttribute('aria-label', t('app.bugReport'));
     btn.innerHTML = '<i class="ph ph-bug"></i>';
     btn.onclick = () => this.openBugReport();
     document.body.appendChild(btn);
@@ -183,7 +184,7 @@ export class App {
       el = document.createElement('div');
       el.id = 'syncIndicator';
       el.className = 'sync-indicator';
-      el.title = 'Wird synchronisiert...';
+      el.title = t('app.syncing');
       document.body.appendChild(el);
     }
     el.classList.toggle('active', this.isSyncing);
@@ -350,12 +351,12 @@ export class App {
     } catch (e: any) {
       console.error('Load household error', e);
       if (e.status === 404 || e.status === 401 || e.status === 403) {
-        this.toast('Haushalt nicht gefunden oder Zugriff verweigert');
+        this.toast(t('app.householdNotFound'));
         this.state.householdId = null;
         this.state.household = null;
         localStorage.removeItem('peerson_householdId');
       } else {
-        this.loadError = 'Verbindungsfehler — bitte erneut versuchen';
+        this.loadError = t('app.connectionError');
         this.toast(this.loadError);
       }
     }
@@ -507,7 +508,7 @@ export class App {
       appEl.innerHTML = `
         <div class="loading-overlay">
           <div class="spinner"></div>
-          <div style="margin-top:16px; font-weight:600;">Laden...</div>
+          <div style="margin-top:16px; font-weight:600;">${t('app.loading')}</div>
         </div>`;
       this.injectBugButton();
     this.injectSyncIndicator();
@@ -561,21 +562,21 @@ export class App {
     this.setHtml(appEl, `
       <div class="view-content ${transitionClass}">${viewHtml}</div>
       <nav class="top-tabs" aria-label="Hauptnavigation">
-        <button class="tab-btn ${this.state.view === 'home' ? 'active' : ''}" onclick="app.navigate('home')" title="Home" aria-label="Home öffnen">
-          <i class="ph ph-house"></i><span class="tab-label">Home</span>
+        <button class="tab-btn ${this.state.view === 'home' ? 'active' : ''}" onclick="app.navigate('home')" title="${t('nav.home')}" aria-label="${t('nav.home')}">
+          <i class="ph ph-house"></i><span class="tab-label">${t('nav.home')}</span>
           ${homeAlerts > 0 ? `<span class="badge">${homeAlerts}</span>` : ''}
         </button>
-        <button class="tab-btn ${this.state.view === 'rooms' ? 'active' : ''}" onclick="app.navigate('rooms')" title="Räume" aria-label="Räume öffnen">
-          <i class="ph ph-grid-four"></i><span class="tab-label">Räume</span>
+        <button class="tab-btn ${this.state.view === 'rooms' ? 'active' : ''}" onclick="app.navigate('rooms')" title="${t('nav.rooms')}" aria-label="${t('nav.rooms')}">
+          <i class="ph ph-grid-four"></i><span class="tab-label">${t('nav.rooms')}</span>
           ${lowStock > 0 ? `<span class="badge">${lowStock}</span>` : ''}
         </button>
-        <button class="tab-btn ${this.state.view === 'people' ? 'active' : ''}" onclick="app.navigate('people')" title="Leute" aria-label="Leute öffnen">
-          <i class="ph ph-users-three"></i><span class="tab-label">Leute</span>
+        <button class="tab-btn ${this.state.view === 'people' ? 'active' : ''}" onclick="app.navigate('people')" title="${t('nav.people')}" aria-label="${t('nav.people')}">
+          <i class="ph ph-users-three"></i><span class="tab-label">${t('nav.people')}</span>
           ${(unreadTasks + briefBalances) > 0 ? `<span class="badge">${unreadTasks + briefBalances}</span>` : ''}
         </button>
       </nav>
-      <button class="capture-fab" onclick="openCaptureSheet()" title="Hinzufügen" aria-label="Hinzufügen"><i class="ph-bold ph-plus"></i></button>
-      <button class="household-top-btn ${this.state.view === 'household' ? 'active' : ''}" onclick="app.navigate('household')" title="Haushalt" aria-label="Haushalt öffnen"><i class="ph ph-users"></i></button>
+      <button class="capture-fab" onclick="openCaptureSheet()" title="${t('nav.add')}" aria-label="${t('nav.add')}"><i class="ph-bold ph-plus"></i></button>
+      <button class="household-top-btn ${this.state.view === 'household' ? 'active' : ''}" onclick="app.navigate('household')" title="${t('nav.household')}" aria-label="${t('nav.household')}"><i class="ph ph-users"></i></button>
     `);
     this.injectBugButton();
     this.injectSyncIndicator();
@@ -644,24 +645,24 @@ export class App {
   }
 
   toast(msg: string) {
-    const t = document.createElement('div');
-    t.className = 'toast';
-    t.setAttribute('role', 'status');
-    t.setAttribute('aria-live', 'polite');
-    t.textContent = msg;
-    document.body.appendChild(t);
-    requestAnimationFrame(() => t.classList.add('visible'));
-    setTimeout(() => { t.classList.remove('visible'); setTimeout(() => t.remove(), 300); }, 2500);
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-live', 'polite');
+    el.textContent = msg;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('visible'));
+    setTimeout(() => { el.classList.remove('visible'); setTimeout(() => el.remove(), 300); }, 2500);
   }
 
   // A toast with an "Undo" button and a shrinking progress bar, used by
   // the soft-delete flow below. Lives for `durationMs`, then calls
   // onExpire() if the user never clicked undo.
   private undoToast(msg: string, durationMs: number, onUndo: () => void, onExpire: () => void) {
-    const t = document.createElement('div');
-    t.className = 'toast toast-undo';
-    t.setAttribute('role', 'status');
-    t.setAttribute('aria-live', 'polite');
+    const toastEl = document.createElement('div');
+    toastEl.className = 'toast toast-undo';
+    toastEl.setAttribute('role', 'status');
+    toastEl.setAttribute('aria-live', 'polite');
 
     const message = document.createElement('span');
     message.textContent = msg;
@@ -669,7 +670,7 @@ export class App {
     const undoBtn = document.createElement('button');
     undoBtn.className = 'toast-undo-btn';
     undoBtn.type = 'button';
-    undoBtn.textContent = 'Rückgängig';
+    undoBtn.textContent = t('app.undo');
 
     const progress = document.createElement('div');
     progress.className = 'toast-progress';
@@ -677,9 +678,9 @@ export class App {
     bar.className = 'toast-progress-bar';
     progress.appendChild(bar);
 
-    t.append(message, undoBtn, progress);
-    document.body.appendChild(t);
-    requestAnimationFrame(() => t.classList.add('visible'));
+    toastEl.append(message, undoBtn, progress);
+    document.body.appendChild(toastEl);
+    requestAnimationFrame(() => toastEl.classList.add('visible'));
 
     if (bar) {
       bar.style.transitionDuration = `${durationMs}ms`;
@@ -690,8 +691,8 @@ export class App {
     const dismiss = () => {
       if (settled) return;
       settled = true;
-      t.classList.remove('visible');
-      setTimeout(() => t.remove(), 300);
+      toastEl.classList.remove('visible');
+      setTimeout(() => toastEl.remove(), 300);
     };
 
     undoBtn.addEventListener('click', () => {
@@ -745,7 +746,7 @@ export class App {
         list.splice(insertAt, 0, item);
       }
       this.render();
-      this.toast('Wiederhergestellt');
+      this.toast(t('app.restored'));
     };
 
     const commit = async () => {
@@ -754,11 +755,8 @@ export class App {
         await commitFn();
       } catch (e) {
         console.error(`Soft-delete commit failed for ${key}`, e);
-        // The optimistic removal already happened; if the server call
-        // failed, put it back rather than silently diverging from the
-        // backend's actual state.
         restore();
-        this.toast('Fehler beim Löschen — wiederhergestellt');
+        this.toast(t('app.deleteFailedRestored'));
       }
     };
 
@@ -784,12 +782,12 @@ export class App {
       this.state.householdId = data.household.id;
       this.state.household = data.household;
       localStorage.setItem('peerson_householdId', data.household.id);
-      this.toast('Haushalt erstellt');
+      this.toast(t('app.householdCreated'));
       this.navigate('home');
       await this.loadData();
       this.render();
     } catch (e: any) {
-      this.toast(e.message || 'Fehler beim Erstellen');
+      this.toast(e.message || t('app.householdCreateError'));
     }
   }
 
@@ -800,12 +798,12 @@ export class App {
       this.state.householdId = data.household.id;
       this.state.household = data.household;
       localStorage.setItem('peerson_householdId', data.household.id);
-      this.toast('Haushalt beigetreten');
+      this.toast(t('app.householdJoined'));
       this.navigate('home');
       await this.loadData();
       this.render();
     } catch (e: any) {
-      this.toast(e.message || 'Ungültiger Code');
+      this.toast(e.message || t('app.invalidCode'));
       this.render();
     }
   }
@@ -822,7 +820,7 @@ export class App {
     localStorage.setItem('peerson_userName', name);
     try {
       await api.users.updateName(name);
-      this.toast('Name gespeichert');
+      this.toast(t('app.nameSaved'));
     } catch (e) {
       console.error('Update name error', e);
     }
@@ -855,4 +853,14 @@ export class App {
   getItemTotal(itemId: string) {
     return this.state.batches.filter(b => b.item_id === itemId).reduce((a, b) => a + b.quantity, 0);
   }
+
+  setAppLanguage(lang: 'de' | 'en') {
+    setLanguage(lang);
+    this.render();
+  }
 }
+
+// Expose setAppLanguage on window so inline onclick handlers work
+(window as any).setAppLanguage = (lang: 'de' | 'en') => {
+  (window as any).app?.setAppLanguage(lang);
+};

@@ -8,13 +8,8 @@ import {
   itemCountInSubtree as itemCountInSubtreeStock,
   lowStockAlertCountInSubtree,
 } from '../utils/roomStock';
+import { t } from '../i18n';
 
-// Icon shown for a room/container tile itself (distinct from an item's own
-// category icon) -- kept intentionally simple/generic since a household's
-// location names are freeform ("Küche", "Balkon", "Rollcontainer") and
-// there's no reliable way to guess a more specific icon from the name
-// alone. Root-level locations get the house-y "door-open" icon; anything
-// nested one level deeper (a container within a room) gets a plain box.
 const ROOM_ICON = 'door-open';
 const CONTAINER_ICON = 'archive';
 
@@ -31,8 +26,6 @@ export function renderRoomsView(app: App) {
   if (nav.containerId) {
     const container = s.locations.find(l => l.id === nav.containerId);
     if (container) return renderContainerLevel(app, container);
-    // Container vanished (deleted elsewhere) -- fall back up a level
-    // rather than rendering a broken/empty screen.
     s.roomsNav = { roomId: nav.roomId, containerId: null };
   }
   if (s.roomsNav.roomId) {
@@ -59,15 +52,15 @@ function renderRootLevel(app: App) {
 
   return `
     <div class="header">
-      <h1><i class="ph ph-grid-four"></i> Räume</h1>
-      <button class="icon-btn" onclick="openAddRoomModal(null)" title="Neuer Raum"><i class="ph ph-plus"></i></button>
+      <h1><i class="ph ph-grid-four"></i> ${t('rooms.title')}</h1>
+      <button class="icon-btn" onclick="openAddRoomModal(null)" title="${t('rooms.newRoom')}"><i class="ph ph-plus"></i></button>
     </div>
 
-    ${renderBreadcrumb(app, [{ label: 'Räume', onclick: null }])}
+    ${renderBreadcrumb(app, [{ label: t('rooms.title'), onclick: null }])}
 
     <div class="room-search">
       <i class="ph ph-magnifying-glass"></i>
-      <input type="text" id="roomsSearch" placeholder="Artikel suchen..." oninput="filterRoomsSearch(this.value)">
+      <input type="text" id="roomsSearch" placeholder="${t('rooms.search')}" oninput="filterRoomsSearch(this.value)">
     </div>
     <div id="roomsSearchResults"></div>
 
@@ -84,18 +77,18 @@ function renderRootLevel(app: App) {
           <span class="rt-icon"><i class="ph ph-${ROOM_ICON}"></i></span>
           <span>
             <div class="rt-name">${escapeHtml(r.name)}</div>
-            <div class="rt-meta">${count} Artikel</div>
+            <div class="rt-meta">${t('rooms.items', { count })}</div>
           </span>
         </button>`;
       }).join('')}
       <button class="room-tile add-tile" onclick="openAddRoomModal(null)">
         <i class="ph ph-plus" style="font-size:26px;"></i>
-        <span>Raum hinzufügen</span>
+        <span>${t('rooms.addRoom')}</span>
       </button>
     </div>` : `
     <div class="empty-state">
-      Noch keine Räume angelegt.
-      <div style="margin-top:12px;"><button class="btn" style="width:auto; padding:12px 20px;" onclick="openAddRoomModal(null)"><i class="ph-bold ph-plus"></i> Ersten Raum anlegen</button></div>
+      ${t('rooms.noRooms')}
+      <div style="margin-top:12px;"><button class="btn" style="width:auto; padding:12px 20px;" onclick="openAddRoomModal(null)"><i class="ph-bold ph-plus"></i> ${t('rooms.createFirst')}</button></div>
     </div>`}
 
     ${renderNoLocationSection(app)}
@@ -122,7 +115,7 @@ function renderExpiryCheckSection(app: App) {
   return `
     <div class="section">
       <div class="section-header">
-        <div class="section-title"><i class="ph ph-clock"></i> Check MHD</div>
+        <div class="section-title"><i class="ph ph-clock"></i> ${t('rooms.expiryCheck')}</div>
         <span class="badge">${expiring.length}</span>
       </div>
       ${expiring.map(b => {
@@ -135,7 +128,7 @@ function renderExpiryCheckSection(app: App) {
             <div class="card-icon"><i class="ph ph-${icon}"></i></div>
             <div class="card-text">
               <div class="card-header"><div class="item-name">${itemName}</div><div class="item-qty">${escapeHtml(b.quantity)}</div></div>
-              <div class="card-meta">${b.days < 0 ? 'Abgelaufen' : escapeHtml(b.days) + ' Tage'} · ${formatDate(b.expiry)}</div>
+              <div class="card-meta">${b.days < 0 ? t('rooms.expired') : t('rooms.days', { count: b.days })} · ${formatDate(b.expiry)}</div>
             </div>
           </div>
         </div>
@@ -153,7 +146,7 @@ function renderNoLocationSection(app: App) {
   if (!orphans.length) return '';
   return `
     <div class="section">
-      <div class="section-header"><div class="section-title">Ohne festen Ort</div><span class="badge">${orphans.length}</span></div>
+      <div class="section-header"><div class="section-title">${t('rooms.noFixedPlace')}</div><span class="badge">${orphans.length}</span></div>
       ${orphans.map(({ item, quantity }) => renderRoomItemRow(item, quantity, null)).join('')}
     </div>`;
 }
@@ -166,17 +159,17 @@ function renderRoomLevel(app: App, room: Location) {
   return `
     <div class="header">
       <h1><i class="ph ph-${ROOM_ICON}"></i> ${escapeHtml(room.name)}</h1>
-      <button class="icon-btn" onclick="openAddRoomModal('${escapeJsAttr(room.id)}')" title="Unterbereich hinzufügen"><i class="ph ph-plus"></i></button>
+      <button class="icon-btn" onclick="openAddRoomModal('${escapeJsAttr(room.id)}')" title="${t('hh.addSubLocation')}"><i class="ph ph-plus"></i></button>
     </div>
 
     ${renderBreadcrumb(app, [
-      { label: 'Räume', onclick: 'navigateToRoot()' },
+      { label: t('rooms.title'), onclick: 'navigateToRoot()' },
       { label: room.name, onclick: null },
     ])}
 
     ${containers.length ? `
     <div class="section">
-      <div class="section-header"><div class="section-title">Bereiche</div></div>
+      <div class="section-header"><div class="section-title">${t('rooms.areas')}</div></div>
       ${containers.map(c => {
         const count = itemCountInSubtreeStock(s.items, s.batches, s.locations, c.id);
         return `
@@ -184,18 +177,18 @@ function renderRoomLevel(app: App, room: Location) {
           <div class="cr-icon"><i class="ph ph-${CONTAINER_ICON}"></i></div>
           <div class="cr-text">
             <div class="cr-title">${escapeHtml(c.name)}</div>
-            <div class="cr-sub">${count} Artikel</div>
+            <div class="cr-sub">${t('rooms.items', { count })}</div>
           </div>
           <i class="ph ph-caret-right" style="color:var(--text-soft);"></i>
         </div>`;
       }).join('')}
     </div>` : ''}
 
-    <button class="add-row-dashed" onclick="openAddRoomModal('${escapeJsAttr(room.id)}')"><i class="ph ph-plus"></i> Bereich hinzufügen</button>
+    <button class="add-row-dashed" onclick="openAddRoomModal('${escapeJsAttr(room.id)}')"><i class="ph ph-plus"></i> ${t('rooms.addArea')}</button>
 
     <div class="section">
-      <div class="section-header"><div class="section-title">Artikel hier</div><span class="badge">${directItems.length}</span></div>
-      ${directItems.length ? directItems.map(({ item, quantity }) => renderRoomItemRow(item, quantity, room.id)).join('') : `<div class="empty-state">Keine Artikel direkt in ${escapeHtml(room.name)}</div>`}
+      <div class="section-header"><div class="section-title">${t('rooms.itemsHere')}</div><span class="badge">${directItems.length}</span></div>
+      ${directItems.length ? directItems.map(({ item, quantity }) => renderRoomItemRow(item, quantity, room.id)).join('') : `<div class="empty-state">${t('rooms.noItems', { name: escapeHtml(room.name) })}</div>`}
     </div>
   `;
 }
@@ -209,35 +202,35 @@ function renderContainerLevel(app: App, container: Location) {
   return `
     <div class="header">
       <h1><i class="ph ph-${CONTAINER_ICON}"></i> ${escapeHtml(container.name)}</h1>
-      <button class="icon-btn" onclick="openAddRoomModal('${escapeJsAttr(container.id)}')" title="Unterbereich hinzufügen"><i class="ph ph-plus"></i></button>
+      <button class="icon-btn" onclick="openAddRoomModal('${escapeJsAttr(container.id)}')" title="${t('hh.addSubLocation')}"><i class="ph ph-plus"></i></button>
     </div>
 
     ${renderBreadcrumb(app, [
-      { label: 'Räume', onclick: 'navigateToRoot()' },
+      { label: t('rooms.title'), onclick: 'navigateToRoot()' },
       { label: room ? room.name : '…', onclick: room ? `navigateToRoom('${escapeJsAttr(room.id)}')` : null },
       { label: container.name, onclick: null },
     ])}
 
     ${subContainers.length ? `
     <div class="section">
-      <div class="section-header"><div class="section-title">Bereiche</div></div>
+      <div class="section-header"><div class="section-title">${t('rooms.areas')}</div></div>
       ${subContainers.map(c => `
         <div class="container-row" onclick="navigateToContainer('${escapeJsAttr(c.id)}')">
           <div class="cr-icon"><i class="ph ph-${CONTAINER_ICON}"></i></div>
           <div class="cr-text">
             <div class="cr-title">${escapeHtml(c.name)}</div>
-            <div class="cr-sub">${itemCountInSubtreeStock(s.items, s.batches, s.locations, c.id)} Artikel</div>
+            <div class="cr-sub">${t('rooms.items', { count: itemCountInSubtreeStock(s.items, s.batches, s.locations, c.id) })}</div>
           </div>
           <i class="ph ph-caret-right" style="color:var(--text-soft);"></i>
         </div>
       `).join('')}
     </div>` : ''}
 
-    <button class="add-row-dashed" onclick="openAddRoomModal('${escapeJsAttr(container.id)}')"><i class="ph ph-plus"></i> Bereich hinzufügen</button>
+    <button class="add-row-dashed" onclick="openAddRoomModal('${escapeJsAttr(container.id)}')"><i class="ph ph-plus"></i> ${t('rooms.addArea')}</button>
 
     <div class="section">
-      <div class="section-header"><div class="section-title">Artikel hier</div><span class="badge">${directItems.length}</span></div>
-      ${directItems.length ? directItems.map(({ item, quantity }) => renderRoomItemRow(item, quantity, container.id)).join('') : `<div class="empty-state">Keine Artikel hier</div>`}
+      <div class="section-header"><div class="section-title">${t('rooms.itemsHere')}</div><span class="badge">${directItems.length}</span></div>
+      ${directItems.length ? directItems.map(({ item, quantity }) => renderRoomItemRow(item, quantity, container.id)).join('') : `<div class="empty-state">${t('rooms.noItemsHere')}</div>`}
     </div>
   `;
 }
@@ -261,18 +254,18 @@ function renderRoomItemRow(item: any, quantity: number, locationId: string | nul
       <div class="ir-icon" style="cursor:pointer;" onclick="openItemDetail('${itemId}')"><i class="ph ph-${icon}"></i></div>
       <div class="ir-text" style="cursor:pointer;" onclick="openItemDetail('${itemId}')">
         <div class="ir-title">${escapeHtml(item.name)}</div>
-        <div class="ir-sub">${escapeHtml(CATEGORY_META[item.category]?.label || item.category)}${quantity < item.threshold ? ' · <span style="color:var(--warning); font-weight:700;">niedrig</span>' : ''}</div>
+        <div class="ir-sub">${escapeHtml(CATEGORY_META[item.category]?.label || item.category)}${quantity < item.threshold ? ' · <span style="color:var(--warning); font-weight:700;">' + t('rooms.low') + '</span>' : ''}</div>
       </div>
-      <button class="icon-btn" style="width:34px; height:34px; font-size:15px;" onclick="openMoveItemModal('${itemId}', ${locArg})" title="Verschieben" aria-label="${escapeHtml(item.name)} verschieben"><i class="ph ph-arrows-out-cardinal"></i></button>
+      <button class="icon-btn" style="width:34px; height:34px; font-size:15px;" onclick="openMoveItemModal('${itemId}', ${locArg})" title="${t('rooms.move')}" aria-label="${t('rooms.moveItem', { name: escapeHtml(item.name) })}"><i class="ph ph-arrows-out-cardinal"></i></button>
       <div class="room-stepper">
-        <button onclick="removeOneAt('${itemId}', ${locArg})" aria-label="Eine Einheit entnehmen"><i class="ph ph-minus"></i></button>
+        <button onclick="removeOneAt('${itemId}', ${locArg})" aria-label="${t('rooms.takeOne')}"><i class="ph ph-minus"></i></button>
         <span class="rs-qty">${quantity}</span>
-        <button onclick="openAddStock('${itemId}', null, ${locArg})" aria-label="Bestand hinzufügen"><i class="ph ph-plus"></i></button>
+        <button onclick="openAddStock('${itemId}', null, ${locArg})" aria-label="${t('rooms.addStock')}"><i class="ph ph-plus"></i></button>
       </div>
     </div>`;
 }
 
-// --- Navigation -----------------------------------------------------------
+// ── Navigation ─────────────────────────────────────────────────────
 
 export function navigateToRoot() {
   const app = (window as any).app as App;
@@ -289,9 +282,6 @@ export function navigateToRoom(roomId: string) {
 export function navigateToContainer(containerId: string) {
   const app = (window as any).app as App;
   const container = app.state.locations.find(l => l.id === containerId);
-  // Keep the top-level room set to whichever root ancestor this container
-  // belongs under, so the breadcrumb's middle segment is always correct
-  // even when jumping straight to a container from search.
   let roomId = app.state.roomsNav.roomId;
   if (container) {
     let current: Location | undefined = container;
@@ -306,7 +296,7 @@ export function navigateToContainer(containerId: string) {
   app.render();
 }
 
-// --- Search (jumps straight to an item's room/container) -----------------
+// ── Search ──────────────────────────────────────────────────────────
 
 export function filterRoomsSearch(term: string) {
   const app = (window as any).app as App;
@@ -317,12 +307,12 @@ export function filterRoomsSearch(term: string) {
 
   const matches = app.state.items.filter(i => i.name.toLowerCase().includes(q)).slice(0, 8);
   if (!matches.length) {
-    el.innerHTML = `<div class="empty-state">Keine Treffer</div>`;
+    el.innerHTML = `<div class="empty-state">${t('rooms.noResults')}</div>`;
     return;
   }
   el.innerHTML = matches.map(i => {
     const loc = i.location_id ? app.state.locations.find(l => l.id === i.location_id) : null;
-    const path = loc ? locationPath(loc.id, app.state.locations) : 'Kein Ort zugewiesen';
+    const path = loc ? locationPath(loc.id, app.state.locations) : t('rooms.noLocation');
     const jumpTarget = loc ? (loc.parent_id ? `navigateToContainer('${escapeJsAttr(loc.id)}')` : `navigateToRoom('${escapeJsAttr(loc.id)}')`) : '';
     return `
       <div class="room-item-row" ${jumpTarget ? `onclick="${jumpTarget}"` : ''} style="${jumpTarget ? 'cursor:pointer;' : ''}">
@@ -336,7 +326,7 @@ export function filterRoomsSearch(term: string) {
   }).join('');
 }
 
-// --- Add room / container modal -------------------------------------------
+// ── Add room / container modal ──────────────────────────────────────
 
 export function openAddRoomModal(parentId: string | null) {
   const app = (window as any).app as App;
@@ -344,13 +334,13 @@ export function openAddRoomModal(parentId: string | null) {
   (window as any)._addRoomParentId = parentId;
   app.showModal('addRoomModal', `
     <div class="modal-header">
-      <div class="modal-title">${parent ? 'Bereich hinzufügen' : 'Neuer Raum'}</div>
+      <div class="modal-title">${parent ? t('rooms.addArea') : t('rooms.newRoom')}</div>
       <button class="close-btn" onclick="window.app.closeModal('addRoomModal')"><i class="ph ph-x"></i></button>
     </div>
     <div class="modal-body">
-      ${parent ? `<div style="margin-bottom:12px; color:var(--text-soft); font-size:13px;">In ${escapeHtml(parent.name)}</div>` : ''}
-      <div class="form-group"><label>Name</label><input type="text" id="newRoomName" placeholder="${parent ? 'z. B. Kühlschrank' : 'z. B. Küche'}"></div>
-      <button class="btn" onclick="saveAddRoomModal()"><i class="ph-bold ph-check"></i> Anlegen</button>
+      ${parent ? `<div style="margin-bottom:12px; color:var(--text-soft); font-size:13px;">${t('rooms.inParent', { name: escapeHtml(parent.name) })}</div>` : ''}
+      <div class="form-group"><label>${t('rooms.name')}</label><input type="text" id="newRoomName" placeholder="${parent ? t('rooms.placeArea') : t('rooms.placeRoom')}"></div>
+      <button class="btn" onclick="saveAddRoomModal()"><i class="ph-bold ph-check"></i> ${t('action.save')}</button>
     </div>
   `);
 }
@@ -359,26 +349,20 @@ export async function saveAddRoomModal() {
   const app = (window as any).app as App;
   const api = (window as any).api;
   const name = (document.getElementById('newRoomName') as HTMLInputElement)?.value.trim();
-  if (!name) return app.toast('Name erforderlich');
+  if (!name) return app.toast(t('rooms.nameRequired'));
   const parentId = (window as any)._addRoomParentId as string | null;
   try {
     const res = await api.locations.create({ household_id: app.state.householdId, name, parent_id: parentId });
     app.state.locations.push(res.location);
     app.closeModal('addRoomModal');
     app.render();
-    app.toast(parentId ? 'Bereich hinzugefügt' : 'Raum hinzugefügt');
+    app.toast(parentId ? t('rooms.areaAdded') : t('rooms.roomAdded'));
   } catch (e) {
-    app.toast('Fehler beim Anlegen');
+    app.toast(t('rooms.addError'));
   }
 }
 
-// --- Move item between locations -------------------------------------------
-//
-// Moves a *quantity* of an item from wherever it's currently being shown
-// (`fromLocationId`) to a destination the user picks, walking batches
-// FIFO server-side (see functions/api/batches/move.ts) so each moved
-// unit keeps its own expiry/price rather than the move being a blind
-// "subtract N here, add N there" that would lose that distinction.
+// ── Move item between locations ────────────────────────────────────
 
 export function openMoveItemModal(itemId: string, fromLocationId: string | null) {
   const app = (window as any).app as App;
@@ -387,27 +371,24 @@ export function openMoveItemModal(itemId: string, fromLocationId: string | null)
   const available = fromLocationId
     ? (itemsAtLocation([item], app.state.batches, fromLocationId)[0]?.quantity ?? 0)
     : (itemsWithNoLocation([item], app.state.batches)[0]?.quantity ?? 0);
-  const fromPath = fromLocationId ? (locationPath(fromLocationId, app.state.locations) || 'Kein Ort') : 'Kein Ort';
+  const fromPath = fromLocationId ? (locationPath(fromLocationId, app.state.locations) || t('rooms.noPlace')) : t('rooms.noPlace');
 
   // Default the destination to any location OTHER than where the item
-  // already is -- defaulting to "Kein Ort" (the select's normal first
-  // option, meaningful when *assigning* a brand new item's home) would
-  // make the common case ("move this to the other room") require an
-  // extra deliberate selection every single time for no benefit, since
-  // moving to nowhere is a much rarer intent than moving somewhere else.
+  // already is -- defaulting to no location would make the common case
+  // (moving to another room) require an extra deliberate selection.
   const defaultTarget = app.state.locations.find(l => l.id !== fromLocationId)?.id ?? null;
 
   const fromArg = fromLocationId === null ? 'null' : `'${escapeJsAttr(fromLocationId)}'`;
   app.showModal('moveItemModal', `
     <div class="modal-header">
-      <div class="modal-title"><i class="ph ph-arrows-out-cardinal"></i> ${escapeHtml(item.name)} verschieben</div>
+      <div class="modal-title"><i class="ph ph-arrows-out-cardinal"></i> ${t('rooms.moveItem', { name: escapeHtml(item.name) })}</div>
       <button class="close-btn" onclick="window.app.closeModal('moveItemModal')"><i class="ph ph-x"></i></button>
     </div>
     <div class="modal-body">
-      <div style="margin-bottom:14px; color:var(--text-soft); font-size:13px;">Von <strong>${escapeHtml(fromPath)}</strong> (${available} verfügbar)</div>
-      <div class="form-group"><label>Menge</label><input type="number" id="moveQty" value="${Math.min(1, available) || 1}" min="1" max="${available || 1}"></div>
-      <div class="form-group"><label>Neuer Ort</label><select id="moveToLocation">${locationSelectOptions(app.state.locations, defaultTarget)}</select></div>
-      <button class="btn" onclick="commitMoveItem('${escapeJsAttr(itemId)}', ${fromArg})"><i class="ph-bold ph-check"></i> Verschieben</button>
+      <div style="margin-bottom:14px; color:var(--text-soft); font-size:13px;">${t('rooms.moveFrom', { path: '<strong>' + escapeHtml(fromPath) + '</strong>', count: String(available) })}</div>
+      <div class="form-group"><label>${t('rooms.moveQty')}</label><input type="number" id="moveQty" value="${Math.min(1, available) || 1}" min="1" max="${available || 1}"></div>
+      <div class="form-group"><label>${t('rooms.moveTo')}</label><select id="moveToLocation">${locationSelectOptions(app.state.locations, defaultTarget)}</select></div>
+      <button class="btn" onclick="commitMoveItem('${escapeJsAttr(itemId)}', ${fromArg})"><i class="ph-bold ph-check"></i> ${t('rooms.moveConfirm')}</button>
     </div>
   `);
 }
@@ -418,8 +399,8 @@ export async function commitMoveItem(itemId: string, fromLocationId: string | nu
   try {
     const qty = parseInt((document.getElementById('moveQty') as HTMLInputElement)?.value) || 0;
     const toLocationId = (document.getElementById('moveToLocation') as HTMLSelectElement)?.value || null;
-    if (qty <= 0) return app.toast('Menge muss größer als 0 sein');
-    if (toLocationId === fromLocationId) return app.toast('Zielort entspricht dem aktuellen Ort');
+    if (qty <= 0) return app.toast(t('rooms.moveQtyError'));
+    if (toLocationId === fromLocationId) return app.toast(t('rooms.moveSameLocation'));
 
     const result = await api.batches.move({
       item_id: itemId,
@@ -430,9 +411,9 @@ export async function commitMoveItem(itemId: string, fromLocationId: string | nu
     app.state.batches = app.state.batches.filter(b => b.item_id !== itemId).concat(result.batches);
     app.closeModal('moveItemModal');
     app.render();
-    app.toast(result.moved < qty ? `Nur ${result.moved} von ${qty} verschoben (nicht genug Bestand)` : 'Verschoben');
+    app.toast(result.moved < qty ? t('rooms.movePartial', { moved: String(result.moved), qty: String(qty) }) : t('rooms.moved'));
   } catch (e) {
-    app.toast('Fehler beim Verschieben');
+    app.toast(t('rooms.moveError'));
   }
 }
 
