@@ -1,11 +1,8 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../_middleware';
+import { requireMember } from '../auth';
+import { jsonError } from '../http';
 
-async function requireMember(db: D1Database, userId: string, householdId: string) {
-  const row = await db.prepare('SELECT 1 FROM household_members WHERE household_id = ? AND user_id = ?')
-    .bind(householdId, userId).first();
-  if (!row) throw new Error('Forbidden');
-}
 
 async function lastModified(env: Env, householdId: string) {
   try {
@@ -45,7 +42,7 @@ async function lastModified(env: Env, householdId: string) {
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const userId = request.headers.get('X-User-Id');
   const householdId = new URL(request.url).searchParams.get('householdId');
-  if (!userId || !householdId) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  if (!userId || !householdId) return jsonError(401, 'Unauthorized');
   await requireMember(env.DB, userId, householdId);
 
   const q = await lastModified(env, householdId);

@@ -1,5 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../_middleware';
+import { requireMember } from '../auth';
+import { jsonError } from '../http';
 
 function generateId() { return crypto.randomUUID(); }
 function generateCode() {
@@ -8,17 +10,12 @@ function generateCode() {
   for (let i = 0; i < 8; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
   return code;
 }
-async function requireMember(db: D1Database, userId: string, householdId: string) {
-  const row = await db.prepare('SELECT 1 FROM household_members WHERE household_id = ? AND user_id = ?')
-    .bind(householdId, userId).first();
-  if (!row) throw new Error('Forbidden');
-}
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const url = new URL(request.url);
   const userId = request.headers.get('X-User-Id');
   const householdId = url.searchParams.get('householdId');
-  if (!userId) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  if (!userId) return jsonError(401, 'Unauthorized');
 
   const db = env.DB;
 
@@ -46,7 +43,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const userId = request.headers.get('X-User-Id');
   const userName = request.headers.get('X-User-Name') || 'Anonymous';
-  if (!userId) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  if (!userId) return jsonError(401, 'Unauthorized');
 
   const body = await request.json<{ name?: string; action?: string; code?: string; household_id?: string; target_user_id?: string }>();
   const db = env.DB;
@@ -55,7 +52,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   if (body.action === 'join' && body.code) {
     const household = await db.prepare('SELECT * FROM households WHERE invite_code = ?').bind(body.code.toUpperCase()).first();
-    if (!household) return new Response(JSON.stringify({ error: 'Invalid invite code' }), { status: 404 });
+    if (!household) return jsonError(404, 'Invalid invite code');
     await db.prepare('INSERT OR IGNORE INTO household_members (household_id, user_id, role) VALUES (?, ?, ?)')
       .bind(household.id, userId, 'member').run();
     return Response.json({ household });
@@ -72,7 +69,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const membership = await db.prepare('SELECT role FROM household_members WHERE household_id = ? AND user_id = ?')
       .bind(body.household_id, userId).first();
     if (!membership || membership.role !== 'admin') {
-      return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 });
+      return jsonError(403, 'Forbidden');
     }
     await db.prepare('DELETE FROM household_members WHERE household_id = ? AND user_id = ?')
       .bind(body.household_id, body.target_user_id).run();
@@ -80,7 +77,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   const name = body.name?.trim();
-  if (!name) return new Response(JSON.stringify({ error: 'Name required' }), { status: 400 });
+  if (!name) return jsonError(400, 'Name required');
 
   const id = generateId();
   const code = generateCode();

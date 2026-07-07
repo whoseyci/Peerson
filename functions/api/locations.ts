@@ -1,11 +1,8 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../_middleware';
+import { requireMember } from '../auth';
+import { jsonError } from '../http';
 
-async function requireMember(db: D1Database, userId: string, householdId: string) {
-  const row = await db.prepare('SELECT 1 FROM household_members WHERE household_id = ? AND user_id = ?')
-    .bind(householdId, userId).first();
-  if (!row) throw new Error('Forbidden');
-}
 
 // GET /api/locations?householdId=... -- returns the whole location tree for
 // a household as a flat list (id, parent_id, name, sort_order). The client
@@ -16,7 +13,7 @@ async function requireMember(db: D1Database, userId: string, householdId: string
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const userId = request.headers.get('X-User-Id');
   const householdId = new URL(request.url).searchParams.get('householdId');
-  if (!userId || !householdId) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  if (!userId || !householdId) return jsonError(401, 'Unauthorized');
   await requireMember(env.DB, userId, householdId);
 
   const locations = await env.DB.prepare('SELECT * FROM locations WHERE household_id = ?')
@@ -35,11 +32,11 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const userId = request.headers.get('X-User-Id');
-  if (!userId) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  if (!userId) return jsonError(401, 'Unauthorized');
   const body = await request.json<any>();
-  if (!body.household_id) return new Response(JSON.stringify({ error: 'household_id required' }), { status: 400 });
+  if (!body.household_id) return jsonError(400, 'household_id required');
   const name = (body.name || '').trim();
-  if (!name) return new Response(JSON.stringify({ error: 'name required' }), { status: 400 });
+  if (!name) return jsonError(400, 'name required');
   await requireMember(env.DB, userId, body.household_id);
 
   const parentId = body.parent_id || null;
@@ -48,7 +45,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     // or buggy client could link a node into another household's tree.
     const parent = await env.DB.prepare('SELECT household_id FROM locations WHERE id = ?').bind(parentId).first();
     if (!parent || parent.household_id !== body.household_id) {
-      return new Response(JSON.stringify({ error: 'Invalid parent_id' }), { status: 400 });
+      return jsonError(400, 'Invalid parent_id');
     }
   }
 

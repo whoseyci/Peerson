@@ -1,11 +1,8 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../../_middleware';
+import { requireMember } from '../../auth';
+import { jsonError } from '../../http';
 
-async function requireMember(db: D1Database, userId: string, householdId: string) {
-  const row = await db.prepare('SELECT 1 FROM household_members WHERE household_id = ? AND user_id = ?')
-    .bind(householdId, userId).first();
-  if (!row) throw new Error('Forbidden');
-}
 
 // Walks parent_id pointers up from `startId` to the root, returning true if
 // `targetId` appears anywhere in that chain (including startId itself).
@@ -30,11 +27,11 @@ async function wouldCreateCycle(db: D1Database, targetId: string, startId: strin
 export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params }) => {
   const userId = request.headers.get('X-User-Id');
   const id = String(params.id);
-  if (!userId) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  if (!userId) return jsonError(401, 'Unauthorized');
   const body = await request.json<any>();
 
   const existing = await env.DB.prepare('SELECT * FROM locations WHERE id = ?').bind(id).first();
-  if (!existing) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404 });
+  if (!existing) return jsonError(404, 'Not found');
   await requireMember(env.DB, userId, existing.household_id as string);
 
   const fields: string[] = [];
@@ -42,7 +39,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
 
   if (body.name !== undefined) {
     const name = String(body.name).trim();
-    if (!name) return new Response(JSON.stringify({ error: 'name cannot be empty' }), { status: 400 });
+    if (!name) return jsonError(400, 'name cannot be empty');
     fields.push('name = ?');
     values.push(name);
   }
@@ -52,10 +49,10 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
     if (newParentId) {
       const parent = await env.DB.prepare('SELECT household_id FROM locations WHERE id = ?').bind(newParentId).first();
       if (!parent || parent.household_id !== existing.household_id) {
-        return new Response(JSON.stringify({ error: 'Invalid parent_id' }), { status: 400 });
+        return jsonError(400, 'Invalid parent_id');
       }
       if (await wouldCreateCycle(env.DB, id, newParentId)) {
-        return new Response(JSON.stringify({ error: 'Cannot move a location into its own subtree' }), { status: 400 });
+        return jsonError(400, 'Cannot move a location into its own subtree');
       }
     }
     fields.push('parent_id = ?');
@@ -82,9 +79,9 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
 export const onRequestDelete: PagesFunction<Env> = async ({ request, env, params }) => {
   const userId = request.headers.get('X-User-Id');
   const id = String(params.id);
-  if (!userId) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  if (!userId) return jsonError(401, 'Unauthorized');
   const existing = await env.DB.prepare('SELECT * FROM locations WHERE id = ?').bind(id).first();
-  if (!existing) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404 });
+  if (!existing) return jsonError(404, 'Not found');
   await requireMember(env.DB, userId, existing.household_id as string);
   await env.DB.prepare('DELETE FROM locations WHERE id = ?').bind(id).run();
   return Response.json({ success: true });

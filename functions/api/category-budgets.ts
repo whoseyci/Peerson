@@ -1,13 +1,10 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../_middleware';
+import { requireMember } from '../auth';
+import { jsonError } from '../http';
 
 const BUDGETABLE_CATEGORIES = new Set(['groceries', 'rent', 'household', 'leisure', 'sonstiges']);
 
-async function requireMember(db: D1Database, userId: string, householdId: string) {
-  const row = await db.prepare('SELECT 1 FROM household_members WHERE household_id = ? AND user_id = ?')
-    .bind(householdId, userId).first();
-  if (!row) throw new Error('Forbidden');
-}
 
 function validateCategory(category: unknown) {
   const value = String(category || '').trim();
@@ -17,7 +14,7 @@ function validateCategory(category: unknown) {
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const userId = request.headers.get('X-User-Id');
   const householdId = new URL(request.url).searchParams.get('householdId');
-  if (!userId || !householdId) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  if (!userId || !householdId) return jsonError(401, 'Unauthorized');
   await requireMember(env.DB, userId, householdId);
 
   const budgets = await env.DB.prepare('SELECT * FROM category_budgets WHERE household_id = ? ORDER BY category')
@@ -27,16 +24,16 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const userId = request.headers.get('X-User-Id');
-  if (!userId) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  if (!userId) return jsonError(401, 'Unauthorized');
   const body = await request.json<any>();
-  if (!body.household_id) return new Response(JSON.stringify({ error: 'household_id required' }), { status: 400 });
+  if (!body.household_id) return jsonError(400, 'household_id required');
   await requireMember(env.DB, userId, body.household_id);
 
   const category = validateCategory(body.category);
-  if (!category) return new Response(JSON.stringify({ error: 'invalid category' }), { status: 400 });
+  if (!category) return jsonError(400, 'invalid category');
   const monthlyAmount = Number(body.monthly_amount);
   if (!Number.isFinite(monthlyAmount) || monthlyAmount <= 0) {
-    return new Response(JSON.stringify({ error: 'monthly_amount must be positive' }), { status: 400 });
+    return jsonError(400, 'monthly_amount must be positive');
   }
 
   const existing = await env.DB.prepare('SELECT id FROM category_budgets WHERE household_id = ? AND category = ?')
@@ -59,8 +56,8 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env }) => {
   const url = new URL(request.url);
   const householdId = url.searchParams.get('householdId');
   const category = validateCategory(url.searchParams.get('category'));
-  if (!userId || !householdId) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
-  if (!category) return new Response(JSON.stringify({ error: 'invalid category' }), { status: 400 });
+  if (!userId || !householdId) return jsonError(401, 'Unauthorized');
+  if (!category) return jsonError(400, 'invalid category');
   await requireMember(env.DB, userId, householdId);
 
   await env.DB.prepare('DELETE FROM category_budgets WHERE household_id = ? AND category = ?')

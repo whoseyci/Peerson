@@ -1,5 +1,6 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../_middleware';
+import { jsonError } from '../http';
 
 // Looks up a barcode against Open Food Facts (world.openfoodfacts.org) --
 // a free, keyless, community-maintained product database. Proxying this
@@ -41,7 +42,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, waitUntil }) =
   const barcode = (url.searchParams.get('barcode') || '').trim();
 
   if (!/^\d{6,14}$/.test(barcode)) {
-    return new Response(JSON.stringify({ error: 'Invalid barcode' }), { status: 400 });
+    return jsonError(400, 'Invalid barcode');
   }
 
   const cache = (caches as any).default;
@@ -55,11 +56,11 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, waitUntil }) =
       headers: { 'User-Agent': 'Peerson-App/1.0 (household inventory app)' },
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: 'Product lookup service unreachable' }), { status: 502 });
+    return jsonError(502, 'Product lookup service unreachable');
   }
 
   if (!upstream.ok) {
-    return new Response(JSON.stringify({ error: 'Product lookup failed' }), { status: 502 });
+    return jsonError(502, 'Product lookup failed');
   }
 
   const data = await upstream.json<{

@@ -1,11 +1,8 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../_middleware';
+import { requireMember } from '../auth';
+import { jsonError } from '../http';
 
-async function requireMember(db: D1Database, userId: string, householdId: string) {
-  const row = await db.prepare('SELECT 1 FROM household_members WHERE household_id = ? AND user_id = ?')
-    .bind(householdId, userId).first();
-  if (!row) throw new Error('Forbidden');
-}
 
 function safeJsonParse(value: string, fallback: unknown) {
   try { return JSON.parse(value); } catch { return fallback; }
@@ -41,13 +38,13 @@ async function safeQueryAll(db: D1Database, query: string, ...binds: any[]) {
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const userId = request.headers.get('X-User-Id');
   const householdId = new URL(request.url).searchParams.get('householdId');
-  if (!userId) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
-  if (!householdId) return new Response(JSON.stringify({ error: 'householdId required' }), { status: 400 });
+  if (!userId) return jsonError(401, 'Unauthorized');
+  if (!householdId) return jsonError(400, 'householdId required');
 
   try {
     await requireMember(env.DB, userId, householdId);
   } catch {
-    return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 });
+    return jsonError(403, 'Forbidden');
   }
 
   const db = env.DB;

@@ -1,11 +1,8 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../_middleware';
+import { requireMember } from '../auth';
+import { jsonError } from '../http';
 
-async function requireMember(db: D1Database, userId: string, householdId: string) {
-  const row = await db.prepare('SELECT 1 FROM household_members WHERE household_id = ? AND user_id = ?')
-    .bind(householdId, userId).first();
-  if (!row) throw new Error('Forbidden');
-}
 
 function parseTaskRow<T extends { rotation_users?: unknown; subtasks?: unknown }>(row: T): T {
   return {
@@ -22,7 +19,7 @@ function safeJsonParse(value: string, fallback: unknown) {
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const userId = request.headers.get('X-User-Id');
   const householdId = new URL(request.url).searchParams.get('householdId');
-  if (!userId || !householdId) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  if (!userId || !householdId) return jsonError(401, 'Unauthorized');
   await requireMember(env.DB, userId, householdId);
   const tasks = await env.DB.prepare('SELECT * FROM tasks WHERE household_id = ? ORDER BY created_at DESC')
     .bind(householdId).all();
@@ -40,9 +37,9 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const userId = request.headers.get('X-User-Id');
-  if (!userId) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  if (!userId) return jsonError(401, 'Unauthorized');
   const body = await request.json<any>();
-  if (!body.household_id) return new Response(JSON.stringify({ error: 'household_id required' }), { status: 400 });
+  if (!body.household_id) return jsonError(400, 'household_id required');
   await requireMember(env.DB, userId, body.household_id);
 
   const id = crypto.randomUUID();
