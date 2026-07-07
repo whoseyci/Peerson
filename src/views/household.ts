@@ -1,6 +1,7 @@
 import type { App } from '../app';
 import type { Location } from '../types';
 import { escapeAttr, escapeHtml, escapeJsAttr } from '../utils/html';
+import { getPushSubscriptionState, subscribeToPush, unsubscribeFromPush } from '../utils/push';
 
 interface LocationNode extends Location {
   children: LocationNode[];
@@ -107,6 +108,14 @@ export function renderHouseholdView(app: App) {
   }
 
   const inviteUrl = `${location.origin}?join=${s.household.invite_code}`;
+  if (typeof window !== 'undefined' && !s.pushState && !(app as any)._checkingPush) {
+    (app as any)._checkingPush = true;
+    getPushSubscriptionState().then(res => {
+      s.pushState = res;
+      (app as any)._checkingPush = false;
+      if (app.state.view === 'household') app.render();
+    });
+  }
   const householdName = escapeHtml(s.household.name);
   const inviteCode = escapeHtml(s.household.invite_code);
   const inviteCodeJs = escapeJsAttr(s.household.invite_code);
@@ -185,6 +194,32 @@ export function renderHouseholdView(app: App) {
               <button class="btn btn-secondary btn-small" style="width:auto; margin-top:0; flex-shrink:0;" onclick="copyUserId('${escapeJsAttr(s.userId)}')"><i class="ph ph-copy"></i> Kopieren</button>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header"><div class="section-title">Push-Benachrichtigungen</div></div>
+      <div class="card">
+        <div class="card-content" style="flex-direction:column; align-items:stretch;">
+          <div style="font-size:13px; color:var(--text-soft); margin-bottom:12px;">
+            Erhalte Benachrichtigungen bei fälligen Aufgaben, ablaufenden Vorräten und neuen Ausgaben.
+          </div>
+          ${!s.pushState ? `
+            <div style="font-size:13px; color:var(--text-soft);">Status wird geladen...</div>
+          ` : !s.pushState.supported ? `
+            <div style="font-size:13px; color:var(--text-soft);">Push-Benachrichtigungen werden von diesem Browser nicht unterstützt.</div>
+          ` : `
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <div style="font-weight:600;">Status: ${s.pushState.subscribed ? 'Aktiviert' : 'Deaktiviert'}</div>
+                ${!s.pushState.configured ? `<div style="font-size:12px; color:#ef4444; margin-top:2px;">Auf dem Server nicht konfiguriert</div>` : ''}
+              </div>
+              <button class="btn ${s.pushState.subscribed ? 'btn-secondary' : 'btn-primary'}" style="width:auto; margin-top:0;" onclick="${s.pushState.subscribed ? 'togglePushNotifications(false)' : 'togglePushNotifications(true)'}">
+                ${s.pushState.subscribed ? 'Deaktivieren' : 'Aktivieren'}
+              </button>
+            </div>
+          `}
         </div>
       </div>
     </div>
@@ -373,6 +408,35 @@ export async function leaveHousehold() {
   app.render();
 }
 
+export async function togglePushNotifications(enable: boolean) {
+  const app = (window as any).app;
+  if (!app.state.householdId) return;
+  try {
+    if (enable) {
+      app.toast('Benachrichtigungen werden aktiviert...');
+      const res = await subscribeToPush(app.state.householdId);
+      if (!res.success) {
+        app.toast(res.error || 'Fehler beim Aktivieren');
+      } else {
+        app.toast('Push-Benachrichtigungen aktiviert');
+      }
+    } else {
+      app.toast('Benachrichtigungen werden deaktiviert...');
+      const res = await unsubscribeFromPush();
+      if (!res.success) {
+        app.toast(res.error || 'Fehler beim Deaktivieren');
+      } else {
+        app.toast('Push-Benachrichtigungen deaktiviert');
+      }
+    }
+    const newState = await getPushSubscriptionState();
+    app.state.pushState = newState;
+    app.render();
+  } catch (e) {
+    app.toast('Fehler bei der Benachrichtigungs-Einstellung');
+  }
+}
+
 export function openLocationNameModal(title: string, initialValue: string, onSave: (name: string) => Promise<void>) {
   const app = (window as any).app;
   (window as any)._locationModalOnSave = onSave;
@@ -466,20 +530,23 @@ export async function deleteLocation(id: string, name: string) {
 }
 
 // Attach to window so HTML onclick handlers work
-Object.assign(window as any, {
-  createHousehold,
-  joinHousehold,
-  restoreAccount,
-  pasteIntoField,
-  copyUserId,
-  saveProfileName,
-  regenerateInvite,
-  kickMember,
-  leaveHousehold,
-  openLocationNameModal,
-  submitLocationNameModal,
-  addRootLocation,
-  addChildLocation,
-  renameLocation,
-  deleteLocation
-});
+if (typeof window !== 'undefined') {
+  Object.assign(window as any, {
+    createHousehold,
+    joinHousehold,
+    restoreAccount,
+    pasteIntoField,
+    copyUserId,
+    saveProfileName,
+    regenerateInvite,
+    kickMember,
+    leaveHousehold,
+    togglePushNotifications,
+    openLocationNameModal,
+    submitLocationNameModal,
+    addRootLocation,
+    addChildLocation,
+    renameLocation,
+    deleteLocation
+  });
+}

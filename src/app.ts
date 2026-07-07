@@ -126,7 +126,20 @@ export class App {
     if (savedView && (TAB_ORDER.includes(savedView) || LEGACY_VIEWS.includes(savedView) || savedView === 'household')) this.state.view = savedView;
     else if (savedHousehold) this.state.view = 'home';
 
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker.addEventListener) {
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data?.type === 'NAVIGATE_VIEW' && event.data.view) {
+          this.navigate(event.data.view);
+        }
+      });
+    }
+
     const url = new URL(location.href);
+    const paramView = url.searchParams.get('view');
+    if (paramView && (TAB_ORDER.includes(paramView) || LEGACY_VIEWS.includes(paramView) || paramView === 'household')) {
+      this.state.view = paramView as any;
+      history.replaceState({}, '', url.pathname);
+    }
     const inviteCode = url.searchParams.get('join');
     if (inviteCode) {
       this.joinFromInvite(inviteCode);

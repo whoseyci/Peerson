@@ -167,6 +167,12 @@ export interface AppState {
   taskCompletions: TaskCompletion[];
   view: string;
   darkMode: boolean;
+  pushState?: {
+    supported: boolean;
+    configured: boolean;
+    subscribed: boolean;
+    permission: NotificationPermission;
+  };
   // Where the Rooms view's drill-down currently is (root location id, then
   // optionally a child location id one level deeper). Kept on AppState --
   // not module-local to src/views/rooms.ts -- so it survives across

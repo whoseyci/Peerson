@@ -2,6 +2,10 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 
 export interface Env {
   DB: D1Database;
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
+  VAPID_SUBJECT?: string;
+  CRON_SECRET?: string;
 }
 
 function corsOrigin(request: Request) {
@@ -22,7 +26,7 @@ function corsOrigin(request: Request) {
 function applySecurityHeaders(response: Response, request: Request) {
   const origin = corsOrigin(request);
   response.headers.set('Access-Control-Allow-Origin', origin);
-  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, X-User-Id, X-User-Name, X-Household-Id');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, X-User-Id, X-User-Name, X-Household-Id, X-Cron-Secret');
   response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
   response.headers.set('Vary', 'Origin');
 

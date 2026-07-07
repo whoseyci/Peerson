@@ -1,5 +1,6 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../_middleware';
+import { sendExpenseNotifications } from '../_push';
 
 async function requireMember(db: D1Database, userId: string, householdId: string) {
   const row = await db.prepare('SELECT 1 FROM household_members WHERE household_id = ? AND user_id = ?')
@@ -89,6 +90,21 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         INSERT INTO expense_splits (id, expense_id, user_id, amount)
         VALUES (?, ?, ?, ?)
       `).bind(crypto.randomUUID(), id, s.user_id, s.amount).run();
+    }
+
+    const payerId = body.paid_by || userId;
+    const recipientIds = body.splits
+      .filter((s: any) => s.user_id !== payerId && Number(s.amount) > 0)
+      .map((s: any) => s.user_id);
+    if (recipientIds.length > 0) {
+      try {
+        const membersRes = await env.DB.prepare('SELECT 1 FROM household_members WHERE household_id = ?').bind(body.household_id).all();
+        if ((membersRes.results || []).length > 1) {
+          await sendExpenseNotifications(env, body.household_id, payerId, body.title || 'Neue Ausgabe', Number(body.amount) || 0, recipientIds);
+        }
+      } catch (e) {
+        console.error('Push notification trigger error:', e);
+      }
     }
   }
 

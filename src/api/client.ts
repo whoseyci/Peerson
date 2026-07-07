@@ -132,6 +132,11 @@ export const api = {
     // key is configured server-side.
     scan: (imageDataUrl: string) => post('/api/receipt-scan', { image: imageDataUrl }) as Promise<ReceiptScanResult>,
   },
+  push: {
+    getConfig: (householdId: string) => get(`/api/push-subscribe?householdId=${encodeURIComponent(householdId)}`) as Promise<{ configured: boolean; vapidPublicKey: string | null; subscriptions: string[] }>,
+    subscribe: (data: { household_id: string; endpoint: string; keys: { p256dh: string; auth: string } }) => post('/api/push-subscribe', data) as Promise<{ success: boolean }>,
+    unsubscribe: (endpoint: string) => post('/api/push-unsubscribe', { endpoint }) as Promise<{ success: boolean }>,
+  },
 };
 
 export interface ReceiptScanLineItem {

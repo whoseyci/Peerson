@@ -25,6 +25,8 @@ const TABLE_DEFAULTS: Record<string, () => MockRow> = {
   households: () => ({ created_at: Math.floor(Date.now() / 1000) }),
   household_members: () => ({ role: 'member', joined_at: Math.floor(Date.now() / 1000) }),
   category_budgets: () => ({ created_at: Math.floor(Date.now() / 1000) }),
+  push_subscriptions: () => ({ created_at: Math.floor(Date.now() / 1000) }),
+  notification_log: () => ({ sent_at: Math.floor(Date.now() / 1000) }),
 };
 
 export class MockD1Database {
