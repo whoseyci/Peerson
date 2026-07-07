@@ -152,7 +152,7 @@ export function computeFeed(
       const isExceeded = spent >= line.monthlyAmount;
       if (!isExceeded && projected <= line.monthlyAmount) return;
 
-      const catLabel = BUDGET_CATEGORY_LABELS[line.category] || line.category;
+      const catLabel = t(`expenses.cat.${line.category}`) || BUDGET_CATEGORY_LABELS[line.category] || line.category;
       items.push({
         key,
         kind: 'budget',

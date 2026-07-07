@@ -3,14 +3,15 @@ import type { Expense } from '../types';
 import { escapeAttr, escapeHtml, escapeJsAttr } from '../utils/html';
 import { personalBalanceLines } from '../utils/finance';
 import { BUDGETABLE_CATEGORIES, budgetProgressLines, cleanExpenseTitle, isSettlementExpense } from '../utils/budgets';
+import { t as tr } from '../i18n';
 
 const EXPENSE_CATEGORIES: Record<string, { icon: string; label: string }> = {
-  groceries: { icon: 'shopping-cart-simple', label: 'Lebensmittel' },
-  rent: { icon: 'house', label: 'Miete & Wohnen' },
-  household: { icon: 'broom', label: 'Haushalt & Drogerie' },
-  leisure: { icon: 'confetti', label: 'Freizeit' },
-  settlement: { icon: 'hand-coins', label: 'Schuldenausgleich' },
-  sonstiges: { icon: 'package', label: 'Sonstiges' },
+  groceries: { icon: 'shopping-cart-simple', label: 'groceries' },
+  rent: { icon: 'house', label: 'rent' },
+  household: { icon: 'broom', label: 'household' },
+  leisure: { icon: 'confetti', label: 'leisure' },
+  settlement: { icon: 'hand-coins', label: 'settlement' },
+  sonstiges: { icon: 'package', label: 'sonstiges' },
 };
 
 function isExpenseSettled(expense: Expense, splits: Array<{ expense_id: string; settled?: number }>) {
@@ -28,9 +29,9 @@ function expenseMeta(expense: Expense) {
 
 function formatExpenseDate(createdAt: unknown) {
   const seconds = typeof createdAt === 'number' ? createdAt : Number(createdAt);
-  if (!Number.isFinite(seconds) || seconds <= 0) return 'Datum unbekannt';
+  if (!Number.isFinite(seconds) || seconds <= 0) return tr('expenses.dateUnknown');
   const date = new Date(seconds * 1000);
-  return Number.isNaN(date.getTime()) ? 'Datum unbekannt' : date.toLocaleDateString('de-DE');
+  return Number.isNaN(date.getTime()) ? tr('expenses.dateUnknown') : date.toLocaleDateString('de-DE');
 }
 
 // Balance summary + full expense history + budgets management, all as one
@@ -50,33 +51,33 @@ export function renderFinanceSection(app: App) {
   return `
     <div class="section">
       <div class="section-header">
-        <div class="section-title"><i class="ph ph-currency-eur"></i> Finanzen</div>
+        <div class="section-title"><i class="ph ph-currency-eur"></i> ${tr('expenses.title')}</div>
         <div style="display:flex; gap:6px;">
-          <button class="icon-btn-sm" onclick="openPaymentHistoryModal()" title="Zahlungshistorie" aria-label="Zahlungshistorie öffnen"><i class="ph ph-clock-counter-clockwise"></i></button>
-          <button class="icon-btn-sm" onclick="openAddExpenseModal()" title="Ausgabe hinzufügen" aria-label="Ausgabe hinzufügen"><i class="ph ph-plus"></i></button>
+          <button class="icon-btn-sm" onclick="openPaymentHistoryModal()" title="${tr('expenses.paymentHistory')}" aria-label="${tr('expenses.openPaymentHistory')}"><i class="ph ph-clock-counter-clockwise"></i></button>
+          <button class="icon-btn-sm" onclick="openAddExpenseModal()" title="${tr('expenses.add')}" aria-label="${tr('expenses.add')}"><i class="ph ph-plus"></i></button>
         </div>
       </div>
-      ${hasImbalance ? `<button class="btn-mini" onclick="openSettleModal()" style="font-size: 0.75rem; padding: 4px 8px; margin-bottom:10px;"><i class="ph ph-scales"></i> Ausgleichen</button>` : ''}
+      ${hasImbalance ? `<button class="btn-mini" onclick="openSettleModal()" style="font-size: 0.75rem; padding: 4px 8px; margin-bottom:10px;"><i class="ph ph-scales"></i> ${tr('expenses.settle')}</button>` : ''}
       ${personalBalances.length ? personalBalances.map(line => `
         <div class="card">
           <div class="card-content">
             <div class="card-icon"><i class="ph ph-${line.direction === 'you_owe' ? 'arrow-up-right' : 'arrow-down-left'}"></i></div>
             <div class="card-text">
               <div class="card-header">
-                <div class="item-name">${line.direction === 'you_owe' ? 'Du schuldest ' + escapeHtml(line.memberName) : escapeHtml(line.memberName) + ' schuldet dir'}</div>
+                <div class="item-name">${line.direction === 'you_owe' ? tr('expenses.youOwe', { name: escapeHtml(line.memberName) }) : tr('expenses.owesYou', { name: escapeHtml(line.memberName) })}</div>
                 <div class="item-qty ${line.direction === 'owes_you' ? 'balance-positive' : 'balance-negative'}">
                   ${line.amount.toFixed(2)} €
                 </div>
               </div>
-              <div class="card-meta">${line.direction === 'you_owe' ? 'Von dir zu zahlen' : 'Dir wird Geld geschuldet'}</div>
+              <div class="card-meta">${line.direction === 'you_owe' ? tr('expenses.youPay') : tr('expenses.owedToYou')}</div>
             </div>
           </div>
         </div>
-      `).join('') : `<div class="empty-state">Du bist mit allen ausgeglichen</div>`}
+      `).join('') : `<div class="empty-state">${tr('expenses.allBalanced')}</div>`}
     </div>
 
     <div class="section">
-      <div class="section-header"><div class="section-title">Ausgaben</div></div>
+      <div class="section-header"><div class="section-title">${tr('expenses.list')}</div></div>
       ${regularExpenses.length ? regularExpenses.map(e => {
         const payer = escapeHtml(app.getMemberName(e.paid_by));
         const expenseId = escapeJsAttr(e.id);
@@ -92,22 +93,22 @@ export function renderFinanceSection(app: App) {
                 <div class="item-name">${title}</div>
                 <div class="expense-amount">${e.amount.toFixed(2)} €</div>
               </div>
-              <div class="card-meta"><span>Bezahlt von ${payer}</span> · <span>${formatExpenseDate(e.created_at)}</span></div>
+              <div class="card-meta"><span>${tr('expenses.paidBy', { name: payer })}</span> · <span>${formatExpenseDate(e.created_at)}</span></div>
             </div>
           </div>
           <div class="card-actions">
-            <button class="action-btn remove" onclick="event.stopPropagation(); deleteExpense('${expenseId}')" title="Löschen" aria-label="${title} löschen"><i class="ph ph-trash"></i></button>
+            <button class="action-btn remove" onclick="event.stopPropagation(); deleteExpense('${expenseId}')" title="${tr('expenses.delete')}" aria-label="${tr('expenses.deleteItem', { title })}"><i class="ph ph-trash"></i></button>
           </div>
         </div>
         `;
-      }).join('') : `<div class="empty-state">Noch keine Ausgaben</div>`}
+      }).join('') : `<div class="empty-state">${tr('expenses.none')}</div>`}
     </div>
   `;
 }
 
 
 function categoryLabel(category: string) {
-  return EXPENSE_CATEGORIES[category]?.label || category;
+  return tr(`expenses.cat.${category}`) || EXPENSE_CATEGORIES[category]?.label || category;
 }
 
 export function renderBudgetsSection(app: App) {
@@ -117,8 +118,8 @@ export function renderBudgetsSection(app: App) {
   return `
     <div class="section">
       <div class="section-header">
-        <div class="section-title"><i class="ph ph-chart-pie-slice"></i> Budgets diesen Monat</div>
-        <button class="btn btn-small" onclick="openBudgetModal()"><i class="ph ph-plus"></i> Budget</button>
+        <div class="section-title"><i class="ph ph-chart-pie-slice"></i> ${tr('budgets.title')}</div>
+        <button class="btn btn-small" onclick="openBudgetModal()"><i class="ph ph-plus"></i> ${tr('budgets.short')}</button>
       </div>
       ${lines.length ? lines.map(line => {
         const pct = Math.min(100, Math.round(line.ratio * 100));
@@ -128,14 +129,14 @@ export function renderBudgetsSection(app: App) {
           <div class="budget-row">
             <div>
               <div class="budget-title"><i class="ph ph-${escapeAttr(EXPENSE_CATEGORIES[line.category]?.icon || 'package')}"></i> ${escapeHtml(categoryLabel(line.category))}</div>
-              <div class="budget-meta">${line.spent.toFixed(2)} € von ${line.monthlyAmount.toFixed(2)} €${remaining >= 0 ? ` · ${remaining.toFixed(2)} € übrig` : ` · ${Math.abs(remaining).toFixed(2)} € drüber`}</div>
+              <div class="budget-meta">${tr('budgets.spentOf', { spent: line.spent.toFixed(2), budget: line.monthlyAmount.toFixed(2) })}${remaining >= 0 ? ` · ${tr('budgets.remaining', { amount: remaining.toFixed(2) })}` : ` · ${tr('budgets.over', { amount: Math.abs(remaining).toFixed(2) })}`}</div>
             </div>
-            <button class="icon-btn-sm" onclick="openBudgetModal('${escapeJsAttr(line.category)}')" title="Budget bearbeiten" aria-label="Budget bearbeiten"><i class="ph ph-pencil-simple"></i></button>
+            <button class="icon-btn-sm" onclick="openBudgetModal('${escapeJsAttr(line.category)}')" title="${tr('budgets.edit')}" aria-label="${tr('budgets.edit')}"><i class="ph ph-pencil-simple"></i></button>
           </div>
           <div class="budget-progress"><div class="budget-progress-fill" style="width:${pct}%"></div></div>
         </div>`;
-      }).join('') : `<div class="empty-state" style="padding:18px;">Noch keine Monatsbudgets gesetzt</div>`}
-      ${available.length ? `<button class="add-row-dashed" onclick="openBudgetModal()"><i class="ph ph-plus"></i> Budget hinzufügen</button>` : ''}
+      }).join('') : `<div class="empty-state" style="padding:18px;">${tr('budgets.none')}</div>`}
+      ${available.length ? `<button class="add-row-dashed" onclick="openBudgetModal()"><i class="ph ph-plus"></i> ${tr('budgets.add')}</button>` : ''}
     </div>`;
 }
 
@@ -149,12 +150,12 @@ export function openBudgetModal(category?: string) {
     .join('');
 
   app.showModal('budgetModal', `
-    <div class="modal-header"><div class="modal-title">${existing ? 'Budget bearbeiten' : 'Budget hinzufügen'}</div><button class="close-btn" onclick="window.app.closeModal('budgetModal')"><i class="ph ph-x"></i></button></div>
+    <div class="modal-header"><div class="modal-title">${existing ? tr('budgets.edit') : tr('budgets.add')}</div><button class="close-btn" onclick="window.app.closeModal('budgetModal')"><i class="ph ph-x"></i></button></div>
     <div class="modal-body">
-      <div class="form-group"><label>Kategorie</label><select id="budgetCategory" ${existing ? 'disabled' : ''}>${options}</select></div>
-      <div class="form-group"><label>Monatsbudget (€)</label><input type="number" id="budgetAmount" step="0.01" min="0" value="${existing ? Number(existing.monthly_amount).toFixed(2) : ''}" placeholder="z. B. 300"></div>
-      <button class="btn" onclick="saveBudgetModal()"><i class="ph-bold ph-check"></i> Speichern</button>
-      ${existing ? `<button class="btn btn-secondary" onclick="deleteBudget('${escapeJsAttr(existing.category)}')"><i class="ph ph-trash"></i> Budget entfernen</button>` : ''}
+      <div class="form-group"><label>${tr('budgets.category')}</label><select id="budgetCategory" ${existing ? 'disabled' : ''}>${options}</select></div>
+      <div class="form-group"><label>${tr('budgets.monthly')}</label><input type="number" id="budgetAmount" step="0.01" min="0" value="${existing ? Number(existing.monthly_amount).toFixed(2) : ''}" placeholder="z. B. 300"></div>
+      <button class="btn" onclick="saveBudgetModal()"><i class="ph-bold ph-check"></i> ${tr('action.save')}</button>
+      ${existing ? `<button class="btn btn-secondary" onclick="deleteBudget('${escapeJsAttr(existing.category)}')"><i class="ph ph-trash"></i> ${tr('budgets.remove')}</button>` : ''}
     </div>
   `);
 }
@@ -165,7 +166,7 @@ export async function saveBudgetModal() {
   const category = (document.getElementById('budgetCategory') as HTMLSelectElement)?.value;
   const raw = (document.getElementById('budgetAmount') as HTMLInputElement)?.value;
   const amount = raw ? parseFloat(raw.replace(',', '.')) : NaN;
-  if (!category || !Number.isFinite(amount) || amount <= 0) return app.toast('Bitte gültiges Budget eingeben');
+  if (!category || !Number.isFinite(amount) || amount <= 0) return app.toast(tr('budgets.validRequired'));
   try {
     const res = await api.categoryBudgets.upsert({ household_id: app.state.householdId, category, monthly_amount: amount });
     const idx = app.state.categoryBudgets.findIndex(b => b.category === category);
@@ -173,9 +174,9 @@ export async function saveBudgetModal() {
     else app.state.categoryBudgets.push(res.budget);
     app.closeModal('budgetModal');
     app.render();
-    app.toast('Budget gespeichert');
+    app.toast(tr('budgets.saved'));
   } catch (e) {
-    app.toast('Fehler beim Speichern');
+    app.toast(tr('budgets.saveError'));
   }
 }
 
@@ -187,9 +188,9 @@ export async function deleteBudget(category: string) {
     app.state.categoryBudgets = app.state.categoryBudgets.filter(b => b.category !== category);
     app.closeModal('budgetModal');
     app.render();
-    app.toast('Budget entfernt');
+    app.toast(tr('budgets.removed'));
   } catch (e) {
-    app.toast('Fehler beim Entfernen');
+    app.toast(tr('budgets.removeError'));
   }
 }
 
@@ -206,7 +207,7 @@ export function openPaymentHistoryModal() {
         <span>${Number(e.amount || 0).toFixed(2)} €</span>
       </div>
     `;
-  }).join('') : '<div class="empty-state" style="padding:16px;">Noch keine Schuldenausgleiche verbucht</div>';
+  }).join('') : `<div class="empty-state" style="padding:16px;">${tr('settle.none')}</div>`;
 
   const settledRows = settledRegularExpenses.length ? settledRegularExpenses.map((e: Expense) => {
     const payer = escapeHtml(app.getMemberName(e.paid_by));
@@ -217,14 +218,14 @@ export function openPaymentHistoryModal() {
         <span>${Number(e.amount || 0).toFixed(2)} €</span>
       </div>
     `;
-  }).join('') : '<div class="empty-state" style="padding:16px;">Noch keine Ausgaben durch Ausgleich erledigt</div>';
+  }).join('') : `<div class="empty-state" style="padding:16px;">${tr('settle.noneSettled')}</div>`;
 
   app.showModal('paymentHistoryModal', `
-    <div class="modal-header"><div class="modal-title"><i class="ph ph-clock-counter-clockwise"></i> Zahlungshistorie</div><button class="close-btn" onclick="window.app.closeModal('paymentHistoryModal')"><i class="ph ph-x"></i></button></div>
+    <div class="modal-header"><div class="modal-title"><i class="ph ph-clock-counter-clockwise"></i> ${tr('expenses.paymentHistory')}</div><button class="close-btn" onclick="window.app.closeModal('paymentHistoryModal')"><i class="ph ph-x"></i></button></div>
     <div class="modal-body">
-      <div class="section-header"><div class="section-title">Ausgleichszahlungen</div><span class="badge">${settlementExpenses.length}</span></div>
+      <div class="section-header"><div class="section-title">${tr('settle.history')}</div><span class="badge">${settlementExpenses.length}</span></div>
       <div class="price-history-list">${settlementRows}</div>
-      <div class="section-header" style="margin-top:18px;"><div class="section-title">Beglichene Ausgaben</div><span class="badge">${settledRegularExpenses.length}</span></div>
+      <div class="section-header" style="margin-top:18px;"><div class="section-title">${tr('settle.settledExpenses')}</div><span class="badge">${settledRegularExpenses.length}</span></div>
       <div class="price-history-list">${settledRows}</div>
     </div>
   `);
@@ -258,7 +259,7 @@ export function openSettleModal() {
   }
 
   if (!transfers.length) {
-    app.toast('Alle Konten sind bereits ausgeglichen!');
+    app.toast(tr('expenses.allBalanced'));
     return;
   }
 
@@ -270,12 +271,12 @@ export function openSettleModal() {
   `).join('');
 
   app.showModal('settleModal', `
-    <div class="modal-header"><div class="modal-title"><i class="ph ph-scales"></i> Schulden ausgleichen</div><button class="close-btn" onclick="window.app.closeModal('settleModal')"><i class="ph ph-x"></i></button></div>
+    <div class="modal-header"><div class="modal-title"><i class="ph ph-scales"></i> ${tr('settle.title')}</div><button class="close-btn" onclick="window.app.closeModal('settleModal')"><i class="ph ph-x"></i></button></div>
     <div class="modal-body">
-      <p style="margin-bottom:12px; font-size:0.9rem; color:var(--text-soft);">Um alle Konten auf 0,00 € zu setzen, sind folgende Überweisungen nötig:</p>
+      <p style="margin-bottom:12px; font-size:0.9rem; color:var(--text-soft);">${tr('settle.instructions')}</p>
       ${transfersHtml}
       <div style="margin-top:16px;">
-        <button class="btn" style="width:100%; justify-content:center;" onclick="executeSettlement()"><i class="ph-bold ph-check"></i> Als bezahlt markieren (Ausgleich verbuchen)</button>
+        <button class="btn" style="width:100%; justify-content:center;" onclick="executeSettlement()"><i class="ph-bold ph-check"></i> ${tr('settle.markPaid')}</button>
       </div>
     </div>
   `);
@@ -293,7 +294,7 @@ export async function executeSettlement() {
     for (const t of transfers) {
       await api.expenses.create({
         household_id: app.state.householdId,
-        title: 'Schuldenausgleich: ' + t.fromName + ' → ' + t.toName,
+        title: tr('settle.expenseTitle', { from: t.fromName, to: t.toName }),
         amount: t.amount,
         paid_by: t.fromId,
         split_type: 'custom',
@@ -305,9 +306,9 @@ export async function executeSettlement() {
     app.closeModal('settleModal');
     await app.loadData();
     app.render();
-    app.toast('Schulden erfolgreich ausgeglichen!');
+    app.toast(tr('settle.success'));
   } catch (e) {
-    app.toast('Fehler beim Ausgleichen');
+    app.toast(tr('settle.error'));
   }
 }
 
@@ -335,7 +336,7 @@ function renderExpenseEditorModal(existingExpense?: Expense, existingSplits?: an
   const payerOptions = members.map((m: any) => `<option value="${escapeAttr(m.id)}" ${paidByVal === m.id ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('');
   const catOptions = Object.entries(EXPENSE_CATEGORIES)
     .filter(([k]) => k !== 'settlement')
-    .map(([k, v]) => `<option value="${k}" ${catVal === k ? 'selected' : ''}>${v.label}</option>`).join('');
+    .map(([k]) => `<option value="${k}" ${catVal === k ? 'selected' : ''}>${categoryLabel(k)}</option>`).join('');
 
   // Default spend split rule check (Issue #25 & #5)
   const ruleKey = `peerson_split_rule_${app.state.householdId}_${catVal}`;
@@ -371,32 +372,32 @@ function renderExpenseEditorModal(existingExpense?: Expense, existingSplits?: an
   }).join('');
 
   app.showModal('expenseModal', `
-    <div class="modal-header"><div class="modal-title">${isEdit ? 'Ausgabe bearbeiten' : 'Ausgabe hinzufügen'}</div><button class="close-btn" onclick="window.app.closeModal('expenseModal')"><i class="ph ph-x"></i></button></div>
+    <div class="modal-header"><div class="modal-title">${isEdit ? tr('expense.edit') : tr('expense.add')}</div><button class="close-btn" onclick="window.app.closeModal('expenseModal')"><i class="ph ph-x"></i></button></div>
     <div class="modal-body">
-      <div class="form-group"><label>Titel</label><input type="text" id="expTitle" placeholder="z. B. Wocheneinkauf" value="${titleVal}"></div>
+      <div class="form-group"><label>${tr('expense.fieldTitle')}</label><input type="text" id="expTitle" placeholder="${tr('expense.titlePlaceholder')}" value="${titleVal}"></div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-        <div class="form-group"><label>Betrag (€)</label><input type="number" id="expAmount" step="0.01" min="0" value="${amtVal}" oninput="updateSplitAmounts()"></div>
-        <div class="form-group"><label>Kategorie</label><select id="expCategory" onchange="onExpenseCatChange()">${catOptions}</select></div>
+        <div class="form-group"><label>${tr('expense.amount')}</label><input type="number" id="expAmount" step="0.01" min="0" value="${amtVal}" oninput="updateSplitAmounts()"></div>
+        <div class="form-group"><label>${tr('expense.category')}</label><select id="expCategory" onchange="onExpenseCatChange()">${catOptions}</select></div>
       </div>
-      <div class="form-group"><label>Bezahlt von</label><select id="expPayer">${payerOptions}</select></div>
+      <div class="form-group"><label>${tr('expense.paidBy')}</label><select id="expPayer">${payerOptions}</select></div>
       
       <div class="form-group" style="margin-top:10px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-          <label style="margin:0">Aufteilung</label>
+          <label style="margin:0">${tr('expense.split')}</label>
           <select id="expSplitMode" style="width:auto; padding:2px 8px; font-size:0.8rem;" onchange="onSplitModeChange()">
-            <option value="equal">Gleichmäßig</option>
-            <option value="pct" ${Object.keys(defaultRule).length ? 'selected' : ''}>Prozentual (%)</option>
-            <option value="custom">Beträge (€)</option>
+            <option value="equal">${tr('expense.splitEqual')}</option>
+            <option value="pct" ${Object.keys(defaultRule).length ? 'selected' : ''}>${tr('expense.splitPercent')}</option>
+            <option value="custom">${tr('expense.splitAmounts')}</option>
           </select>
         </div>
         <div id="splitRowsContainer" style="background:var(--field-bg); border:1px solid var(--border); padding:8px 12px; border-radius:var(--radius-sm);">${splitRows}</div>
         <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center;">
-          <button class="btn btn-small btn-secondary" type="button" onclick="saveDefaultSplitRule()"><i class="ph ph-push-pin"></i> Als Standard für Kategorie speichern</button>
-          <span id="splitTotalHint" style="font-size:0.8rem; font-weight:700; color:var(--text-soft);">Summe: 0,00 €</span>
+          <button class="btn btn-small btn-secondary" type="button" onclick="saveDefaultSplitRule()"><i class="ph ph-push-pin"></i> ${tr('expense.saveDefaultSplit')}</button>
+          <span id="splitTotalHint" style="font-size:0.8rem; font-weight:700; color:var(--text-soft);">${tr('expense.total', { value: '0.00 €' })}</span>
         </div>
       </div>
 
-      <button class="btn mt-3" onclick="${isEdit ? `saveEditedExpense('${escapeJsAttr(existingExpense.id)}')` : 'saveNewExpense()'}"><i class="ph-bold ph-check"></i> ${isEdit ? 'Änderungen speichern' : 'Ausgabe erstellen'}</button>
+      <button class="btn mt-3" onclick="${isEdit ? `saveEditedExpense('${escapeJsAttr(existingExpense.id)}')` : 'saveNewExpense()'}"><i class="ph-bold ph-check"></i> ${isEdit ? tr('expense.saveChanges') : tr('expense.create')}</button>
     </div>
   `);
 
@@ -434,7 +435,7 @@ export function onExpenseCatChange() {
       if (rule[uid] !== undefined) el.value = rule[uid];
     });
     updateSplitAmounts();
-    app.toast('Standard-Aufteilung für Kategorie geladen');
+    app.toast(tr('expense.defaultLoaded'));
   }
 }
 
@@ -450,7 +451,7 @@ export function updateSplitAmounts(source?: 'pct' | 'amt') {
       const amtInput = document.querySelector(`.split-amt-input[data-user="${cb.value}"]`) as HTMLInputElement;
       if (amtInput) amtInput.value = cb.checked ? share.toFixed(2) : '0.00';
     });
-    if (hint) hint.textContent = `Summe: ${total.toFixed(2)} €`;
+    if (hint) hint.textContent = tr('expense.total', { value: `${total.toFixed(2)} €` });
   } else if (mode === 'pct') {
     let sumPct = 0;
     checkedRows.forEach((cb: any) => {
@@ -460,14 +461,14 @@ export function updateSplitAmounts(source?: 'pct' | 'amt') {
       sumPct += pct;
       if (amtInput) amtInput.value = ((total * pct) / 100).toFixed(2);
     });
-    if (hint) hint.textContent = `Summe: ${sumPct}% (${((total * sumPct) / 100).toFixed(2)} €)`;
+    if (hint) hint.textContent = tr('expense.total', { value: `${sumPct}% (${((total * sumPct) / 100).toFixed(2)} €)` });
   } else if (mode === 'custom') {
     let sumAmt = 0;
     checkedRows.forEach((cb: any) => {
       const amtInput = document.querySelector(`.split-amt-input[data-user="${cb.value}"]`) as HTMLInputElement;
       sumAmt += parseFloat(amtInput?.value) || 0;
     });
-    if (hint) hint.textContent = `Summe: ${sumAmt.toFixed(2)} € / ${total.toFixed(2)} €`;
+    if (hint) hint.textContent = tr('expense.total', { value: `${sumAmt.toFixed(2)} € / ${total.toFixed(2)} €` });
   }
 }
 
@@ -482,7 +483,7 @@ export function saveDefaultSplitRule() {
   });
   const ruleKey = `peerson_split_rule_${app.state.householdId}_${cat}`;
   localStorage.setItem(ruleKey, JSON.stringify(rule));
-  app.toast('Standard-Aufteilung (%) für Kategorie gespeichert!');
+  app.toast(tr('expense.defaultSaved'));
 }
 
 export async function saveNewExpense() {
@@ -494,10 +495,10 @@ export async function saveNewExpense() {
     const paid_by = (document.getElementById('expPayer') as HTMLSelectElement)?.value;
     const category = (document.getElementById('expCategory') as HTMLSelectElement)?.value || 'sonstiges';
 
-    if (!title || isNaN(amount) || amount <= 0) return app.toast('Bitte gültige Daten eingeben');
+    if (!title || isNaN(amount) || amount <= 0) return app.toast(tr('expense.validRequired'));
 
     const checked = Array.from(document.querySelectorAll('.split-check-member:checked'));
-    if (checked.length === 0) return app.toast('Mindestens eine Person auswählen');
+    if (checked.length === 0) return app.toast(tr('expense.onePersonRequired'));
 
     const splits = checked.map((cb: any) => {
       const amtInput = document.querySelector(`.split-amt-input[data-user="${cb.value}"]`) as HTMLInputElement;
@@ -508,9 +509,9 @@ export async function saveNewExpense() {
     app.closeModal('expenseModal');
     await app.loadData();
     app.render();
-    app.toast('Ausgabe erstellt');
+    app.toast(tr('expense.created'));
   } catch (e) {
-    app.toast('Fehler beim Speichern');
+    app.toast(tr('budgets.saveError'));
   }
 }
 
@@ -523,10 +524,10 @@ export async function saveEditedExpense(id: string) {
     const paid_by = (document.getElementById('expPayer') as HTMLSelectElement)?.value;
     const category = (document.getElementById('expCategory') as HTMLSelectElement)?.value || 'sonstiges';
 
-    if (!title || isNaN(amount) || amount <= 0) return app.toast('Bitte gültige Daten eingeben');
+    if (!title || isNaN(amount) || amount <= 0) return app.toast(tr('expense.validRequired'));
 
     const checked = Array.from(document.querySelectorAll('.split-check-member:checked'));
-    if (checked.length === 0) return app.toast('Mindestens eine Person auswählen');
+    if (checked.length === 0) return app.toast(tr('expense.onePersonRequired'));
 
     const splits = checked.map((cb: any) => {
       const amtInput = document.querySelector(`.split-amt-input[data-user="${cb.value}"]`) as HTMLInputElement;
@@ -537,9 +538,9 @@ export async function saveEditedExpense(id: string) {
     app.closeModal('expenseModal');
     await app.loadData();
     app.render();
-    app.toast('Ausgabe aktualisiert');
+    app.toast(tr('expense.updated'));
   } catch (e) {
-    app.toast('Fehler beim Aktualisieren');
+    app.toast(tr('expense.updateError'));
   }
 }
 

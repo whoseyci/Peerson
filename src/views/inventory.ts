@@ -2,6 +2,7 @@ import type { App } from '../app';
 import type { Item, Batch, Location } from '../types';
 import { escapeAttr, escapeHtml, escapeJsAttr } from '../utils/html';
 import { predictConsumptionForItem } from '../utils/consumption';
+import { t } from '../i18n';
 
 // Matches the shape functions/api/product-lookup.ts already fetches from
 // Open Food Facts (per-100g values) -- Item.nutrition just needs to store
@@ -88,7 +89,7 @@ export function locationSelectOptions(locations: Location[], selectedId: string 
   });
   byParent.forEach(list => list.sort((a: any, b: any) => a.sort_order - b.sort_order || a.name.localeCompare(b.name)));
 
-  const options: string[] = ['<option value="">Kein Ort</option>'];
+  const options: string[] = [`<option value="">${t('rooms.noPlace')}</option>`];
   const walk = (parentId: string | null, depth: number) => {
     (byParent.get(parentId) || []).forEach(node => {
       const indent = '\u00A0\u00A0\u00A0\u00A0'.repeat(depth);
