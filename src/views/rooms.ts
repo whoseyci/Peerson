@@ -254,7 +254,7 @@ function renderRoomItemRow(item: any, quantity: number, locationId: string | nul
       <div class="ir-icon" style="cursor:pointer;" onclick="openItemDetail('${itemId}')"><i class="ph ph-${icon}"></i></div>
       <div class="ir-text" style="cursor:pointer;" onclick="openItemDetail('${itemId}')">
         <div class="ir-title">${escapeHtml(item.name)}</div>
-        <div class="ir-sub">${escapeHtml(CATEGORY_META[item.category]?.label || item.category)}${quantity < item.threshold ? ' · <span style="color:var(--warning); font-weight:700;">' + t('rooms.low') + '</span>' : ''}</div>
+        <div class="ir-sub">${escapeHtml(t(`inventory.cat.${item.category}`) || CATEGORY_META[item.category]?.label || item.category)}${quantity < item.threshold ? ' · <span style="color:var(--warning); font-weight:700;">' + t('rooms.low') + '</span>' : ''}</div>
       </div>
       <button class="icon-btn" style="width:34px; height:34px; font-size:15px;" onclick="openMoveItemModal('${itemId}', ${locArg})" title="${t('rooms.move')}" aria-label="${t('rooms.moveItem', { name: escapeHtml(item.name) })}"><i class="ph ph-arrows-out-cardinal"></i></button>
       <div class="room-stepper">

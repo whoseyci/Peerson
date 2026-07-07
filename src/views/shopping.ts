@@ -20,7 +20,8 @@ function getItemAisle(item: { linked_item_id?: string; name: string }, app: App)
     i.id === item.linked_item_id || i.name.trim().toLowerCase() === item.name.trim().toLowerCase()
   );
   const cat = pantryItem?.category || 'sonstiges';
-  return AISLE_META[cat] || AISLE_META.sonstiges;
+  const meta = AISLE_META[cat] || AISLE_META.sonstiges;
+  return { ...meta, label: t(`shopping.aisle.${cat}`) };
 }
 
 export function renderShoppingView(app: App) {
@@ -48,7 +49,8 @@ export function renderShoppingView(app: App) {
 
   missingLowStock.forEach(i => {
     const needed = i.threshold - s.batches.filter(b => b.item_id === i.id).reduce((a, b) => a + b.quantity, 0);
-    const aisle = AISLE_META[i.category] || AISLE_META.sonstiges;
+    const aisleMeta = AISLE_META[i.category] || AISLE_META.sonstiges;
+    const aisle = { ...aisleMeta, label: t(`shopping.aisle.${i.category}`) };
     if (!groupedOpen.has(aisle.label)) groupedOpen.set(aisle.label, { ...aisle, items: [] });
     groupedOpen.get(aisle.label)!.items.push({ type: 'suggested', data: { ...i, needed } });
   });
