@@ -1,6 +1,7 @@
 import type { App } from '../app';
 import type { ShoppingItem } from '../types';
 import { escapeAttr, escapeHtml, escapeJsAttr } from '../utils/html';
+import { t } from '../i18n';
 
 const AISLE_META: Record<string, { label: string; icon: string; order: number }> = {
   obst: { label: 'Obst & Gemüse', icon: 'apple-logo', order: 1 },
@@ -56,16 +57,16 @@ export function renderShoppingView(app: App) {
 
   return `
     <div class="header">
-      <h1><i class="ph ph-shopping-cart-simple"></i> Einkaufen</h1>
+      <h1><i class="ph ph-shopping-cart-simple"></i> ${t('shopping.title')}</h1>
       <div style="display:flex; gap:8px;">
-        <button class="icon-btn" onclick="scanForShopping()" title="Barcode scannen"><i class="ph ph-barcode"></i></button>
-        <button class="icon-btn" onclick="openAddShoppingModal()" title="Manuell hinzufügen"><i class="ph ph-plus"></i></button>
+        <button class="icon-btn" onclick="scanForShopping()" title="${t('shopping.scanBarcode')}"><i class="ph ph-barcode"></i></button>
+        <button class="icon-btn" onclick="openAddShoppingModal()" title="${t('shopping.addManual')}"><i class="ph ph-plus"></i></button>
       </div>
     </div>
 
     <div class="section">
       <div class="section-header">
-        <div class="section-title">Offen (nach Supermarkt-Regal)</div>
+        <div class="section-title">${t('shopping.openByAisle')}</div>
         <span class="badge">${open.length + missingLowStock.length}</span>
       </div>
       ${sortedAisles.length ? sortedAisles.map(aisle => `
@@ -85,14 +86,14 @@ export function renderShoppingView(app: App) {
                 <div class="card-text" style="margin-left: 8px;">
                   <div class="card-header">
                     <div class="item-name">${itemName}</div>
-                    <span class="badge" style="font-size:0.7rem; background:var(--warning); color:#fff;"><i class="ph ph-warning"></i> Vorschlag</span>
+                    <span class="badge" style="font-size:0.7rem; background:var(--warning); color:#fff;"><i class="ph ph-warning"></i> ${t('shopping.suggestion')}</span>
                   </div>
-                  <div class="card-meta">Unter Mindestbestand (+${i.needed} empfohlen)</div>
+                  <div class="card-meta">${t('shopping.lowStockSuggestion', { count: i.needed })}</div>
                 </div>
               </div>
               <div class="card-actions" style="width: auto; flex-direction: row; border-left: 1px solid var(--border);">
-                <button class="action-btn" onclick="autoAddAndOpenBought('${itemId}', ${i.needed}, '${itemNameJs}')" title="Gekauft (Menge/MHD/Preis loggen)" style="width: 44px; border-right: 1px solid var(--border);"><i class="ph ph-bag"></i></button>
-                <button class="action-btn remove" onclick="dismissSuggestion('${itemId}')" title="Vorschlag ausblenden" style="width: 44px;"><i class="ph ph-trash"></i></button>
+                <button class="action-btn" onclick="autoAddAndOpenBought('${itemId}', ${i.needed}, '${itemNameJs}')" title="${t('shopping.boughtLog')}" style="width: 44px; border-right: 1px solid var(--border);"><i class="ph ph-bag"></i></button>
+                <button class="action-btn remove" onclick="dismissSuggestion('${itemId}')" title="${t('shopping.dismissSuggestion')}" style="width: 44px;"><i class="ph ph-trash"></i></button>
               </div>
             </div>`;
           } else {
@@ -114,32 +115,32 @@ export function renderShoppingView(app: App) {
                 </div>
               </div>
               <div class="card-actions" style="width: auto; flex-direction: row; border-left: 1px solid var(--border);">
-                <button class="action-btn" onclick="openBoughtDetailsModal('${shopId}', '${linkedId}')" title="Gekauft (Menge/MHD/Preis loggen)" style="width: 44px; border-right: 1px solid var(--border);"><i class="ph ph-bag"></i></button>
-                <button class="action-btn remove" onclick="deleteShopping('${shopId}')" title="Löschen" style="width: 44px;"><i class="ph ph-trash"></i></button>
+                <button class="action-btn" onclick="openBoughtDetailsModal('${shopId}', '${linkedId}')" title="${t('shopping.boughtLog')}" style="width: 44px; border-right: 1px solid var(--border);"><i class="ph ph-bag"></i></button>
+                <button class="action-btn remove" onclick="deleteShopping('${shopId}')" title="${t('shopping.delete')}" style="width: 44px;"><i class="ph ph-trash"></i></button>
               </div>
             </div>`;
           }
         }).join('')}
-      `).join('') : `<div class="empty-state">Nichts auf der Liste</div>`}
+      `).join('') : `<div class="empty-state">${t('shopping.empty')}</div>`}
     </div>
 
     ${bought.length ? `
     <div class="section">
-      <div class="section-header"><div class="section-title">Erledigt</div></div>
+      <div class="section-header"><div class="section-title">${t('shopping.done')}</div></div>
       ${bought.map(item => {
         const shopId = escapeJsAttr(item.id);
         const itemName = escapeHtml(item.name);
         return `
         <div class="card" style="opacity: 0.7;">
           <div class="card-content" style="align-items: center;">
-            <button class="shopping-check checked" onclick="toggleShopping('${shopId}')" aria-label="${itemName} wieder öffnen"><i class="ph-bold ph-check"></i></button>
+            <button class="shopping-check checked" onclick="toggleShopping('${shopId}')" aria-label="${t('shopping.reopen', { name: itemName })}"><i class="ph-bold ph-check"></i></button>
             <div class="card-text" style="margin-left: 8px;">
               <div class="card-header"><div class="item-name" style="text-decoration: line-through;">${itemName}</div></div>
               ${item.price ? `<div class="card-meta" style="color:var(--success); font-weight:700;">${item.price.toFixed(2)} €</div>` : ''}
             </div>
           </div>
           <div class="card-actions">
-            <button class="action-btn remove" onclick="deleteShopping('${shopId}')" aria-label="${itemName} löschen"><i class="ph ph-trash"></i></button>
+            <button class="action-btn remove" onclick="deleteShopping('${shopId}')" aria-label="${t('shopping.deleteItem', { name: itemName })}"><i class="ph ph-trash"></i></button>
           </div>
         </div>
       `}).join('')}
@@ -150,12 +151,12 @@ export function renderShoppingView(app: App) {
 export async function openAddShoppingModal(prefillName?: string | null) {
   const app = (window as any).app;
   app.showModal('shopModal', `
-    <div class="modal-header"><div class="modal-title">Zur Liste hinzufügen</div><button class="close-btn" onclick="window.app.closeModal('shopModal')"><i class="ph ph-x"></i></button></div>
+    <div class="modal-header"><div class="modal-title">${t('shopping.addToListTitle')}</div><button class="close-btn" onclick="window.app.closeModal('shopModal')"><i class="ph ph-x"></i></button></div>
     <div class="modal-body">
-      <div class="form-group"><label>Artikel</label><input type="text" id="shopName" placeholder="Was wird gebraucht?" value="${prefillName ? escapeAttr(prefillName) : ''}"></div>
-      <div class="form-group"><label>Menge (optional)</label><input type="text" id="shopQty" placeholder="z. B. 2 Packungen"></div>
-      <div class="form-group"><label>Preis (€, optional)</label><input type="number" id="shopPrice" step="0.01" min="0" placeholder="z. B. 1.99"></div>
-      <button class="btn" onclick="saveShoppingItem()"><i class="ph-bold ph-check"></i> Hinzufügen</button>
+      <div class="form-group"><label>${t('shopping.item')}</label><input type="text" id="shopName" placeholder="${t('shopping.needPlaceholder')}" value="${prefillName ? escapeAttr(prefillName) : ''}"></div>
+      <div class="form-group"><label>${t('shopping.quantityOptional')}</label><input type="text" id="shopQty" placeholder="${t('shopping.qtyPlaceholder')}"></div>
+      <div class="form-group"><label>${t('shopping.priceOptional')}</label><input type="number" id="shopPrice" step="0.01" min="0" placeholder="${t('shopping.pricePlaceholder')}"></div>
+      <button class="btn" onclick="saveShoppingItem()"><i class="ph-bold ph-check"></i> ${t('shopping.add')}</button>
     </div>
   `);
 }

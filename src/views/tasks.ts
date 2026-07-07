@@ -1,6 +1,7 @@
 import type { App } from '../app';
 import type { Task } from '../types';
 import { escapeAttr, escapeHtml, escapeJsAttr } from '../utils/html';
+import { t as tr } from '../i18n';
 
 export function renderTasksView(app: App) {
   const s = app.state;
@@ -9,25 +10,25 @@ export function renderTasksView(app: App) {
 
   return `
     <div class="header">
-      <h1><i class="ph ph-check-circle"></i> Aufgaben</h1>
-      <button class="icon-btn" onclick="openAddTaskModal()" title="Neue Aufgabe"><i class="ph ph-plus"></i></button>
+      <h1><i class="ph ph-check-circle"></i> ${tr('tasks.title')}</h1>
+      <button class="icon-btn" onclick="openAddTaskModal()" title="${tr('tasks.new')}"><i class="ph ph-plus"></i></button>
     </div>
 
     <div class="section">
-      <div class="section-header"><div class="section-title">Offen</div><span class="badge">${todo.length}</span></div>
+      <div class="section-header"><div class="section-title">${tr('tasks.open')}</div><span class="badge">${todo.length}</span></div>
       ${todo.length ? todo.map(t => {
-        const recLabel = t.recurrence === 'daily' ? 'Täglich' : t.recurrence === 'weekly' ? 'Wöchentlich' : t.recurrence === 'monthly' ? 'Monatlich' : t.recurrence === 'irregular' ? 'Nach Bedarf' : '';
-        const rotLabel = (t.recurrence !== 'irregular' && t.rotation_users && t.rotation_users.length > 1) ? ' (Rotation)' : '';
+        const recLabel = t.recurrence === 'daily' ? tr('tasks.daily') : t.recurrence === 'weekly' ? tr('tasks.weekly') : t.recurrence === 'monthly' ? tr('tasks.monthly') : t.recurrence === 'irregular' ? tr('tasks.irregular') : '';
+        const rotLabel = (t.recurrence !== 'irregular' && t.rotation_users && t.rotation_users.length > 1) ? tr('tasks.rotation') : '';
         const taskId = escapeJsAttr(t.id);
         const title = escapeHtml(t.title);
-        const assignee = t.assigned_to ? escapeHtml(app.getMemberName(t.assigned_to)) : (t.recurrence === 'irregular' ? 'Frei · wer Zeit hat' : escapeHtml(app.getMemberName(t.assigned_to)));
+        const assignee = t.assigned_to ? escapeHtml(app.getMemberName(t.assigned_to)) : (t.recurrence === 'irregular' ? tr('tasks.free') : escapeHtml(app.getMemberName(t.assigned_to)));
         const subDone = Array.isArray(t.subtasks) ? t.subtasks.filter((s: any) => s.done).length : 0;
         const subTotal = Array.isArray(t.subtasks) ? t.subtasks.length : 0;
         const subBadge = subTotal > 0 ? `<span class="chip ${subDone === subTotal ? 'good' : 'warn'}" style="margin-left:6px; font-weight:700;"><i class="ph ph-check-square"></i> ${subDone}/${subTotal}</span>` : '';
         return `
         <div class="card">
           <div class="card-content" style="align-items: flex-start;" onclick="openEditTaskModal('${taskId}')">
-            <button class="shopping-check" style="margin-top: 2px;" onclick="event.stopPropagation(); toggleTask('${taskId}')" aria-label="${title} erledigen"></button>
+            <button class="shopping-check" style="margin-top: 2px;" onclick="event.stopPropagation(); toggleTask('${taskId}')" aria-label="${tr('tasks.markDone', { title })}"></button>
             <div class="card-text" style="margin-left: 8px;">
               <div class="card-header"><div class="item-name">${title}${subBadge}</div></div>
               ${t.description ? `<div class="task-meta">${escapeHtml(t.description)}</div>` : ''}
@@ -39,15 +40,15 @@ export function renderTasksView(app: App) {
             </div>
           </div>
           <div class="card-actions">
-            <button class="action-btn remove" onclick="event.stopPropagation(); deleteTask('${taskId}')" aria-label="${title} löschen"><i class="ph ph-trash"></i></button>
+            <button class="action-btn remove" onclick="event.stopPropagation(); deleteTask('${taskId}')" aria-label="${tr('tasks.delete', { title })}"><i class="ph ph-trash"></i></button>
           </div>
         </div>`;
-      }).join('') : `<div class="empty-state">Alles erledigt!</div>`}
+      }).join('') : `<div class="empty-state">${tr('tasks.allDone')}</div>`}
     </div>
 
     ${done.length ? `
     <div class="section">
-      <div class="section-header"><div class="section-title">Erledigt</div></div>
+      <div class="section-header"><div class="section-title">${tr('tasks.done')}</div></div>
       ${done.map(t => {
         const taskId = escapeJsAttr(t.id);
         const title = escapeHtml(t.title);
@@ -57,13 +58,13 @@ export function renderTasksView(app: App) {
         return `
         <div class="card" style="opacity: 0.6;">
           <div class="card-content" style="align-items: flex-start;" onclick="openEditTaskModal('${taskId}')">
-            <button class="shopping-check checked" style="margin-top: 2px;" onclick="event.stopPropagation(); toggleTask('${taskId}')" aria-label="${title} wieder öffnen"><i class="ph-bold ph-check"></i></button>
+            <button class="shopping-check checked" style="margin-top: 2px;" onclick="event.stopPropagation(); toggleTask('${taskId}')" aria-label="${tr('tasks.reopen', { title })}"><i class="ph-bold ph-check"></i></button>
             <div class="card-text" style="margin-left: 8px;">
               <div class="card-header"><div class="item-name" style="text-decoration: line-through;">${title}${subBadge}</div></div>
             </div>
           </div>
           <div class="card-actions">
-            <button class="action-btn remove" onclick="event.stopPropagation(); deleteTask('${taskId}')" aria-label="${title} löschen"><i class="ph ph-trash"></i></button>
+            <button class="action-btn remove" onclick="event.stopPropagation(); deleteTask('${taskId}')" aria-label="${tr('tasks.delete', { title })}"><i class="ph ph-trash"></i></button>
           </div>
         </div>
       `}).join('')}
@@ -84,37 +85,37 @@ export async function openAddTaskModal() {
   `).join('');
 
   app.showModal('taskModal', `
-    <div class="modal-header"><div class="modal-title">Neue Aufgabe</div><button class="close-btn" onclick="window.app.closeModal('taskModal')"><i class="ph ph-x"></i></button></div>
+    <div class="modal-header"><div class="modal-title">${tr('tasks.new')}</div><button class="close-btn" onclick="window.app.closeModal('taskModal')"><i class="ph ph-x"></i></button></div>
     <div class="modal-body">
-      <div class="form-group"><label>Titel</label><input type="text" id="taskTitle" placeholder="Was ist zu tun?"></div>
-      <div class="form-group"><label>Beschreibung</label><textarea id="taskDesc" rows="2" placeholder="Details..."></textarea></div>
-      <div class="form-group"><label>Zugewiesen an</label><select id="taskAssignee"><option value="">Niemand</option>${memberOptions}</select></div>
-      <div class="form-group"><label>Fällig am</label><input type="date" id="taskDue"></div>
+      <div class="form-group"><label>${tr('tasks.fieldTitle')}</label><input type="text" id="taskTitle" placeholder="${tr('tasks.titlePlaceholder')}"></div>
+      <div class="form-group"><label>${tr('tasks.description')}</label><textarea id="taskDesc" rows="2" placeholder="${tr('tasks.descPlaceholder')}"></textarea></div>
+      <div class="form-group"><label>${tr('tasks.assignee')}</label><select id="taskAssignee"><option value="">${tr('tasks.nobody')}</option>${memberOptions}</select></div>
+      <div class="form-group"><label>${tr('tasks.due')}</label><input type="date" id="taskDue"></div>
       <div class="form-group">
-        <label>Wiederholung</label>
+        <label>${tr('tasks.recurrence')}</label>
         <select id="taskRecurrence" onchange="document.getElementById('rotSection').style.display = this.value === 'daily' || this.value === 'weekly' || this.value === 'monthly' ? 'block' : 'none'; document.getElementById('irregularHint').style.display = this.value === 'irregular' ? 'block' : 'none';">
-          <option value="">Einmalig</option>
-          <option value="daily">Täglich</option>
-          <option value="weekly">Wöchentlich</option>
-          <option value="monthly">Monatlich</option>
-          <option value="irregular">Nach Bedarf (unregelmäßig, für alle offen)</option>
+          <option value="">${tr('tasks.once')}</option>
+          <option value="daily">${tr('tasks.daily')}</option>
+          <option value="weekly">${tr('tasks.weekly')}</option>
+          <option value="monthly">${tr('tasks.monthly')}</option>
+          <option value="irregular">${tr('tasks.irregularLong')}</option>
         </select>
       </div>
       <div id="irregularHint" class="form-group" style="display:none; font-size:12.5px; color:var(--text-soft); background:var(--field-bg); border:1px solid var(--border); padding:10px; border-radius:var(--radius-sm);">
-        <i class="ph ph-info"></i> Für Aufgaben ohne festen Rhythmus (z. B. Wäsche waschen) -- bleibt unzugewiesen und offen für alle, wird nach Erledigung nicht neu zugeteilt, sondern springt einfach wieder auf "offen" zurück, sobald es wieder nötig ist.
+        <i class="ph ph-info"></i> ${tr('tasks.irregularHint')}
       </div>
       <div id="rotSection" class="form-group" style="display:none; background:var(--field-bg); border:1px solid var(--border); padding:10px; border-radius:var(--radius-sm);">
-        <label style="margin-bottom:6px;">Team-Rotation (Wer wechselt sich ab?)</label>
+        <label style="margin-bottom:6px;">${tr('tasks.rotationTeam')}</label>
         <div style="display:flex; flex-direction:column; gap:4px;">${rotCheckboxes}</div>
       </div>
       <div class="form-group" style="margin-top:12px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-          <label style="margin:0">Checkliste (Unteraufgaben)</label>
-          <button class="btn btn-small btn-secondary" type="button" onclick="addTaskSubtaskRow()"><i class="ph ph-plus"></i> Schritt hinzufügen</button>
+          <label style="margin:0">${tr('tasks.checklist')}</label>
+          <button class="btn btn-small btn-secondary" type="button" onclick="addTaskSubtaskRow()"><i class="ph ph-plus"></i> ${tr('tasks.addStep')}</button>
         </div>
         <div id="taskSubtasksContainer" style="background:var(--field-bg); border:1px solid var(--border); padding:10px; border-radius:var(--radius-sm);">${renderTaskSubtasksRows()}</div>
       </div>
-      <button class="btn mt-2" onclick="saveTask()"><i class="ph-bold ph-check"></i> Aufgabe erstellen</button>
+      <button class="btn mt-2" onclick="saveTask()"><i class="ph-bold ph-check"></i> ${tr('tasks.create')}</button>
     </div>
   `);
 }
@@ -136,37 +137,37 @@ export async function openEditTaskModal(id: string) {
   `).join('');
 
   app.showModal('taskModal', `
-    <div class="modal-header"><div class="modal-title">Aufgabe bearbeiten</div><button class="close-btn" onclick="window.app.closeModal('taskModal')"><i class="ph ph-x"></i></button></div>
+    <div class="modal-header"><div class="modal-title">${tr('tasks.edit')}</div><button class="close-btn" onclick="window.app.closeModal('taskModal')"><i class="ph ph-x"></i></button></div>
     <div class="modal-body">
-      <div class="form-group"><label>Titel</label><input type="text" id="taskTitle" value="${escapeAttr(t.title)}"></div>
-      <div class="form-group"><label>Beschreibung</label><textarea id="taskDesc" rows="2">${escapeHtml(t.description || '')}</textarea></div>
-      <div class="form-group"><label>Zugewiesen an</label><select id="taskAssignee"><option value="">Niemand</option>${memberOptions}</select></div>
-      <div class="form-group"><label>Fällig am</label><input type="date" id="taskDue" value="${t.due_date || ''}"></div>
+      <div class="form-group"><label>${tr('tasks.fieldTitle')}</label><input type="text" id="taskTitle" value="${escapeAttr(t.title)}"></div>
+      <div class="form-group"><label>${tr('tasks.description')}</label><textarea id="taskDesc" rows="2">${escapeHtml(t.description || '')}</textarea></div>
+      <div class="form-group"><label>${tr('tasks.assignee')}</label><select id="taskAssignee"><option value="">${tr('tasks.nobody')}</option>${memberOptions}</select></div>
+      <div class="form-group"><label>${tr('tasks.due')}</label><input type="date" id="taskDue" value="${t.due_date || ''}"></div>
       <div class="form-group">
-        <label>Wiederholung</label>
+        <label>${tr('tasks.recurrence')}</label>
         <select id="taskRecurrence" onchange="document.getElementById('rotSection').style.display = this.value === 'daily' || this.value === 'weekly' || this.value === 'monthly' ? 'block' : 'none'; document.getElementById('irregularHint').style.display = this.value === 'irregular' ? 'block' : 'none';">
-          <option value="" ${!t.recurrence ? 'selected' : ''}>Einmalig</option>
-          <option value="daily" ${t.recurrence === 'daily' ? 'selected' : ''}>Täglich</option>
-          <option value="weekly" ${t.recurrence === 'weekly' ? 'selected' : ''}>Wöchentlich</option>
-          <option value="monthly" ${t.recurrence === 'monthly' ? 'selected' : ''}>Monatlich</option>
-          <option value="irregular" ${t.recurrence === 'irregular' ? 'selected' : ''}>Nach Bedarf (unregelmäßig, für alle offen)</option>
+          <option value="" ${!t.recurrence ? 'selected' : ''}>${tr('tasks.once')}</option>
+          <option value="daily" ${t.recurrence === 'daily' ? 'selected' : ''}>${tr('tasks.daily')}</option>
+          <option value="weekly" ${t.recurrence === 'weekly' ? 'selected' : ''}>${tr('tasks.weekly')}</option>
+          <option value="monthly" ${t.recurrence === 'monthly' ? 'selected' : ''}>${tr('tasks.monthly')}</option>
+          <option value="irregular" ${t.recurrence === 'irregular' ? 'selected' : ''}>${tr('tasks.irregularLong')}</option>
         </select>
       </div>
       <div id="irregularHint" class="form-group" style="display:${t.recurrence === 'irregular' ? 'block' : 'none'}; font-size:12.5px; color:var(--text-soft); background:var(--field-bg); border:1px solid var(--border); padding:10px; border-radius:var(--radius-sm);">
-        <i class="ph ph-info"></i> Für Aufgaben ohne festen Rhythmus (z. B. Wäsche waschen) -- bleibt unzugewiesen und offen für alle, wird nach Erledigung nicht neu zugeteilt, sondern springt einfach wieder auf "offen" zurück, sobald es wieder nötig ist.
+        <i class="ph ph-info"></i> ${tr('tasks.irregularHint')}
       </div>
       <div id="rotSection" class="form-group" style="display:${(t.recurrence && t.recurrence !== 'irregular') ? 'block' : 'none'}; background:var(--field-bg); border:1px solid var(--border); padding:10px; border-radius:var(--radius-sm);">
-        <label style="margin-bottom:6px;">Team-Rotation (Wer wechselt sich ab?)</label>
+        <label style="margin-bottom:6px;">${tr('tasks.rotationTeam')}</label>
         <div style="display:flex; flex-direction:column; gap:4px;">${rotCheckboxes}</div>
       </div>
       <div class="form-group" style="margin-top:12px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-          <label style="margin:0">Checkliste (Unteraufgaben)</label>
-          <button class="btn btn-small btn-secondary" type="button" onclick="addTaskSubtaskRow()"><i class="ph ph-plus"></i> Schritt hinzufügen</button>
+          <label style="margin:0">${tr('tasks.checklist')}</label>
+          <button class="btn btn-small btn-secondary" type="button" onclick="addTaskSubtaskRow()"><i class="ph ph-plus"></i> ${tr('tasks.addStep')}</button>
         </div>
         <div id="taskSubtasksContainer" style="background:var(--field-bg); border:1px solid var(--border); padding:10px; border-radius:var(--radius-sm);">${renderTaskSubtasksRows()}</div>
       </div>
-      <button class="btn mt-2" onclick="updateExistingTask('${escapeJsAttr(t.id)}')"><i class="ph-bold ph-check"></i> Änderungen speichern</button>
+      <button class="btn mt-2" onclick="updateExistingTask('${escapeJsAttr(t.id)}')"><i class="ph-bold ph-check"></i> ${tr('tasks.saveChanges')}</button>
     </div>
   `);
 }
@@ -176,7 +177,7 @@ export async function saveTask() {
   const api = (window as any).api;
   try {
     const title = (document.getElementById('taskTitle') as HTMLInputElement)?.value.trim();
-    if (!title) return app.toast('Titel erforderlich');
+    if (!title) return app.toast(tr('tasks.titleRequired'));
     const recurrence = (document.getElementById('taskRecurrence') as HTMLSelectElement)?.value || null;
     // "Irregular" tasks (no fixed rhythm, e.g. laundry) deliberately have no
     // rotation -- they're open to whoever's available, not handed round a
@@ -202,9 +203,9 @@ export async function saveTask() {
     app.state.tasks.push(task.task);
     app.closeModal('taskModal');
     app.render();
-    app.toast('Aufgabe erstellt');
+    app.toast(tr('tasks.created'));
   } catch (e) {
-    app.toast('Fehler beim Erstellen');
+    app.toast(tr('tasks.createError'));
   }
 }
 
@@ -213,7 +214,7 @@ export async function updateExistingTask(id: string) {
   const api = (window as any).api;
   try {
     const title = (document.getElementById('taskTitle') as HTMLInputElement)?.value.trim();
-    if (!title) return app.toast('Titel erforderlich');
+    if (!title) return app.toast(tr('tasks.titleRequired'));
     const recurrence = (document.getElementById('taskRecurrence') as HTMLSelectElement)?.value || null;
     const isIrregular = recurrence === 'irregular';
     const rotChecks = Array.from(document.querySelectorAll('.rot-check:checked')) as HTMLInputElement[];
@@ -241,7 +242,7 @@ export async function updateExistingTask(id: string) {
           due_date = null;
           status = 'todo';
           completed_by = app.state.userId;
-          app.toast('Erledigt! Aufgabe ist wieder offen, sobald sie erneut nötig ist.');
+          app.toast(tr('tasks.irregularCompleted'));
         } else if (recurrence) {
           // Recurring task with all subtasks checked! Reset subtasks and advance!
           cleanedSubtasks.forEach((s: any) => s.done = false);
@@ -259,7 +260,7 @@ export async function updateExistingTask(id: string) {
           }
           status = 'todo';
           completed_by = app.state.userId;
-          app.toast('Wiederholende Aufgabe für nächste Runde fällig gestellt! (Checkliste zurückgesetzt)');
+          app.toast(tr('tasks.recurringChecklistNext'));
         } else {
           status = 'done';
           completed_by = app.state.userId;
@@ -285,9 +286,9 @@ export async function updateExistingTask(id: string) {
     if (t) Object.assign(t, data);
     app.closeModal('taskModal');
     app.render();
-    app.toast('Gespeichert');
+    app.toast(tr('tasks.saved'));
   } catch (e) {
-    app.toast('Fehler beim Speichern');
+    app.toast(tr('tasks.saveError'));
   }
 }
 
@@ -305,7 +306,7 @@ export async function toggleTask(id: string) {
       await api.tasks.update(id, { status: 'todo', assigned_to: null, due_date: null, completed_by: app.state.userId });
       app.state.taskCompletions.unshift({ id: `local-${Date.now()}`, task_id: id, household_id: app.state.householdId, completed_by: app.state.userId, completed_at: Math.floor(Date.now() / 1000) });
       t.assigned_to = null;
-      app.toast('Erledigt! Aufgabe ist wieder offen, sobald sie erneut nötig ist.');
+      app.toast(tr('tasks.irregularCompleted'));
       app.render();
       return;
     }
@@ -338,7 +339,7 @@ export async function toggleTask(id: string) {
       app.state.taskCompletions.unshift({ id: `local-${Date.now()}`, task_id: id, household_id: app.state.householdId, completed_by: app.state.userId, completed_at: Math.floor(Date.now() / 1000) });
       t.assigned_to = nextAssignee;
       t.due_date = nextDue;
-      app.toast('Wiederholende Aufgabe für nächste Runde fällig gestellt!');
+      app.toast(tr('tasks.recurringNext'));
       app.render();
       return;
     }
@@ -356,7 +357,7 @@ export async function toggleTask(id: string) {
     t.status = next;
     app.render();
   } catch (e) {
-    app.toast('Fehler beim Aktualisieren');
+    app.toast(tr('tasks.updateError'));
   }
 }
 
@@ -395,7 +396,7 @@ export async function toggleSubtaskInstant(taskId: string, idx: number, checked:
       due_date = null;
       status = 'todo';
       completed_by = app.state.userId;
-      app.toast('Erledigt! Aufgabe ist wieder offen, sobald sie erneut nötig ist.');
+      app.toast(tr('tasks.irregularCompleted'));
     } else if (t.recurrence) {
       t.subtasks.forEach((s: any) => (s.done = false));
       if (taskSubtasksDraft.length) taskSubtasksDraft.forEach(s => (s.done = false));
@@ -413,7 +414,7 @@ export async function toggleSubtaskInstant(taskId: string, idx: number, checked:
       }
       status = 'todo';
       completed_by = app.state.userId;
-      app.toast('Wiederholende Aufgabe für nächste Runde fällig gestellt! (Checkliste zurückgesetzt)');
+      app.toast(tr('tasks.recurringChecklistNext'));
     } else {
       status = 'done';
       completed_by = app.state.userId;
@@ -433,7 +434,7 @@ export async function toggleSubtaskInstant(taskId: string, idx: number, checked:
     await api.tasks.update(taskId, payload);
     app.render();
   } catch (e) {
-    app.toast('Fehler beim Aktualisieren');
+    app.toast(tr('tasks.updateError'));
   }
 }
 
@@ -444,7 +445,7 @@ let taskSubtasksDraft: Array<{ id: string; text: string; done: boolean }> = [];
 
 export function renderTaskSubtasksRows(): string {
   if (!taskSubtasksDraft.length) {
-    return '<div class="empty-state" style="padding:12px;">Keine Checklisten-Punkte</div>';
+    return `<div class="empty-state" style="padding:12px;">${tr('tasks.noChecklist')}</div>`;
   }
   return taskSubtasksDraft
     .map(
@@ -455,14 +456,14 @@ export function renderTaskSubtasksRows(): string {
         ' onchange="updateTaskSubtaskDone(' +
         idx +
         ', this.checked)">' +
-        '<input type="text" class="subtask-row-text" placeholder="Schritt (z. B. Boden wischen)" value="' +
+        '<input type="text" class="subtask-row-text" placeholder="' + escapeAttr(tr('tasks.stepPlaceholder')) + '" value="' +
         escapeAttr(sub.text || '') +
         '" style="flex:1; padding:6px 10px; border-radius:6px; border:1px solid var(--border); background:var(--field-bg); color:var(--text); font-size:14px;" oninput="updateTaskSubtaskText(' +
         idx +
         ', this.value)">' +
         '<button class="icon-btn btn-mini" type="button" onclick="removeTaskSubtaskRow(' +
         idx +
-        ')" title="Entfernen"><i class="ph ph-x"></i></button>' +
+        ')" title="' + escapeAttr(tr('tasks.remove')) + '"><i class="ph ph-x"></i></button>' +
         '</div>'
     )
     .join('');
