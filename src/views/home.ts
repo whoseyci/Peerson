@@ -1,6 +1,7 @@
 import type { App } from '../app';
 import { computeFeed, getSnoozedKeys, snoozeKey, type FeedItem } from '../utils/feed';
 import { escapeHtml } from '../utils/html';
+import { renderBudgetsSection } from './expenses';
 
 // How many cards sit in the physical swipeable stack at once; anything
 // beyond this shows as a plain scrollable list below it instead (matching
@@ -64,6 +65,13 @@ export function renderHomeView(app: App) {
       <button class="quick-tile" onclick="openAddTaskModal()"><span class="qt-icon"><i class="ph ph-check-circle"></i></span>Aufgabe</button>
       <button class="quick-tile" onclick="openAddExpenseModal()"><span class="qt-icon"><i class="ph ph-currency-eur"></i></span>Ausgabe</button>
     </div>
+
+    <div class="section">
+      <div class="section-header"><div class="section-title">Aufgaben</div></div>
+      <button class="add-row-dashed" onclick="window.app.navigate('tasks')"><i class="ph ph-list-checks"></i> Alle Aufgaben ansehen</button>
+    </div>
+
+    ${renderBudgetsSection(app)}
 
     ${overflow.length ? `
     <div class="section">

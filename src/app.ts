@@ -1,11 +1,8 @@
 import type { AppState, Household, HouseholdMember, Item, Batch, Task, Expense, ShoppingItem } from './types';
 import { api } from './api/client';
 import { renderHouseholdView } from './views/household';
-import { renderInventoryView } from './views/inventory';
 import { renderShoppingView } from './views/shopping';
 import { renderTasksView } from './views/tasks';
-import { renderExpensesView } from './views/expenses';
-import { renderBriefView } from './views/brief';
 import { renderHomeView, installHomeSwipeOnce } from './views/home';
 import { renderRoomsView } from './views/rooms';
 import { renderPeopleView } from './views/people';
@@ -28,17 +25,22 @@ interface ActionLog {
 // also triggers an immediate refresh so switching back to the tab always
 // feels current even between polls.
 const SYNC_INTERVAL_MS = 3000;
-// Primary navigation, redesigned around 3 destinations (Home / Rooms /
-// People) plus the capture FAB, per the approved UX vision at
-// /home/user/ux-vision/peerson-reimagined.html. The previous 5-tab IA
-// (Vorrat/Einkaufen/Heute/Aufgaben/Finanzen) still exists and is fully
-// functional -- those views just aren't in the primary tab bar anymore.
-// They stay reachable as "Klassische Ansicht" links from the Haushalt
-// screen (see household.ts) for anyone who wants the denser power-user
-// views (category/price/nutrition editing, recurring-task setup, split
-// rules, payment history) that the 3 new views don't try to replace.
+// Primary navigation is 3 destinations (Home / Rooms / People) plus the
+// capture FAB, per the approved UX vision at
+// /home/user/ux-vision/peerson-reimagined.html. The old 5-tab IA
+// (Vorrat/Einkaufen/Heute/Aufgaben/Finanzen) has been fully retired --
+// "Vorrat" and "Finanzen" (Aufgaben-listing, budgets, expense history,
+// price/nutrition editing, category/location assignment, etc.) were
+// folded directly into Rooms/People/Home rather than kept as separate
+// pages (see rooms.ts's "Ohne festen Ort" section, home.ts's budgets
+// section + "Alle Aufgaben" link, people.ts's Finanzen section). Only
+// `shopping` and `tasks` remain as reachable-but-not-tabbed full-list
+// views (linked from the capture sheet / Home), since Rooms and People
+// deliberately only ever show a *subset* of shopping items / tasks
+// (open low-stock suggestions folded into Home's feed; assigned-to-you
+// tasks in People) and users still need a way to see the FULL list.
 const TAB_ORDER = ['home', 'rooms', 'people'];
-const LEGACY_VIEWS = ['inventory', 'shopping', 'brief', 'tasks', 'expenses'];
+const SECONDARY_VIEWS = ['shopping', 'tasks'];
 
 function redactSensitive(value: string) {
   return value
@@ -123,7 +125,7 @@ export class App {
     this.state.darkMode = localStorage.getItem('peerson_darkMode') === 'true';
     if (this.state.darkMode) document.body.classList.add('dark-mode');
 
-    if (savedView && (TAB_ORDER.includes(savedView) || LEGACY_VIEWS.includes(savedView) || savedView === 'household')) this.state.view = savedView;
+    if (savedView && (TAB_ORDER.includes(savedView) || SECONDARY_VIEWS.includes(savedView) || savedView === 'household')) this.state.view = savedView;
     else if (savedHousehold) this.state.view = 'home';
 
     const url = new URL(location.href);
@@ -471,7 +473,7 @@ export class App {
   }
 
   navigate(view: string) {
-    if (!TAB_ORDER.includes(view) && !LEGACY_VIEWS.includes(view) && view !== 'household') return;
+    if (!TAB_ORDER.includes(view) && !SECONDARY_VIEWS.includes(view) && view !== 'household') return;
     if (view === this.state.view) return;
     const current = TAB_ORDER.indexOf(this.state.view);
     const next = TAB_ORDER.indexOf(view);
@@ -524,11 +526,8 @@ export class App {
       case 'home': viewHtml = renderHomeView(this); break;
       case 'rooms': viewHtml = renderRoomsView(this); break;
       case 'people': viewHtml = renderPeopleView(this); break;
-      case 'brief': viewHtml = renderBriefView(this); break;
-      case 'inventory': viewHtml = renderInventoryView(this); break;
       case 'shopping': viewHtml = renderShoppingView(this); break;
       case 'tasks': viewHtml = renderTasksView(this); break;
-      case 'expenses': viewHtml = renderExpensesView(this); break;
       case 'household': viewHtml = renderHouseholdView(this); break;
       default: viewHtml = renderHomeView(this);
     }

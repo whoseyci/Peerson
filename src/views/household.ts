@@ -189,23 +189,6 @@ export function renderHouseholdView(app: App) {
       </div>
     </div>
 
-    <div class="section">
-      <div class="section-header"><div class="section-title">Klassische Ansicht</div></div>
-      <div class="card">
-        <div class="card-content" style="flex-direction:column; align-items:stretch;">
-          <div style="font-size:13px; color:var(--text-soft); margin-bottom:12px;">
-            Die dichteren Power-User-Ansichten (Kategorien, Preise, Nährwerte, Wiederholungen, Aufteilungsregeln, Zahlungshistorie) sind weiterhin verfügbar:
-          </div>
-          <div class="quick-grid">
-            <button class="quick-card" onclick="app.navigate('inventory')" style="cursor:pointer; text-align:left; border:1px solid var(--border);"><i class="ph ph-package"></i><span>Vorrat</span></button>
-            <button class="quick-card" onclick="app.navigate('shopping')" style="cursor:pointer; text-align:left; border:1px solid var(--border);"><i class="ph ph-shopping-cart-simple"></i><span>Einkaufen</span></button>
-            <button class="quick-card" onclick="app.navigate('tasks')" style="cursor:pointer; text-align:left; border:1px solid var(--border);"><i class="ph ph-check-circle"></i><span>Aufgaben</span></button>
-            <button class="quick-card" onclick="app.navigate('expenses')" style="cursor:pointer; text-align:left; border:1px solid var(--border);"><i class="ph ph-currency-eur"></i><span>Finanzen</span></button>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <div class="section" style="display:flex; flex-direction:column; gap:12px;">
       <button class="btn btn-secondary" onclick="exportHouseholdData()"><i class="ph ph-download-simple"></i> Daten exportieren (JSON)</button>
       <button class="btn btn-danger" onclick="leaveHousehold()">Haushalt verlassen</button>

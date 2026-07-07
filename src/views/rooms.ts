@@ -1,9 +1,10 @@
 import type { App } from '../app';
 import type { Location } from '../types';
 import { escapeAttr, escapeHtml, escapeJsAttr } from '../utils/html';
-import { CATEGORY_META, getItemIcon, locationPath, locationSelectOptions } from './inventory';
+import { CATEGORY_META, formatDate, getDays, getItemIcon, locationPath, locationSelectOptions } from './inventory';
 import {
   itemsAtLocation,
+  itemsWithNoLocation,
   itemCountInSubtree as itemCountInSubtreeStock,
   lowStockAlertCountInSubtree,
 } from '../utils/roomStock';
@@ -70,6 +71,8 @@ function renderRootLevel(app: App) {
     </div>
     <div id="roomsSearchResults"></div>
 
+    ${renderExpiryCheckSection(app)}
+
     ${roots.length ? `
     <div class="room-grid" id="roomsGrid">
       ${roots.map(r => {
@@ -94,7 +97,65 @@ function renderRootLevel(app: App) {
       Noch keine Räume angelegt.
       <div style="margin-top:12px;"><button class="btn" style="width:auto; padding:12px 20px;" onclick="openAddRoomModal(null)"><i class="ph-bold ph-plus"></i> Ersten Raum anlegen</button></div>
     </div>`}
+
+    ${renderNoLocationSection(app)}
   `;
+}
+
+// A wider-window (30-day) "check the use-by date soon" list -- distinct
+// from (and in addition to) Home's urgent feed, which only surfaces
+// batches expiring within 3 days. This is a straight port of the old
+// standalone Vorrat page's "Check MHD" section (same 30-day window, same
+// sort-soonest-first order, same danger/warning color thresholds) so
+// nothing about that longer-lead-time visibility is lost now that page
+// is gone -- someone doing a weekly room tidy-up still wants to spot a
+// batch expiring in 3 weeks, not just the ones already urgent enough for
+// Home's feed.
+function renderExpiryCheckSection(app: App) {
+  const s = app.state;
+  const expiring = s.batches
+    .filter((b: any) => b.quantity > 0 && b.expiry && getDays(b.expiry) <= 30)
+    .map(b => ({ ...b, item: s.items.find((i: any) => i.id === b.item_id), days: getDays(b.expiry) }))
+    .filter((x: any) => x.item)
+    .sort((a: any, b: any) => a.days - b.days);
+  if (!expiring.length) return '';
+  return `
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title"><i class="ph ph-clock"></i> Check MHD</div>
+        <span class="badge">${expiring.length}</span>
+      </div>
+      ${expiring.map(b => {
+        const itemId = escapeJsAttr(b.item!.id);
+        const itemName = escapeHtml(b.item!.name);
+        const icon = escapeAttr(getItemIcon(b.item!));
+        return `
+        <div class="card ${b.days < 0 ? 'danger' : b.days < 14 ? 'warning' : ''}">
+          <div class="card-content" onclick="openItemDetail('${itemId}')">
+            <div class="card-icon"><i class="ph ph-${icon}"></i></div>
+            <div class="card-text">
+              <div class="card-header"><div class="item-name">${itemName}</div><div class="item-qty">${escapeHtml(b.quantity)}</div></div>
+              <div class="card-meta">${b.days < 0 ? 'Abgelaufen' : escapeHtml(b.days) + ' Tage'} · ${formatDate(b.expiry)}</div>
+            </div>
+          </div>
+        </div>
+      `}).join('')}
+    </div>`;
+}
+
+// A catch-all bucket for items that have never been given any location at
+// all (no item-level location_id and no per-batch override) -- without
+// this, such an item would be invisible in this location-indexed view
+// entirely, since every other section here is keyed by room/container.
+function renderNoLocationSection(app: App) {
+  const s = app.state;
+  const orphans = itemsWithNoLocation(s.items, s.batches);
+  if (!orphans.length) return '';
+  return `
+    <div class="section">
+      <div class="section-header"><div class="section-title">Ohne festen Ort</div><span class="badge">${orphans.length}</span></div>
+      ${orphans.map(({ item, quantity }) => renderRoomItemRow(item, quantity, null)).join('')}
+    </div>`;
 }
 
 function renderRoomLevel(app: App, room: Location) {
@@ -186,10 +247,15 @@ function renderContainerLevel(app: App, container: Location) {
 // location_id, since a batch can sit somewhere different (see
 // Batch.location_id). Every action on this row (steppers, move) is
 // scoped to exactly this location, not the item as a whole.
-function renderRoomItemRow(item: any, quantity: number, locationId: string) {
+function renderRoomItemRow(item: any, quantity: number, locationId: string | null) {
   const icon = escapeAttr(getItemIcon(item));
   const itemId = escapeJsAttr(item.id);
-  const locId = escapeJsAttr(locationId);
+  // A real (quoted) JS string for an actual location, vs. the bare
+  // `null` literal for "no location" -- these functions all distinguish
+  // "empty string" from "null" (see e.g. functions/api/batches/move.ts's
+  // `from_location_id ?? null`), so this must NOT collapse to `''` the
+  // way wrapping escapeJsAttr(null) in quotes would.
+  const locArg = locationId === null ? 'null' : `'${escapeJsAttr(locationId)}'`;
   return `
     <div class="room-item-row">
       <div class="ir-icon" style="cursor:pointer;" onclick="openItemDetail('${itemId}')"><i class="ph ph-${icon}"></i></div>
@@ -197,11 +263,11 @@ function renderRoomItemRow(item: any, quantity: number, locationId: string) {
         <div class="ir-title">${escapeHtml(item.name)}</div>
         <div class="ir-sub">${escapeHtml(CATEGORY_META[item.category]?.label || item.category)}${quantity < item.threshold ? ' · <span style="color:var(--warning); font-weight:700;">niedrig</span>' : ''}</div>
       </div>
-      <button class="icon-btn" style="width:34px; height:34px; font-size:15px;" onclick="openMoveItemModal('${itemId}', '${locId}')" title="Verschieben" aria-label="${escapeHtml(item.name)} verschieben"><i class="ph ph-arrows-out-cardinal"></i></button>
+      <button class="icon-btn" style="width:34px; height:34px; font-size:15px;" onclick="openMoveItemModal('${itemId}', ${locArg})" title="Verschieben" aria-label="${escapeHtml(item.name)} verschieben"><i class="ph ph-arrows-out-cardinal"></i></button>
       <div class="room-stepper">
-        <button onclick="removeOneAt('${itemId}', '${locId}')" aria-label="Eine Einheit entnehmen"><i class="ph ph-minus"></i></button>
+        <button onclick="removeOneAt('${itemId}', ${locArg})" aria-label="Eine Einheit entnehmen"><i class="ph ph-minus"></i></button>
         <span class="rs-qty">${quantity}</span>
-        <button onclick="openAddStock('${itemId}', null, '${locId}')" aria-label="Bestand hinzufügen"><i class="ph ph-plus"></i></button>
+        <button onclick="openAddStock('${itemId}', null, ${locArg})" aria-label="Bestand hinzufügen"><i class="ph ph-plus"></i></button>
       </div>
     </div>`;
 }
@@ -314,12 +380,14 @@ export async function saveAddRoomModal() {
 // unit keeps its own expiry/price rather than the move being a blind
 // "subtract N here, add N there" that would lose that distinction.
 
-export function openMoveItemModal(itemId: string, fromLocationId: string) {
+export function openMoveItemModal(itemId: string, fromLocationId: string | null) {
   const app = (window as any).app as App;
   const item = app.state.items.find(i => i.id === itemId);
   if (!item) return;
-  const available = itemsAtLocation([item], app.state.batches, fromLocationId)[0]?.quantity ?? 0;
-  const fromPath = locationPath(fromLocationId, app.state.locations) || 'Kein Ort';
+  const available = fromLocationId
+    ? (itemsAtLocation([item], app.state.batches, fromLocationId)[0]?.quantity ?? 0)
+    : (itemsWithNoLocation([item], app.state.batches)[0]?.quantity ?? 0);
+  const fromPath = fromLocationId ? (locationPath(fromLocationId, app.state.locations) || 'Kein Ort') : 'Kein Ort';
 
   // Default the destination to any location OTHER than where the item
   // already is -- defaulting to "Kein Ort" (the select's normal first
@@ -329,6 +397,7 @@ export function openMoveItemModal(itemId: string, fromLocationId: string) {
   // moving to nowhere is a much rarer intent than moving somewhere else.
   const defaultTarget = app.state.locations.find(l => l.id !== fromLocationId)?.id ?? null;
 
+  const fromArg = fromLocationId === null ? 'null' : `'${escapeJsAttr(fromLocationId)}'`;
   app.showModal('moveItemModal', `
     <div class="modal-header">
       <div class="modal-title"><i class="ph ph-arrows-out-cardinal"></i> ${escapeHtml(item.name)} verschieben</div>
@@ -338,12 +407,12 @@ export function openMoveItemModal(itemId: string, fromLocationId: string) {
       <div style="margin-bottom:14px; color:var(--text-soft); font-size:13px;">Von <strong>${escapeHtml(fromPath)}</strong> (${available} verfügbar)</div>
       <div class="form-group"><label>Menge</label><input type="number" id="moveQty" value="${Math.min(1, available) || 1}" min="1" max="${available || 1}"></div>
       <div class="form-group"><label>Neuer Ort</label><select id="moveToLocation">${locationSelectOptions(app.state.locations, defaultTarget)}</select></div>
-      <button class="btn" onclick="commitMoveItem('${escapeJsAttr(itemId)}', '${escapeJsAttr(fromLocationId)}')"><i class="ph-bold ph-check"></i> Verschieben</button>
+      <button class="btn" onclick="commitMoveItem('${escapeJsAttr(itemId)}', ${fromArg})"><i class="ph-bold ph-check"></i> Verschieben</button>
     </div>
   `);
 }
 
-export async function commitMoveItem(itemId: string, fromLocationId: string) {
+export async function commitMoveItem(itemId: string, fromLocationId: string | null) {
   const app = (window as any).app as App;
   const api = (window as any).api;
   try {

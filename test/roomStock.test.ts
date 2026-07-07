@@ -3,6 +3,7 @@ import {
   effectiveBatchLocation,
   subtreeLocationIds,
   itemsAtLocation,
+  itemsWithNoLocation,
   itemCountInSubtree,
   lowStockAlertCountInSubtree,
 } from '../src/utils/roomStock';
@@ -79,6 +80,44 @@ describe('itemsAtLocation', () => {
       batch('b2', 'milk', 1, { location_id: 'kitchen' }),
     ];
     expect(itemsAtLocation(items, batches, 'kitchen')).toEqual([{ item: items[0], quantity: 3 }]);
+  });
+});
+
+describe('itemsWithNoLocation', () => {
+  // Regression coverage for the "Ohne festen Ort" Rooms section added
+  // when the standalone Vorrat page (which listed every item regardless
+  // of location) was removed -- without this bucket, an item with no
+  // location_id and no located batches would become entirely invisible
+  // in the (now location-indexed-only) Rooms view.
+  it('surfaces an item with no location_id and no batches at all', () => {
+    const items = [item('mystery', { location_id: undefined })];
+    expect(itemsWithNoLocation(items, [])).toEqual([{ item: items[0], quantity: 0 }]);
+  });
+
+  it('sums quantity for batches with no effective location', () => {
+    const items = [item('mystery', { location_id: undefined })];
+    const batches = [
+      batch('b1', 'mystery', 2),
+      batch('b2', 'mystery', 3),
+    ];
+    expect(itemsWithNoLocation(items, batches)).toEqual([{ item: items[0], quantity: 5 }]);
+  });
+
+  it('excludes an item that has a location_id', () => {
+    const items = [item('milk', { location_id: 'kitchen' })];
+    expect(itemsWithNoLocation(items, [])).toEqual([]);
+  });
+
+  it('excludes an item whose only batches are all explicitly located', () => {
+    const items = [item('milk', { location_id: undefined })];
+    const batches = [batch('b1', 'milk', 2, { location_id: 'kitchen' })];
+    expect(itemsWithNoLocation(items, batches)).toEqual([]);
+  });
+
+  it('still surfaces a no-location item when a DIFFERENT item has located batches', () => {
+    const items = [item('mystery', { location_id: undefined }), item('milk', { location_id: 'kitchen' })];
+    const batches = [batch('b1', 'milk', 2, { location_id: 'kitchen' })];
+    expect(itemsWithNoLocation(items, batches)).toEqual([{ item: items[0], quantity: 0 }]);
   });
 });
 
