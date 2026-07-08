@@ -326,6 +326,32 @@ h1 i { color: var(--text); opacity: 0.8; }
   background: var(--text);
   color: var(--bg);
 }
+.shopping-presence-top {
+  position: fixed;
+  top: calc(10px + env(safe-area-inset-top, 0px));
+  left: 12px;
+  min-width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  z-index: 101;
+  border: 1px solid var(--border);
+  background: var(--accent);
+  color: var(--accent-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 18px;
+  font-weight: 900;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+  cursor: pointer;
+  animation: shopping-presence-pulse 1.8s ease-in-out infinite;
+}
+.shopping-presence-top span { font-size: 11px; line-height: 1; }
+@keyframes shopping-presence-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
 .view-content {
   min-height: 60vh;
   will-change: transform, opacity;
@@ -804,8 +830,8 @@ body.dark-mode .toast-progress-bar { background: rgba(0,0,0,0.35); }
 /* Sync / realtime indicator */
 .sync-indicator {
   position: fixed;
-  top: calc(22px + env(safe-area-inset-top, 0px));
-  left: 14px;
+  top: calc(58px + env(safe-area-inset-top, 0px));
+  left: 18px;
   width: 10px;
   height: 10px;
   border-radius: 50%;
