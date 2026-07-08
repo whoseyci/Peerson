@@ -1,5 +1,6 @@
 import type { App } from '../app';
 import { escapeAttr, escapeHtml, escapeJsAttr } from '../utils/html';
+import { t } from '../i18n';
 
 interface TripState {
   ids: string[];
@@ -58,6 +59,7 @@ function renderTripScreen() {
       <button class="btn btn-small btn-secondary" style="width:auto; margin-top:0;" onclick="finishShoppingTrip()">Beenden</button>
     </div>
     <div class="trip-progress-track"><div class="trip-progress-fill" style="width:${total ? (done / total) * 100 : 0}%"></div></div>
+    ${renderTripPresenceBand(app)}
     <div class="trip-body">
       <div class="trip-actions">
         <button class="btn btn-secondary btn-small" onclick="scanTripExtra()"><i class="ph ph-barcode"></i> Barcode</button>
@@ -83,6 +85,16 @@ function renderTripScreen() {
       <button class="btn mt-3" onclick="finishShoppingTrip()"><i class="ph-bold ph-check"></i> Einkauf beenden (${total - done} offen lassen)</button>
     </div>
   `;
+}
+
+function renderTripPresenceBand(app: App) {
+  const shoppers = (app.realtimePresence || []).filter(u => u.shopping);
+  if (!shoppers.length) return '';
+  const names = shoppers.map(u => escapeHtml(u.name || 'Someone')).join(', ');
+  const text = shoppers.length === 1
+    ? t('presence.shoppingAlsoOne', { name: names })
+    : t('presence.shoppingAlsoMany', { names });
+  return `<div class="status-card" style="margin:12px 20px 0;"><i class="ph ph-shopping-cart-simple"></i> ${text}</div>`;
 }
 
 function renderTripSummary(el: HTMLElement, done: number, total: number) {

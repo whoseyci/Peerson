@@ -801,22 +801,29 @@ body.dark-mode .toast-undo-btn:hover { background: rgba(0,0,0,0.15); }
 }
 body.dark-mode .toast-progress-bar { background: rgba(0,0,0,0.35); }
 
-/* Sync indicator */
+/* Sync / realtime indicator */
 .sync-indicator {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 8px; height: 8px;
+  position: fixed;
+  top: calc(22px + env(safe-area-inset-top, 0px));
+  left: 14px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: var(--text-soft);
-  opacity: 0;
-  transition: opacity 0.2s;
-  margin-left: 6px;
+  opacity: 0.55;
+  z-index: 102;
+  border: 2px solid var(--bg);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+  transition: opacity 0.2s, background 0.2s, transform 0.2s;
 }
+.sync-indicator.realtime-connected { opacity: 1; background: var(--success); }
+.sync-indicator.realtime-connecting { opacity: 0.85; background: var(--warning); animation: pulse-sync 1.4s ease-in-out infinite; }
+.sync-indicator.realtime-fallback { opacity: 0.75; background: var(--warning); }
+.sync-indicator.realtime-disconnected { opacity: 0.45; background: var(--text-soft); }
 .sync-indicator.active { opacity: 1; animation: pulse-sync 1s ease-in-out infinite; }
 @keyframes pulse-sync {
-  0%, 100% { opacity: 0.4; transform: scale(0.85); }
-  50% { opacity: 1; transform: scale(1.15); }
+  0%, 100% { transform: scale(0.85); }
+  50% { transform: scale(1.25); }
 }
 
 /* Utility */

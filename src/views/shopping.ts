@@ -66,6 +66,8 @@ export function renderShoppingView(app: App) {
       </div>
     </div>
 
+    ${renderShoppingPresenceBand(app)}
+
     <div class="section">
       <div class="section-header">
         <div class="section-title">${t('shopping.openByAisle')}</div>
@@ -148,6 +150,16 @@ export function renderShoppingView(app: App) {
       `}).join('')}
     </div>` : ''}
   `;
+}
+
+function renderShoppingPresenceBand(app: App) {
+  const shoppers = (app.realtimePresence || []).filter(u => u.shopping);
+  if (!shoppers.length) return '';
+  const names = shoppers.map(u => escapeHtml(u.name || 'Someone')).join(', ');
+  const text = shoppers.length === 1
+    ? t('presence.shoppingAlsoOne', { name: names })
+    : t('presence.shoppingAlsoMany', { names });
+  return `<div class="status-card" style="margin-bottom:16px;"><i class="ph ph-shopping-cart-simple"></i> ${text}</div>`;
 }
 
 export async function openAddShoppingModal(prefillName?: string | null) {

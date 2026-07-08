@@ -451,8 +451,14 @@ const de: Translations = {
   'expense.validRequired':                 'Bitte gültige Daten eingeben',
   'expense.onePersonRequired':             'Mindestens eine Person auswählen',
 
+  'realtime.connected':                    'Live-Sync verbunden',
+  'realtime.connecting':                   'Live-Sync verbindet…',
+  'realtime.fallback':                     'Live-Sync nicht verbunden — Polling aktiv',
+  'realtime.disconnected':                 'Live-Sync getrennt',
   'presence.shoppingOne':                  '{{name}} ist gerade einkaufen',
   'presence.shoppingMany':                 '{{names}} sind gerade einkaufen',
+  'presence.shoppingAlsoOne':              '{{name}} ist auch gerade einkaufen',
+  'presence.shoppingAlsoMany':             '{{names}} sind auch gerade einkaufen',
 
   'action.save':                          'Speichern',
   'action.cancel':                        'Abbrechen',
