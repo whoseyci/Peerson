@@ -145,7 +145,11 @@ export class App {
 
     this.realtime = new RealtimeClient({
       onChanged: () => this.scheduleRealtimeSync(),
-      onPresence: (users) => { this.realtimePresence = users.filter(u => u.userId !== this.state.userId); this.renderIfSafe(); },
+      onPresence: (users) => {
+        this.realtimePresence = users.filter(u => u.userId !== this.state.userId);
+        window.dispatchEvent(new CustomEvent('peerson:realtime-presence'));
+        this.renderIfSafe();
+      },
       onStatus: (status) => {
         this.realtimeStatus = status;
         this.injectSyncIndicator();
@@ -470,6 +474,7 @@ export class App {
         // Fall back to full data load if check fails
       }
       await this.loadData();
+      window.dispatchEvent(new CustomEvent('peerson:data-updated'));
     } finally {
       this.syncInFlight = false;
       this.isSyncing = false;
@@ -624,6 +629,7 @@ export class App {
 
     this.setHtml(appEl, `
       <div class="view-content ${transitionClass}">${viewHtml}</div>
+      ${this.renderTopShoppingPresence()}
       <nav class="top-tabs" aria-label="Hauptnavigation">
         <button class="tab-btn ${this.state.view === 'home' ? 'active' : ''}" onclick="app.navigate('home')" title="${t('nav.home')}" aria-label="${t('nav.home')}">
           <i class="ph ph-house"></i><span class="tab-label">${t('nav.home')}</span>
@@ -644,6 +650,20 @@ export class App {
     this.injectBugButton();
     this.injectSyncIndicator();
     installHomeSwipeOnce();
+  }
+
+  private renderTopShoppingPresence() {
+    const shoppers = this.realtimePresence.filter(u => u.shopping);
+    if (!shoppers.length) return '';
+    const names = shoppers.map(u => escapeHtml(u.name || 'Someone')).join(', ');
+    const title = shoppers.length === 1
+      ? t('presence.shoppingOne', { name: names })
+      : t('presence.shoppingMany', { names });
+    return `
+      <button class="shopping-presence-top" onclick="app.navigate('shopping')" title="${title}" aria-label="${title}">
+        <i class="ph ph-shopping-cart-simple"></i>
+        <span>${shoppers.length}</span>
+      </button>`;
   }
 
   showModal(id: string, content: string) {

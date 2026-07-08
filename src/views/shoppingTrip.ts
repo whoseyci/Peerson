@@ -5,6 +5,7 @@ import { t } from '../i18n';
 interface TripState {
   ids: string[];
   checkedIds: Set<string>;
+  spentById: Map<string, number>;
   totalSpent: number;
   summary: boolean;
 }
@@ -14,7 +15,7 @@ let trip: TripState | null = null;
 export function openShoppingTrip() {
   const app = (window as any).app as App;
   const open = app.state.shopping.filter(s => s.status === 'open');
-  trip = { ids: open.map(s => s.id), checkedIds: new Set(), totalSpent: 0, summary: false };
+  trip = { ids: open.map(s => s.id), checkedIds: new Set(), spentById: new Map(), totalSpent: 0, summary: false };
   app.setShoppingPresence(true);
   renderTripScreen();
   requestAnimationFrame(() => {
@@ -36,7 +37,8 @@ function renderTripScreen() {
   const app = (window as any).app as App;
   if (!trip) return;
   const total = trip.ids.length;
-  const done = trip.checkedIds.size;
+  syncTripWithShoppingState(app);
+  const done = tripDoneCount(app);
   const allDone = total > 0 && done === total;
 
   let el = document.getElementById('tripScreen');
@@ -68,9 +70,9 @@ function renderTripScreen() {
       ${total ? trip.ids.map(id => {
         const item = app.state.shopping.find(s => s.id === id);
         if (!item) return '';
-        const checked = trip!.checkedIds.has(id);
+        const checked = isTripItemChecked(app, id);
         return `
-          <div class="trip-item-card ${checked ? 'checked' : ''}" onclick="${checked ? '' : `openTripQuickLog('${escapeJsAttr(id)}')`}">
+          <div class="trip-item-card ${checked ? 'checked' : ''}" onclick="${checked ? `untickTripItem('${escapeJsAttr(id)}')` : `openTripQuickLog('${escapeJsAttr(id)}')`}">
             <div class="check-circle">${checked ? '<i class="ph-bold ph-check"></i>' : ''}</div>
             <div style="flex:1; min-width:0;">
               <div style="font-weight:700; font-size:14.5px;">${escapeHtml(item.name)}</div>
@@ -85,6 +87,29 @@ function renderTripScreen() {
       <button class="btn mt-3" onclick="finishShoppingTrip()"><i class="ph-bold ph-check"></i> Einkauf beenden (${total - done} offen lassen)</button>
     </div>
   `;
+}
+
+function syncTripWithShoppingState(app: App) {
+  if (!trip) return;
+  trip.ids.forEach(id => {
+    const item = app.state.shopping.find(s => s.id === id);
+    if (item?.status === 'bought') trip!.checkedIds.add(id);
+    else trip!.checkedIds.delete(id);
+  });
+}
+
+function isTripItemChecked(app: App, id: string) {
+  const item = app.state.shopping.find(s => s.id === id);
+  return item?.status === 'bought' || !!trip?.checkedIds.has(id);
+}
+
+function tripDoneCount(app: App) {
+  if (!trip) return 0;
+  return trip.ids.filter(id => isTripItemChecked(app, id)).length;
+}
+
+export function refreshShoppingTripRealtime() {
+  if (trip) renderTripScreen();
 }
 
 function renderTripPresenceBand(app: App) {
@@ -158,6 +183,28 @@ export function openTripQuickLog(shopItemId: string) {
   `);
 }
 
+
+export async function untickTripItem(shopItemId: string) {
+  const app = (window as any).app as App;
+  const api = (window as any).api;
+  const shopItem = app.state.shopping.find(s => s.id === shopItemId);
+  if (!shopItem || !trip) return;
+  try {
+    await api.shopping.update(shopItemId, { status: 'open' });
+    shopItem.status = 'open';
+    trip.checkedIds.delete(shopItemId);
+    const spent = trip.spentById.get(shopItemId) || 0;
+    if (spent) {
+      trip.totalSpent = Math.max(0, trip.totalSpent - spent);
+      trip.spentById.delete(shopItemId);
+    }
+    trip.summary = false;
+    renderTripScreen();
+  } catch (e) {
+    app.toast('Fehler beim Aktualisieren');
+  }
+}
+
 export function adjustTripQty(delta: number) {
   const current = (window as any)._tripQuickLogQty || 1;
   const next = Math.max(1, current + delta);
@@ -201,7 +248,10 @@ export async function confirmTripQuickLog() {
       app.state.batches.push(batch.batch);
     }
 
-    if (!trip.checkedIds.has(shopItemId) && price) trip.totalSpent += price;
+    if (!trip.checkedIds.has(shopItemId) && price) {
+      trip.totalSpent += price;
+      trip.spentById.set(shopItemId, price);
+    }
     trip.checkedIds.add(shopItemId);
 
     app.closeSheet('sheetQuickLog');
@@ -309,6 +359,12 @@ export async function logTripAsExpense() {
   } catch (e) {
     app.toast('Fehler beim Verbuchen');
   }
+}
+
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('peerson:realtime-presence', refreshShoppingTripRealtime);
+  window.addEventListener('peerson:data-updated', refreshShoppingTripRealtime);
 }
 
 Object.assign(window as any, {
