@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'fs';
 import { signRealtimeToken, verifyRealtimeToken } from '../functions/realtime-auth';
 import { SyncHubCore } from '../functions/realtime-core';
 import { notifyHouseholdChanged } from '../functions/realtime-notify';
@@ -33,6 +34,33 @@ describe('SyncHubCore', () => {
     core.updatePresence('a', { view: 'shoppingTrip', shopping: true });
     expect(core.presenceForHousehold('h1')).toMatchObject([{ userId: 'u1', name: 'Alice', shopping: true, view: 'shoppingTrip' }]);
     expect(messages.some(m => m.t === 'presence.snapshot')).toBe(true);
+  });
+});
+
+describe('realtime mutation route coverage', () => {
+  const mutationRoutes = [
+    'functions/api/items.ts',
+    'functions/api/items/[id].ts',
+    'functions/api/batches.ts',
+    'functions/api/batches/[id].ts',
+    'functions/api/batches/move.ts',
+    'functions/api/tasks.ts',
+    'functions/api/tasks/[id].ts',
+    'functions/api/shopping.ts',
+    'functions/api/shopping/[id].ts',
+    'functions/api/expenses.ts',
+    'functions/api/expenses/[id].ts',
+    'functions/api/locations.ts',
+    'functions/api/locations/[id].ts',
+    'functions/api/category-budgets.ts',
+  ];
+
+  it('keeps realtime invalidation wired into important mutation routes', () => {
+    for (const route of mutationRoutes) {
+      const source = readFileSync(route, 'utf-8');
+      expect(source, `${route} should import notifyHouseholdChanged`).toContain('notifyHouseholdChanged');
+      expect(source, `${route} should pass X-Client-Id for sender exclusion`).toContain("X-Client-Id");
+    }
   });
 });
 

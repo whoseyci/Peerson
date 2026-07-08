@@ -22,11 +22,12 @@ interface ActionLog {
   details?: string;
 }
 
-// How often we poll for changes made by other household members. Kept
-// fairly responsive (3s) while a visibilitychange + window-focus listener
-// also triggers an immediate refresh so switching back to the tab always
-// feels current even between polls.
-const SYNC_INTERVAL_MS = 3000;
+// Polling remains the correctness fallback for realtime sync. When the
+// websocket is connected we only keep a slow safety poll to minimize D1/API
+// reads on Cloudflare's free tier; when realtime is unavailable we fall back
+// to the original responsive 3s polling cadence.
+const SYNC_INTERVAL_FALLBACK_MS = 3000;
+const SYNC_INTERVAL_LIVE_MS = 60000;
 // Primary navigation is 3 destinations (Home / Rooms / People) plus the
 // capture FAB, per the approved UX vision at
 // /home/user/ux-vision/peerson-reimagined.html. The old 5-tab IA
@@ -145,7 +146,11 @@ export class App {
     this.realtime = new RealtimeClient({
       onChanged: () => this.scheduleRealtimeSync(),
       onPresence: (users) => { this.realtimePresence = users.filter(u => u.userId !== this.state.userId); this.renderIfSafe(); },
-      onStatus: (status) => { this.realtimeStatus = status; this.injectSyncIndicator(); },
+      onStatus: (status) => {
+        this.realtimeStatus = status;
+        this.injectSyncIndicator();
+        this.restartSyncTimer();
+      },
     });
 
     if (savedHousehold) {
@@ -195,11 +200,18 @@ export class App {
     if (!el) {
       el = document.createElement('div');
       el.id = 'syncIndicator';
-      el.className = 'sync-indicator';
-      el.title = t('app.syncing');
       document.body.appendChild(el);
     }
-    el.classList.toggle('active', this.isSyncing);
+    const status = this.realtimeStatus;
+    el.className = `sync-indicator realtime-${status}${this.isSyncing ? ' active' : ''}`;
+    const labels: Record<typeof status, string> = {
+      connected: t('realtime.connected'),
+      connecting: t('realtime.connecting'),
+      fallback: t('realtime.fallback'),
+      disconnected: t('realtime.disconnected'),
+    };
+    el.title = this.isSyncing ? `${labels[status]} · ${t('app.syncing')}` : labels[status];
+    el.setAttribute('aria-label', el.title);
   }
 
   openBugReport() {
@@ -418,7 +430,7 @@ export class App {
 
   startSync() {
     if (this.syncTimer) return;
-    this.syncTimer = setInterval(() => this.syncNow(), SYNC_INTERVAL_MS);
+    this.restartSyncTimer();
   }
 
   stopSync() {
@@ -426,6 +438,20 @@ export class App {
       clearInterval(this.syncTimer);
       this.syncTimer = null;
     }
+  }
+
+  private syncIntervalMs() {
+    return this.realtimeStatus === 'connected' ? SYNC_INTERVAL_LIVE_MS : SYNC_INTERVAL_FALLBACK_MS;
+  }
+
+  private restartSyncTimer() {
+    if (!this.state.householdId && !this.syncTimer) return;
+    if (this.syncTimer) clearInterval(this.syncTimer);
+    if (!this.state.householdId) {
+      this.syncTimer = null;
+      return;
+    }
+    this.syncTimer = setInterval(() => this.syncNow(), this.syncIntervalMs());
   }
 
   async syncNow(force = false) {

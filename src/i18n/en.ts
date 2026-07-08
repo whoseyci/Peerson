@@ -446,8 +446,14 @@ const en: Translations = {
   'expense.validRequired':                 'Please enter valid data',
   'expense.onePersonRequired':             'Select at least one person',
 
+  'realtime.connected':                    'Live sync connected',
+  'realtime.connecting':                   'Live sync connecting…',
+  'realtime.fallback':                     'Live sync disconnected — polling fallback active',
+  'realtime.disconnected':                 'Live sync disconnected',
   'presence.shoppingOne':                  '{{name}} is shopping now',
   'presence.shoppingMany':                 '{{names}} are shopping now',
+  'presence.shoppingAlsoOne':              '{{name}} is also shopping now',
+  'presence.shoppingAlsoMany':             '{{names}} are also shopping now',
 
   'action.save':                          'Save',
   'action.cancel':                        'Cancel',
