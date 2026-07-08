@@ -131,6 +131,11 @@ test.describe('full visible i18n audit', () => {
     await page.evaluate(() => (window as any).openAddShoppingModal());
     await assertNoGerman(page, 'add shopping modal');
     await page.evaluate(() => (window as any).app.closeModal('shopModal'));
+    await page.evaluate(() => (window as any).openShoppingTrip());
+    await expect(page.locator('#tripScreen').getByText('Chilled & dairy')).toBeVisible();
+    await expect(page.locator('#tripScreen').getByText('Suggestion')).toBeVisible();
+    await assertNoGerman(page, 'shopping trip');
+    await page.evaluate(() => (window as any).closeShoppingTrip());
 
     await page.evaluate(() => (window as any).app.navigate('rooms'));
     await assertNoGerman(page, 'rooms root');
